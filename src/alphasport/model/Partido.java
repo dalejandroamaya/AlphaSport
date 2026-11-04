@@ -1,0 +1,387 @@
+package alphasport.model;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+
+/**
+ * Antes Partido heredaba de Campeonato (un partido NO es un campeonato).
+ * Ahora es una clase independiente que guarda a que fase, grupo y ronda
+ * pertenece, ademas del marcador, penales, tarjetas y datos de programacion.
+ */
+public class Partido implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    public static final int SIN_PENALES = -1;
+
+    private int id;
+    private int paso;          // en que "avance" del campeonato se genero
+    private int indiceFase;    // posicion de la fase dentro del campeonato
+    private String grupo = ""; // "A", "B"... solo en fases de grupos
+    private int ronda;         // jornada (fases de tabla) o ronda (eliminatorias)
+    private String nombreRonda = "";
+    private String serie = ""; // identifica la llave (ida y vuelta comparten serie)
+    private int pierna;        // 0 = partido unico, 1 = ida, 2 = vuelta
+    private String llave = ""; // doble eliminacion: Ganadores / Perdedores / Gran final
+    private boolean eliminatorio; // si es true el partido o la serie necesita un ganador
+
+    private int idLocal;
+    private int idVisitante;
+
+    private EstadoPartido estado = EstadoPartido.PENDIENTE;
+    private int golesLocal;
+    private int golesVisitante;
+    private int penalesLocal = SIN_PENALES;
+    private int penalesVisitante = SIN_PENALES;
+    private int amarillasLocal;
+    private int rojasLocal;
+    private int amarillasVisitante;
+    private int rojasVisitante;
+    private ArrayList<Tarjeta> tarjetas = new ArrayList<>();
+
+    private String fecha = "Por definir";
+    private String hora = "";
+    private String sede = "";
+    private String observaciones = "";
+
+    public Partido() {
+    }
+
+    public Partido(int id, int idLocal, int idVisitante) {
+        this.id = id;
+        this.idLocal = idLocal;
+        this.idVisitante = idVisitante;
+    }
+
+    public boolean isJugado() {
+        return estado == EstadoPartido.JUGADO;
+    }
+
+    public boolean tienePenales() {
+        return penalesLocal != SIN_PENALES && penalesVisitante != SIN_PENALES;
+    }
+
+    public boolean involucra(int idEquipo) {
+        return idLocal == idEquipo || idVisitante == idEquipo;
+    }
+
+    public int getRival(int idEquipo) {
+        return idLocal == idEquipo ? idVisitante : idLocal;
+    }
+
+    public int getGolesDe(int idEquipo) {
+        return idLocal == idEquipo ? golesLocal : golesVisitante;
+    }
+
+    /**
+     * Ganador de este partido (contando penales). Devuelve -1 si no se ha
+     * jugado o si quedo empatado sin penales.
+     */
+    public int getGanador() {
+        if (!isJugado()) {
+            return -1;
+        }
+        if (golesLocal > golesVisitante) {
+            return idLocal;
+        }
+        if (golesVisitante > golesLocal) {
+            return idVisitante;
+        }
+        if (tienePenales() && penalesLocal != penalesVisitante) {
+            return penalesLocal > penalesVisitante ? idLocal : idVisitante;
+        }
+        return -1;
+    }
+
+    /**
+     * Deja el partido como no jugado (por ejemplo para corregir un error).
+     */
+    public void reiniciarResultado() {
+        estado = EstadoPartido.PENDIENTE;
+        golesLocal = 0;
+        golesVisitante = 0;
+        penalesLocal = SIN_PENALES;
+        penalesVisitante = SIN_PENALES;
+        amarillasLocal = 0;
+        rojasLocal = 0;
+        amarillasVisitante = 0;
+        rojasVisitante = 0;
+        getTarjetas().clear();
+    }
+
+    /**
+     * Copia el resultado y los datos de programacion de otro partido
+     * (se usa al editar: el dialogo trabaja sobre una copia).
+     */
+    public void copiarDatosDe(Partido otro) {
+        estado = otro.estado;
+        golesLocal = otro.golesLocal;
+        golesVisitante = otro.golesVisitante;
+        penalesLocal = otro.penalesLocal;
+        penalesVisitante = otro.penalesVisitante;
+        amarillasLocal = otro.amarillasLocal;
+        rojasLocal = otro.rojasLocal;
+        amarillasVisitante = otro.amarillasVisitante;
+        rojasVisitante = otro.rojasVisitante;
+        tarjetas = new ArrayList<>();
+        for (Tarjeta t : otro.getTarjetas()) {
+            tarjetas.add(t.copia());
+        }
+        fecha = otro.fecha;
+        hora = otro.hora;
+        sede = otro.sede;
+        observaciones = otro.observaciones;
+    }
+
+    public String getMarcador() {
+        if (!isJugado()) {
+            return "vs";
+        }
+        String texto = golesLocal + " - " + golesVisitante;
+        if (tienePenales()) {
+            texto += " (" + penalesLocal + "-" + penalesVisitante + " pen)";
+        }
+        return texto;
+    }
+
+    // ---------------- getters y setters ----------------
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public int getPaso() {
+        return paso;
+    }
+
+    public void setPaso(int paso) {
+        this.paso = paso;
+    }
+
+    public int getIndiceFase() {
+        return indiceFase;
+    }
+
+    public void setIndiceFase(int indiceFase) {
+        this.indiceFase = indiceFase;
+    }
+
+    public String getGrupo() {
+        return grupo;
+    }
+
+    public void setGrupo(String grupo) {
+        this.grupo = grupo;
+    }
+
+    public int getRonda() {
+        return ronda;
+    }
+
+    public void setRonda(int ronda) {
+        this.ronda = ronda;
+    }
+
+    public String getNombreRonda() {
+        return nombreRonda;
+    }
+
+    public void setNombreRonda(String nombreRonda) {
+        this.nombreRonda = nombreRonda;
+    }
+
+    public String getSerie() {
+        return serie;
+    }
+
+    public void setSerie(String serie) {
+        this.serie = serie;
+    }
+
+    public int getPierna() {
+        return pierna;
+    }
+
+    public void setPierna(int pierna) {
+        this.pierna = pierna;
+    }
+
+    public String getLlave() {
+        return llave;
+    }
+
+    public void setLlave(String llave) {
+        this.llave = llave;
+    }
+
+    public boolean isEliminatorio() {
+        return eliminatorio;
+    }
+
+    public void setEliminatorio(boolean eliminatorio) {
+        this.eliminatorio = eliminatorio;
+    }
+
+    public int getIdLocal() {
+        return idLocal;
+    }
+
+    public void setIdLocal(int idLocal) {
+        this.idLocal = idLocal;
+    }
+
+    public int getIdVisitante() {
+        return idVisitante;
+    }
+
+    public void setIdVisitante(int idVisitante) {
+        this.idVisitante = idVisitante;
+    }
+
+    public EstadoPartido getEstado() {
+        return estado;
+    }
+
+    public void setEstado(EstadoPartido estado) {
+        this.estado = estado;
+    }
+
+    public int getGolesLocal() {
+        return golesLocal;
+    }
+
+    public void setGolesLocal(int golesLocal) {
+        this.golesLocal = golesLocal;
+    }
+
+    public int getGolesVisitante() {
+        return golesVisitante;
+    }
+
+    public void setGolesVisitante(int golesVisitante) {
+        this.golesVisitante = golesVisitante;
+    }
+
+    public int getPenalesLocal() {
+        return penalesLocal;
+    }
+
+    public void setPenalesLocal(int penalesLocal) {
+        this.penalesLocal = penalesLocal;
+    }
+
+    public int getPenalesVisitante() {
+        return penalesVisitante;
+    }
+
+    public void setPenalesVisitante(int penalesVisitante) {
+        this.penalesVisitante = penalesVisitante;
+    }
+
+    public int getAmarillasLocal() {
+        return amarillasLocal;
+    }
+
+    public void setAmarillasLocal(int amarillasLocal) {
+        this.amarillasLocal = amarillasLocal;
+    }
+
+    public int getRojasLocal() {
+        return rojasLocal;
+    }
+
+    public void setRojasLocal(int rojasLocal) {
+        this.rojasLocal = rojasLocal;
+    }
+
+    public int getAmarillasVisitante() {
+        return amarillasVisitante;
+    }
+
+    public void setAmarillasVisitante(int amarillasVisitante) {
+        this.amarillasVisitante = amarillasVisitante;
+    }
+
+    public int getRojasVisitante() {
+        return rojasVisitante;
+    }
+
+    public void setRojasVisitante(int rojasVisitante) {
+        this.rojasVisitante = rojasVisitante;
+    }
+
+    public ArrayList<Tarjeta> getTarjetas() {
+        if (tarjetas == null) { // archivos guardados antes de existir las tarjetas por jugador
+            tarjetas = new ArrayList<>();
+        }
+        return tarjetas;
+    }
+
+    /**
+     * Guarda las tarjetas por jugador y actualiza los totales por equipo
+     * (los usa el criterio de juego limpio de la tabla). Se pasa el id del
+     * equipo local porque este objeto puede ser solo una copia de los datos.
+     */
+    public void setTarjetas(ArrayList<Tarjeta> tarjetas, int idEquipoLocal) {
+        this.tarjetas = tarjetas;
+        amarillasLocal = 0;
+        rojasLocal = 0;
+        amarillasVisitante = 0;
+        rojasVisitante = 0;
+        for (Tarjeta t : tarjetas) {
+            boolean local = t.getIdEquipo() == idEquipoLocal;
+            if (t.isRoja()) {
+                if (local) {
+                    rojasLocal++;
+                } else {
+                    rojasVisitante++;
+                }
+            } else if (local) {
+                amarillasLocal++;
+            } else {
+                amarillasVisitante++;
+            }
+        }
+    }
+
+    public String getFecha() {
+        return fecha;
+    }
+
+    public void setFecha(String fecha) {
+        this.fecha = fecha;
+    }
+
+    public String getHora() {
+        return hora;
+    }
+
+    public void setHora(String hora) {
+        this.hora = hora;
+    }
+
+    public String getSede() {
+        return sede;
+    }
+
+    public void setSede(String sede) {
+        this.sede = sede;
+    }
+
+    public String getObservaciones() {
+        return observaciones;
+    }
+
+    public void setObservaciones(String observaciones) {
+        this.observaciones = observaciones;
+    }
+
+    @Override
+    public String toString() {
+        return "Partido{" + "id=" + id + ", local=" + idLocal + ", visitante=" + idVisitante
+                + ", marcador=" + getMarcador() + ", estado=" + estado + '}';
+    }
+}

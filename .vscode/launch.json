@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "AlphaSport",
+      "request": "launch",
+      "mainClass": "alphasport.ui.AlphaSportApp",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "type": "java",
+      "name": "Prueba automatica (SimulacionFormatos)",
+      "request": "launch",
+      "mainClass": "alphasport.service.SimulacionFormatos",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
