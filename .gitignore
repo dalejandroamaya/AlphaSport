@@ -1,0 +1,13 @@
+# Compilados
+bin/
+out/
+*.class
+
+# Datos que genera el programa al usarse (campeonatos, historial, noticias, fotos)
+datos/
+
+# Sistema operativo y editores
+.idea/
+Thumbs.db
+.DS_Store
+desktop.ini
