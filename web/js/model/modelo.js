@@ -7,34 +7,28 @@ const SIN_PENALES = -1;
 
 const FORMATOS = {
   LIGA: {
-    nombre: 'Todos contra todos (Liga / Round-Robin)',
-    corto: 'Liga',
-    descripcion: 'Todos los equipos se enfrentan entre sí. Gana el que sume más puntos (3 por victoria, 1 por empate). A una sola vuelta o a ida y vuelta (doble round-robin, como LaLiga o la Premier League).'
+    nombre: 'Liga',
+    descripcion: 'Todos juegan contra todos. Gana el que sume más puntos al final (3 por ganar, 1 por empatar). Se puede jugar a una vuelta o a ida y vuelta.'
   },
   ELIMINACION_DIRECTA: {
-    nombre: 'Eliminación directa (Copa / Knockout)',
-    corto: 'Copa',
-    descripcion: 'El que pierde queda eliminado. Se arma una llave (dieciseisavos, octavos, cuartos...). A partido único (empate = penales) o a ida y vuelta (avanza el mejor marcador global).'
+    nombre: 'Copa (eliminación directa)',
+    descripcion: 'Partidos de llave: el que pierde queda eliminado. Se juegan octavos, cuartos, semifinal y final. Si hay empate, se define por penales.'
   },
   GRUPOS_Y_ELIMINATORIA: {
-    nombre: 'Mixto: fase de grupos + eliminatorias',
-    corto: 'Grupos + llave',
-    descripcion: 'Los equipos se dividen en grupos (mini ligas, normalmente de 4). Los mejores de cada grupo pasan a una llave de eliminación directa hasta la final (como el Mundial o la Copa América).'
+    nombre: 'Tipo Mundial (grupos y eliminatorias)',
+    descripcion: 'Primero se juega en grupos pequeños. Los mejores de cada grupo pasan a una llave de eliminación hasta la final, como en el Mundial.'
   },
   TORNEO_CORTO: {
-    nombre: 'Torneo corto (Apertura/Clausura) + Liguilla',
-    corto: 'Apertura/Clausura',
-    descripcion: 'Fase regular todos contra todos. Los mejores de la tabla clasifican a una liguilla de eliminación directa o a cuadrangulares semifinales (como la Liga BetPlay o la Liga MX).'
+    nombre: 'Apertura y Clausura (con liguilla)',
+    descripcion: 'Todos contra todos en la fase regular; los mejores de la tabla pasan a la liguilla o a cuadrangulares para definir al campeón, como en la Liga BetPlay.'
   },
   SUIZO: {
-    nombre: 'Sistema suizo (Fase de liga UEFA)',
-    corto: 'Suizo',
-    descripcion: 'Todos en una sola tabla, pero cada equipo juega solo un número limitado de partidos contra rivales distintos. Los primeros pasan directo a la llave y la zona media juega un repechaje (como la Champions League).'
+    nombre: 'Tipo Champions (sistema suizo)',
+    descripcion: 'Todos en una sola tabla, pero cada equipo juega solo algunos partidos contra rivales distintos. Los primeros pasan directo a la llave y los del medio juegan un repechaje.'
   },
   DOBLE_ELIMINACION: {
-    nombre: 'Doble eliminación (Winner / Loser bracket)',
-    corto: 'Doble eliminación',
-    descripcion: 'Perder una vez manda al equipo a la llave de perdedores; solo queda fuera al perder dos veces. El campeón de ganadores juega la gran final contra el campeón de perdedores.'
+    nombre: 'Doble oportunidad (doble eliminación)',
+    descripcion: 'Nadie se va al primer tropiezo: quien pierde una vez pasa a la llave de perdedores y solo queda eliminado si pierde dos veces.'
   }
 };
 

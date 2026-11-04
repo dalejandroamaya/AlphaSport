@@ -4,7 +4,7 @@ Investigación de los formatos que usa el programa, cómo se aplican en ligas re
 
 ---
 
-## 1. Todos contra todos (Liga / Round-Robin)
+## 1. Liga (todos contra todos)
 
 **Regla.** Todos los equipos se enfrentan entre sí. Victoria 3 puntos, empate 1, derrota 0 (los puntos se pueden configurar). Gana quien acumule más puntos.
 
@@ -13,7 +13,7 @@ Investigación de los formatos que usa el programa, cómo se aplican en ligas re
 
 **Implementación.** `GeneradorFixture.todosContraTodos` usa el **método del círculo** (el mismo del prototipo de P2): un equipo queda fijo y los demás rotan una posición por jornada. Se alterna local/visitante para equilibrar las localías; la segunda vuelta repite las jornadas invirtiendo la localía.
 
-## 2. Eliminación directa (Copa / Knockout)
+## 2. Copa (eliminación directa)
 
 **Regla.** El que pierde queda eliminado. Se arma una llave: dieciseisavos (32), octavos (16), cuartos (8), semifinales (4) y final (2).
 
@@ -27,7 +27,7 @@ Investigación de los formatos que usa el programa, cómo se aplican en ligas re
 - Opción de **final a partido único** aunque el resto sea a ida y vuelta.
 - **Prórroga:** el programa registra el marcador final (con prórroga incluida) y, si sigue el empate, exige los **penales**.
 
-## 3. Formato mixto: fase de grupos + eliminatorias
+## 3. Tipo Mundial (grupos y eliminatorias)
 
 **Regla.** Los equipos se dividen en grupos (normalmente de 4) que juegan todos contra todos (una o dos vueltas). Los mejores de cada grupo (ej. 1.º y 2.º) pasan a una llave de eliminación directa. Es el modelo de la Copa del Mundo, la Copa América y la Eurocopa.
 
@@ -38,7 +38,7 @@ Investigación de los formatos que usa el programa, cómo se aplican en ligas re
 - **Clasificados:** primero todos los 1.º (ordenados entre sí por puntos y desempates), luego los 2.º, etc. Si no completan una llave de 4/8/16/32, se completa con los mejores de la siguiente posición (*mejores terceros*). Para comparar equipos de grupos distintos se omite el enfrentamiento directo (nunca jugaron entre sí).
 - En la primera ronda de la llave se intercambian rivales para que **no se crucen dos equipos del mismo grupo**.
 
-## 4. Torneos cortos (Apertura y Clausura) + Liguilla / Playoffs
+## 4. Apertura y Clausura (con liguilla)
 
 **Regla.** Sistema dominante en América (Liga BetPlay en Colombia, Liga MX, MLS). La temporada se divide en dos torneos independientes (Apertura y Clausura), cada uno con su campeón.
 
@@ -53,7 +53,7 @@ Investigación de los formatos que usa el programa, cómo se aplican en ligas re
 - **Siguiente torneo corto:** el menú *Iniciar siguiente torneo corto (Clausura)* guarda el historial del torneo terminado y crea uno nuevo con los mismos equipos, plantillas y reglas.
 - *No implementado:* el *play-in* de la Liga MX (puestos 7 a 10) ni la tabla de reclasificación anual.
 
-## 5. Sistema suizo (fase de liga UEFA)
+## 5. Tipo Champions (sistema suizo)
 
 **Regla.** Desde la temporada 2024/25 la Champions League, la Europa League y la Conference League usan una **fase de liga**: 36 clubes en **una sola tabla**, pero cada uno juega solo **8 partidos contra 8 rivales distintos** (4 de local y 4 de visitante). Al final:
 
@@ -67,7 +67,7 @@ Investigación de los formatos que usa el programa, cómo se aplican en ligas re
 - Si el número de equipos es impar, en cada ronda **descansa** el peor ubicado que todavía no haya descansado (sin sumar puntos).
 - Configurable: número de rondas, clasificados directos y cantidad en repechaje (por defecto 8 y 16, como la UEFA). El repechaje empareja el mejor contra el peor de la zona (9 vs 24, 10 vs 23…) y luego la llave final siembra a los directos contra los ganadores del repechaje.
 
-## 6. Doble eliminación (Winner / Loser bracket)
+## 6. Doble oportunidad (doble eliminación)
 
 **Regla.** No se usa en el fútbol profesional FIFA, pero es muy útil en fútbol amateur, torneos relámpago y fútbol base: nadie queda fuera por un solo mal partido.
 
@@ -98,7 +98,7 @@ Cuando dos o más equipos empatan en puntos, cada liga aplica criterios distinto
 
 **Regla.** El árbitro amonesta a un **jugador** (amarilla) o lo expulsa (roja). Dos amarillas en el mismo partido equivalen a una roja. Un expulsado queda **suspendido** un número de fechas que fija el comité disciplinario de cada torneo (normalmente 1 por doble amarilla y más por una roja directa, según la falta). En muchas ligas también suspende la **acumulación** de amarillas (por ejemplo 5 en el torneo).
 
-**Implementación (`logica.Sanciones`).**
+**Implementación (`service.Sanciones`).**
 - Cada `Tarjeta` guarda equipo, jugador (por un id que no cambia aunque se edite el dorsal), tipo y, si es roja, las **fechas de suspensión** que se escriben al registrarla.
 - La suspensión cubre los **siguientes N partidos del equipo** del jugador en el orden del fixture (incluye las rondas que se generen después). Una fecha se cuenta como **cumplida** cuando ese partido está jugado; un partido aplazado no la cumple hasta que se juegue.
 - Al abrir un partido se muestran los suspendidos; si se le pone tarjeta a uno, el programa pide confirmación (el jugador no debería haber jugado).

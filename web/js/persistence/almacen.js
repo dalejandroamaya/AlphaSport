@@ -26,7 +26,8 @@ const Almacen = (() => {
   return {
     campeonato: {
       cargar: () => leer(CLAVE_ACTUAL, null),
-      guardar: c => escribir(CLAVE_ACTUAL, c)
+      guardar: c => escribir(CLAVE_ACTUAL, c),
+      eliminar: () => { try { localStorage.removeItem(CLAVE_ACTUAL); } catch (e) { /* sin almacenamiento */ } }
     },
     historial: {
       listar: () => leer(CLAVE_HISTORIAL, []),

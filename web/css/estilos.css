@@ -131,9 +131,7 @@ select option { background: var(--panel-solido); }
 .area { top: 30%; height: 40%; width: 12%; }
 .area.izquierda { left: 0; border-left: 0 !important; }
 .area.derecha { right: 0; border-right: 0 !important; }
-.balon-flotante { position: absolute; left: 50%; top: 14%; width: 76px; transform: translateX(-50%); animation: flotar 4s ease-in-out infinite; filter: drop-shadow(0 18px 24px rgba(0, 0, 0, .6)); }
-@keyframes flotar { 50% { transform: translate(-50%, -16px) rotate(18deg); } }
-.login-tarjeta { position: relative; width: min(420px, 100%); padding: 2.2rem 2rem; display: flex; flex-direction: column; gap: 1rem; }
+.login-tarjeta { position: relative; width: min(460px, 100%); padding: 2.2rem 2rem; display: flex; flex-direction: column; gap: 1rem; }
 .login-lema { text-align: center; color: var(--sutil); margin: -.4rem 0 .6rem; }
 
 /* ------------------------------------------------------------------ estructura */
@@ -383,6 +381,62 @@ select option { background: var(--panel-solido); }
 .despedida { min-height: 100vh; display: grid; place-content: center; text-align: center; gap: .5rem; }
 .despedida img { width: 70px; margin: 0 auto; }
 
+/* ------------------------------------------------------------------ logos y tema */
+.logo-login {
+  width: 100%; max-width: 380px; margin: -.4rem auto .2rem; display: block;
+  filter: drop-shadow(0 0 22px rgba(31, 224, 138, .35)) drop-shadow(0 12px 18px rgba(0, 0, 0, .45));
+  animation: latido 5s ease-in-out infinite;
+}
+@keyframes latido { 50% { transform: translateY(-6px) scale(1.015); filter: drop-shadow(0 0 34px rgba(31, 224, 138, .5)) drop-shadow(0 16px 22px rgba(0, 0, 0, .45)); } }
+.marca-lateral { display: flex; flex-direction: column; align-items: center; gap: .2rem; text-align: center; padding-bottom: .4rem; border-bottom: 1px solid var(--borde); }
+.marca-lateral img { width: 150px; filter: drop-shadow(0 0 16px rgba(31, 224, 138, .35)); transition: transform .3s; }
+.marca-lateral img:hover { transform: scale(1.05) rotate(-2deg); }
+.marca-lateral span { font-family: var(--titulos); font-weight: 800; font-size: 1.25rem; letter-spacing: .05em; }
+.marca-lateral b { color: var(--cesped); }
+.marca-lateral small { color: var(--sutil); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; }
+.logo-movil { display: none; }
+.btn.icono { width: 42px; height: 42px; padding: 0; font-size: 1.1rem; }
+.tema-movil { display: none; }
+.tema-login { position: absolute; top: 18px; right: 18px; z-index: 2; }
+.opcion-peligro { color: var(--rojo) !important; }
+
+:root[data-tema="claro"] {
+  --fondo: #eef3f8; --fondo-2: #ffffff; --panel: rgba(255, 255, 255, .82); --panel-solido: #ffffff;
+  --borde: rgba(8, 120, 72, .16); --borde-fuerte: rgba(8, 140, 84, .4); --texto: #0b1726; --sutil: #56667e;
+  --cesped: #079a5b; --cesped-2: #057a47; --cesped-brillo: rgba(7, 154, 91, .28); --oro: #c48a06; --oro-2: #a06e00;
+  --rojo: #d42a48; --ambar: #c27a00; --cian: #0a7fb0; --sombra: 0 14px 38px rgba(15, 35, 60, .12);
+  color-scheme: light;
+}
+[data-tema="claro"] body {
+  background: radial-gradient(1200px 700px at 85% -10%, rgba(7, 154, 91, .12), transparent 60%),
+    radial-gradient(900px 600px at -10% 110%, rgba(10, 127, 176, .08), transparent 60%), var(--fondo);
+}
+[data-tema="claro"] .fondo-cancha { opacity: .7; }
+[data-tema="claro"] .vidrio { box-shadow: var(--sombra), inset 0 1px 0 rgba(255, 255, 255, .6); }
+[data-tema="claro"] input:not([type=checkbox]), [data-tema="claro"] select { background: #fff; border-color: rgba(11, 23, 38, .14); }
+[data-tema="claro"] .barra-lateral { background: linear-gradient(180deg, #ffffff, #f2f6fa); }
+[data-tema="claro"] .navegacion button:hover, [data-tema="claro"] .tabla tbody tr:hover { background: rgba(11, 23, 38, .04); }
+[data-tema="claro"] .btn.fantasma { border-color: rgba(11, 23, 38, .16); }
+[data-tema="claro"] .btn.fantasma:hover:not(:disabled) { background: rgba(11, 23, 38, .05); }
+[data-tema="claro"] .btn.peligro { color: var(--rojo); }
+[data-tema="claro"] .chip { border-color: rgba(11, 23, 38, .12); background: rgba(11, 23, 38, .04); }
+[data-tema="claro"] .tabla td { border-bottom-color: rgba(11, 23, 38, .07); }
+[data-tema="claro"] .pos { background: rgba(11, 23, 38, .07); }
+[data-tema="claro"] .cruce, [data-tema="claro"] .criterios li, [data-tema="claro"] .lista-tarjetas li,
+[data-tema="claro"] .tarjeta-formato, [data-tema="claro"] .historial-lista button, [data-tema="claro"] .premio {
+  background: #f4f7fb; border-color: rgba(11, 23, 38, .08);
+}
+[data-tema="claro"] .lado + .lado, [data-tema="claro"] .menu-lista hr { border-color: rgba(11, 23, 38, .08); }
+[data-tema="claro"] .grupo { border-color: rgba(11, 23, 38, .1); }
+[data-tema="claro"] .dialogo { background: linear-gradient(180deg, #ffffff, #f3f7fb); box-shadow: 0 30px 80px rgba(15, 35, 60, .25); }
+[data-tema="claro"] .dialogo::backdrop { background: rgba(15, 30, 45, .4); }
+[data-tema="claro"] .msg-texto { color: #34445a; }
+[data-tema="claro"] .marcador-partido { background: radial-gradient(circle at 50% 0, rgba(7, 154, 91, .12), transparent 70%), #f4f7fb; }
+[data-tema="claro"] .campeon-caja { background: radial-gradient(circle at 50% 0, rgba(246, 196, 83, .35), #fffaf0 70%); }
+[data-tema="claro"] .aviso { background: #ffffff; }
+[data-tema="claro"] .logo-login { filter: drop-shadow(0 10px 18px rgba(15, 35, 60, .25)); }
+[data-tema="claro"] .cancha-3d { opacity: .85; }
+
 /* ------------------------------------------------------------------ responsive */
 @media (max-width: 1000px) {
   .app { grid-template-columns: 1fr; }
@@ -390,7 +444,9 @@ select option { background: var(--panel-solido); }
     position: fixed; bottom: 0; top: auto; left: 0; right: 0; height: auto; z-index: 30; flex-direction: row; padding: .4rem;
     border-right: 0; border-top: 1px solid var(--borde);
   }
-  .barra-lateral .marca, .lateral-pie { display: none; }
+  .barra-lateral .marca-lateral, .lateral-pie { display: none; }
+  .logo-movil { display: block; width: 74px; align-self: center; filter: drop-shadow(0 0 12px rgba(31, 224, 138, .35)); }
+  .tema-movil { display: inline-flex; }
   .navegacion { flex-direction: row; flex: 1; justify-content: space-around; }
   .navegacion button { flex-direction: column; gap: .2rem; padding: .45rem .3rem; font-size: .68rem; flex: 1; text-align: center; }
   .navegacion button.activa { box-shadow: inset 0 3px 0 var(--cesped); }

@@ -1,33 +1,20 @@
 package alphasport.ui;
 
-import alphasport.persistence.ArchivoRepositorioCampeonato;
-import alphasport.persistence.ArchivoRepositorioHistorial;
 import alphasport.service.AutenticacionService;
 import alphasport.service.CampeonatoService;
 import java.awt.Desktop;
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 /**
- * Punto de entrada: arma las capas (persistence, service, ui), inicia el
- * servidor local y abre la interfaz en el navegador.
+ * Version web del programa Java: inicia el servidor local y abre la interfaz en el navegador.
  */
 public class AlphaSportApp {
 
     private static final int PUERTO = 8080;
 
     public static void main(String[] args) throws Exception {
-        Path carpetaWeb = Path.of("web");
-        if (!Files.isRegularFile(carpetaWeb.resolve("index.html"))) {
-            System.err.println("No se encontro la carpeta web/. Ejecute el programa desde la carpeta del proyecto.");
-            System.exit(1);
-        }
-        Path carpetaDatos = Path.of("datos");
-        CampeonatoService servicio = new CampeonatoService(
-                new ArchivoRepositorioCampeonato(carpetaDatos), new ArchivoRepositorioHistorial(carpetaDatos));
-        servicio.cargarGuardado();
-        ServidorWeb servidor = new ServidorWeb(carpetaWeb, servicio, new ApiControlador(servicio, new AutenticacionService()));
+        CampeonatoService servicio = Arranque.servicio();
+        ServidorWeb servidor = new ServidorWeb(Arranque.CARPETA_WEB, servicio, new ApiControlador(servicio, new AutenticacionService()));
         int puerto = servidor.iniciar(PUERTO);
         String direccion = "http://127.0.0.1:" + puerto + "/";
         Runtime.getRuntime().addShutdownHook(new Thread(servidor::detener));

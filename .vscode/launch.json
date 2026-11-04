@@ -3,7 +3,15 @@
   "configurations": [
     {
       "type": "java",
-      "name": "AlphaSport",
+      "name": "AlphaSport Escritorio (JavaFX)",
+      "request": "launch",
+      "mainClass": "alphasport.ui.escritorio.AlphaSportEscritorio",
+      "vmArgs": "--enable-native-access=ALL-UNNAMED",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "java",
+      "name": "AlphaSport Web (navegador)",
       "request": "launch",
       "mainClass": "alphasport.ui.AlphaSportApp",
       "cwd": "${workspaceFolder}",

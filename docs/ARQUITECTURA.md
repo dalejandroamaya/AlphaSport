@@ -1,201 +1,148 @@
-# Arquitectura de AlphaSport
+# Arquitectura de AlphaSport (V4)
 
-El código Java está separado en cuatro paquetes. La versión web (`web/js/motor.js`) es una traducción directa de `modelo` + `logica`, con los mismos nombres de métodos.
+AlphaSport está organizado en cuatro capas: **ui → service → persistence → model**. Cada capa solo conoce a la que está debajo, así que las reglas del torneo no dependen de ninguna pantalla ni del medio de almacenamiento.
 
 ```
-vista  ──usa──▶  logica  ──usa──▶  modelo
-  │                                   ▲
-  └──────────usa──────▶ controlador ──┘   (guardar / leer)
+            ┌──────────────── ui ─────────────────┐
+            │  Escritorio (JavaFX)   Web (navegador)│
+            │      Aplicacion      ServidorWeb + API│
+            │          └── ApiControlador ──┘        │
+            │              Presentador               │
+            └──────────────────┬─────────────────────┘
+                               ▼
+            ┌────────────── service ──────────────┐
+            │ CampeonatoService (casos de uso)     │
+            │ MotorCampeonato, TablaPosiciones,    │
+            │ Sanciones, ResumenCampeonato, ...    │
+            │ formatos: Liga, Copa, Mundial, ...   │
+            └──────────────────┬───────────────────┘
+                               ▼
+            ┌──────────── persistence ────────────┐
+            │ RepositorioCampeonato (interfaz)     │
+            │ RepositorioHistorial  (interfaz)     │
+            │ ArchivoRepositorio... (archivos .dat)│
+            └──────────────────┬───────────────────┘
+                               ▼
+            ┌─────────────── model ───────────────┐
+            │ Campeonato, Equipo, Persona, Jugador,│
+            │ DirectorTecnico, Partido, Tarjeta,   │
+            │ Fase, ConfiguracionTorneo, enums     │
+            └──────────────────────────────────────┘
 ```
 
-| Paquete | Responsabilidad | No hace |
+## Capas en Java (`src/alphasport/`)
+
+| Capa | Paquete | Responsabilidad | No hace |
+|---|---|---|---|
+| **ui** | `ui`, `ui.escritorio` | Mostrar la información y recibir las acciones del usuario. Hay dos interfaces: la ventana de escritorio en JavaFX y la interfaz web que sirve `ServidorWeb`. Ambas usan el mismo `ApiControlador` (traduce cada acción en una llamada al servicio) y el mismo `Presentador` (prepara tablas, llaves, sanciones e historial para la pantalla). | No aplica reglas del torneo ni guarda archivos. |
+| **service** | `service`, `service.formatos` | Casos de uso (`CampeonatoService`: crear, cambiar formato, cancelar, avanzar, editar partidos, equipos, historial, respaldos) y reglas del torneo (`MotorCampeonato`, `TablaPosiciones`, `GeneradorFixture`, `Sanciones`, `ResumenCampeonato`, `Palmares`). Cada formato es una subclase de `FormatoCampeonato`. | No sabe cómo se dibuja la pantalla ni dónde se guardan los datos. |
+| **persistence** | `persistence` | Interfaces `RepositorioCampeonato` y `RepositorioHistorial` con su implementación en archivos binarios (`datos/campeonato.dat` y `datos/historial/`). `PersistenciaException` aísla los errores de almacenamiento. | No conoce las reglas del torneo. |
+| **model** | `model` | Entidades del dominio y enumeraciones. | No calcula tablas ni decide quién avanza. |
+
+Para usar una base de datos (Fase 3) basta con crear, por ejemplo, `BdRepositorioCampeonato implements RepositorioCampeonato` y entregarla al `CampeonatoService` en `Arranque`; el servicio y las interfaces no cambian.
+
+## Capas en la versión web (`web/js/`)
+
+| Capa | Archivo | Responsabilidad |
 |---|---|---|
-| `modelo` | Datos: equipos, jugadores, partidos, fases, configuración | No calcula tablas ni decide quién avanza |
-| `logica` | Reglas del torneo: fixture, tablas, desempates, llaves, avanzar de fase, edición | No muestra ventanas |
-| `logica.formatos` | Qué fases tiene cada formato y cómo se pasa de una a otra | — |
-| `controlador` | Guardar y leer archivos (`campeonato.dat`, historial `.txt`) | — |
-| `vista` | Ventanas y diálogos Swing. En la V2 todo el estilo está centralizado en `Estilo` (colores, fuentes, botones) | No contiene reglas del torneo |
+| **ui** | `ui/app.js`, `index.html`, `css/estilos.css` | Dibuja el estado y envía las acciones al servicio. |
+| **service** | `service/servicioRemoto.js` | Si la página la sirve el programa Java, envía cada acción a su API (`/api/...`). |
+| | `service/servicioLocal.js` + `service/motor.js` | Si la página se abre sola, aplica las mismas reglas en JavaScript. |
+| **persistence** | `persistence/almacen.js` | Guarda el campeonato y el historial en el navegador. |
+| **model** | `model/modelo.js` | Constantes del dominio, creación del campeonato y datos de cada partido. |
 
-## Diagrama de clases
+Los dos servicios responden **exactamente el mismo JSON**, por eso la interfaz es una sola y no sabe con cuál está hablando.
+
+## Las tres formas de ejecutar AlphaSport
+
+| Forma | Clase / archivo | ui | service | persistence |
+|---|---|---|---|---|
+| Escritorio | `ui.escritorio.AlphaSportEscritorio` | JavaFX | Java | archivos `datos/` |
+| Web con Java | `ui.AlphaSportApp` | navegador | Java (API local en `127.0.0.1`) | archivos `datos/` |
+| Web sola | `web/index.html` | navegador | JavaScript | navegador |
+
+## Diagrama de clases (resumen)
 
 ```mermaid
 classDiagram
     direction LR
-    class Persona {
-        <<abstract>>
-        -String nombre
-        -String documento
-        +getRol()* String
-    }
-    class Jugador {
-        -int id
-        -int dorsal
-        -String posicion
-    }
-    class DirectorTecnico {
-        -String nacionalidad
-    }
+    class Persona { <<abstract>> -nombre -documento +getRol()* }
     Persona <|-- Jugador
     Persona <|-- DirectorTecnico
-
-    class Equipo {
-        -int id
-        -String nombreEquipo
-        -String estadio
-        -boolean retirado
-        +agregarJugador(Jugador) boolean
-    }
+    class Equipo { -id -nombreEquipo -estadio -retirado +agregarJugador(Jugador) }
     Equipo o-- "0..1" DirectorTecnico
     Equipo o-- "*" Jugador
-
-    class Partido {
-        -int idLocal, idVisitante
-        -EstadoPartido estado
-        -int goles, penales
-        -String fecha, hora, sede
-        -String serie
-        -int pierna
-        +getGanador() int
-        +setTarjetas(lista, idLocal)
-    }
-    class Tarjeta {
-        -int idEquipo
-        -int idJugador
-        -String tipo
-        -int fechasSuspension
-    }
+    class Partido { -idLocal -idVisitante -estado -goles -penales +getGanador() }
     Partido *-- "*" Tarjeta
-    Tarjeta ..> Jugador
-    class Sanciones {
-        +listar() ArrayList~Registro~
-        +suspendidosEn(Partido) ArrayList~Tarjeta~
-        +fechasPendientesDe(int idJugador) int
-    }
-    Sanciones --> Campeonato
-    class ResumenCampeonato {
-        +clasificacionFinal() ArrayList~FilaTabla~
-        +equipoMasGoleador() FilaTabla
-        +vallaMenosVencida() FilaTabla
-        +premioFairPlay() FilaTabla
-        +mayorGoleada() Partido
-        +texto() String
-    }
-    class Palmares {
-        +calcular(List~Campeonato~)$ ArrayList~Fila~
-    }
-    ResumenCampeonato --> Campeonato
-    Palmares ..> ResumenCampeonato
-    class Fase {
-        -String nombre
-        -TipoFase tipo
-        -ArrayList participantes
-        -ArrayList grupos
-        -ArrayList cuadro
-    }
-    class Campeonato {
-        -String nombreCampeonato
-        -TipoFormato formato
-        -int pasoActual
-        -int idCampeon
-    }
-    class ConfiguracionTorneo {
-        -boolean idaYVuelta
-        -int tamanoGrupo
-        -ArrayList~CriterioDesempate~ criterios
-    }
+    class Campeonato { -nombre -formato -pasoActual -idCampeon +agregarEquipo() +crearPartido() }
     Campeonato *-- "*" Equipo
     Campeonato *-- "*" Partido
     Campeonato *-- "*" Fase
     Campeonato *-- "1" ConfiguracionTorneo
 
-    class MotorCampeonato {
-        +iniciar() String
-        +avanzar() String
-        +tablaDeFase(int) ArrayList
-        +ganadorSerie(...) int
-        +afectaRondasPosteriores(Partido, Partido) boolean
-        +aplicarEdicion(Partido, Partido, boolean)
-        +retirarEquipo(Equipo) String
-    }
-    class TablaPosiciones {
-        +calcular(partidos, ids) ArrayList~FilaTabla~
-        +ordenar(filas, partidos, permitirDirecto)
-    }
-    class FormatoCampeonato {
-        <<abstract>>
-        +validar(Campeonato)* String
-        +crearPrimeraFase(...)* Fase
-        +crearSiguienteFase(...)* Fase
-        +crear(TipoFormato)$ FormatoCampeonato
-    }
+    class RepositorioCampeonato { <<interface>> +guardar() +cargar() +existe() +eliminar() }
+    class RepositorioHistorial { <<interface>> +archivar() +listar() +eliminar() }
+    RepositorioCampeonato <|.. ArchivoRepositorioCampeonato
+    RepositorioHistorial <|.. ArchivoRepositorioHistorial
+
+    class CampeonatoService { +crear() +cambiarFormato() +cancelar() +avanzar() +guardarPartido() +guardarEquipo() }
+    CampeonatoService --> RepositorioCampeonato
+    CampeonatoService --> RepositorioHistorial
+    CampeonatoService --> MotorCampeonato
+    class MotorCampeonato { +iniciar() +avanzar() +aplicarEdicion() +retirarEquipo() }
+    MotorCampeonato --> FormatoCampeonato
+    MotorCampeonato --> TablaPosiciones
+    class FormatoCampeonato { <<abstract>> +validar()* +crearPrimeraFase()* +crearSiguienteFase()* }
     FormatoCampeonato <|-- FormatoLiga
     FormatoCampeonato <|-- FormatoEliminacionDirecta
     FormatoCampeonato <|-- FormatoGruposEliminatoria
     FormatoCampeonato <|-- FormatoTorneoCorto
     FormatoCampeonato <|-- FormatoSuizo
     FormatoCampeonato <|-- FormatoDobleEliminacion
-    MotorCampeonato --> Campeonato
-    MotorCampeonato --> TablaPosiciones
-    MotorCampeonato --> FormatoCampeonato
-    MotorCampeonato ..> GeneradorFixture
+
+    class ApiControlador { +consultar(ruta) +ejecutar(ruta, datos) }
+    ApiControlador --> CampeonatoService
+    ApiControlador --> Presentador
+    ServidorWeb --> ApiControlador
+    Aplicacion --> ApiControlador
 ```
 
 ## Conceptos de POO aplicados
 
 | Concepto | Dónde |
 |---|---|
-| **Herencia** | `Jugador` y `DirectorTecnico` heredan de la clase abstracta `Persona`. Los 6 formatos heredan de `FormatoCampeonato`. |
-| **Clases y métodos abstractos** | `Persona.getRol()`, `FormatoCampeonato.validar / crearPrimeraFase / crearSiguienteFase`. |
-| **Polimorfismo** | `MotorCampeonato` llama `formato.crearSiguienteFase(...)` sin saber qué formato es; cada subclase responde a su manera. `FormatoCampeonato.crear(tipo)` es un método de fábrica. |
-| **Encapsulamiento** | Atributos privados con getters/setters; las reglas viven en `logica` y la vista solo llama métodos públicos. |
-| **Herencia en la vista (V2)** | `PanelCancha` extiende `JPanel` y sobrescribe `paintComponent` para dibujar la cancha; `IconoBalon` implementa la interfaz `Icon` para dibujar el balón con Java2D. |
-| **Composición / agregación** | `Campeonato` contiene equipos, partidos, fases y configuración; `Equipo` agrega jugadores y un director técnico; `Partido` contiene sus `Tarjeta`. |
-| **Enumeraciones** | `TipoFormato`, `TipoFase`, `EstadoPartido`, `CriterioDesempate` (con descripción). |
-| **Excepciones** | `IllegalStateException` con mensajes para el usuario cuando no se puede iniciar o avanzar; la vista las muestra en un diálogo. |
-| **Serialización** | Todo el modelo implementa `Serializable` para guardarse en `campeonato.dat`. |
-
-En P2, `Partido` heredaba de `Campeonato` ("un partido es un campeonato"), lo que no tiene sentido como relación *es-un*. Ahora es una clase independiente y el campeonato **tiene** partidos (composición).
+| **Herencia** | `Jugador` y `DirectorTecnico` heredan de `Persona`; los 6 formatos heredan de `FormatoCampeonato`. |
+| **Clases abstractas** | `Persona.getRol()`; `FormatoCampeonato.validar / crearPrimeraFase / crearSiguienteFase`. |
+| **Interfaces** | `RepositorioCampeonato` y `RepositorioHistorial` (persistencia intercambiable); `Serializable` en todo el modelo. |
+| **Polimorfismo** | El motor llama `formato.crearSiguienteFase(...)` sin saber qué formato es; el servicio usa los repositorios por su interfaz. |
+| **Encapsulamiento** | Atributos privados con getters/setters; la interfaz solo usa el servicio. |
+| **Composición / agregación** | `Campeonato` contiene equipos, partidos, fases y configuración; `Equipo` agrega jugadores y DT; `Partido` contiene sus tarjetas. |
+| **Excepciones propias** | `ReglaNegocioException` (con código `PENALES`, `CONFIRMAR`, `LOGIN`...) y `PersistenciaException`. |
 
 ## Ideas clave del diseño
 
-### 1. Las estadísticas se calculan, no se acumulan
-En P2 cada equipo guardaba sus puntos y goles, y al registrar o corregir un resultado había que sumar y restar a mano (era fácil dejar la tabla mal). Ahora `Equipo` no guarda estadísticas: `TablaPosiciones.calcular` recorre los partidos jugados cada vez que se muestra una tabla. Corregir, borrar o aplazar un partido deja todo correcto automáticamente.
-
-### 2. Fases y pasos
-Un campeonato es una lista de **fases** (fase regular, grupos, liguilla, llave...). Cada vez que se genera algo (una fase o una ronda nueva) se incrementa el **paso** del campeonato y los partidos generados guardan ese número.
-
-- El **formato** decide *qué* fases hay (`crearPrimeraFase`, `crearSiguienteFase`).
-- El **motor** sabe *cómo* se juega cada tipo de fase (`TipoFase`): liga y grupos generan todo el calendario de una vez; suizo, eliminatoria y doble eliminación generan una ronda por paso.
-
-### 3. Edición segura de partidos
-Al editar un partido, `afectaRondasPosteriores` calcula una "huella" de lo que ese partido decide (el orden de su tabla o el ganador de su llave) antes y después del cambio. Si la huella cambia y hay pasos posteriores, la vista pregunta y `deshacerDesdePaso` borra solo lo que se generó después, para volver a generarlo con *Avanzar*.
-
-### 4. Llaves sin estructuras extra
-La llave guarda solo el orden de la primera ronda (`Fase.cuadro`, con posiciones `LIBRE` para los que pasan directo). Las rondas siguientes se deducen de los ganadores de cada serie (`ganadoresDeRonda`), así que editar un resultado se refleja solo.
-
-### 5. Suspensiones calculadas
-Igual que la tabla, las suspensiones no se guardan como contador: `Sanciones` las calcula recorriendo las rojas y los partidos siguientes de cada equipo. Si se corrige un resultado, se aplaza un partido o se borra una tarjeta, el estado de cada suspensión se actualiza solo. Las tarjetas guardan el id del jugador (no el dorsal), así que editar el dorsal no rompe nada.
-
-### 6. Historial de campeonatos
-Cada campeonato tiene un `codigo` único. Al terminar (o al reemplazarlo por otro con partidos jugados) el `Controlador` guarda una copia completa en `historial/campeonato_<codigo>.dat`; si se vuelve a guardar el mismo campeonato se reemplaza, nunca se duplica. Como se guarda el objeto completo y no un texto, el historial puede **recalcular** todo: `ResumenCampeonato` arma la clasificación final, el podio y los premios, y `Palmares` suma los resultados de todos los torneos por equipo. Al crear el siguiente torneo corto o un campeonato "con los mismos equipos" se copian los equipos con su plantilla, pero el campeonato nuevo recibe otro código.
+1. **Las estadísticas se calculan, no se acumulan.** La tabla, las llaves y las suspensiones se deducen de los partidos cada vez; corregir un resultado deja todo correcto.
+2. **Fases y pasos.** El formato decide qué fases hay; el motor sabe cómo se juega cada tipo de fase.
+3. **Edición segura.** Si un cambio afecta rondas ya generadas, el servicio responde `CONFIRMAR` y la interfaz pregunta antes de regenerarlas.
+4. **Cancelar o cambiar el formato.** `cancelar()` descarta el campeonato sin pasarlo al historial; `cambiarFormato()` lo rehace con otro formato conservando equipos y plantillas.
+5. **Historial completo.** Cada campeonato terminado se guarda entero, así se pueden recalcular podio, premios y palmarés.
 
 ## Flujo de uso
 
 ```mermaid
 flowchart LR
     A[Login] --> B{¿Hay campeonato guardado?}
-    B -- No --> C[Nuevo campeonato:<br/>formato + reglas + desempates]
-    B -- Sí --> D[Ventana principal]
+    B -- No --> C[Nuevo campeonato: formato, reglas y desempates]
+    B -- Sí --> D[Panel principal]
     C --> D
-    D --> E[Registrar equipos,<br/>DT y jugadores]
+    D --> E[Equipos, DT y jugadores]
     E --> F[Iniciar: fixture automático]
-    F --> G[Registrar / corregir partidos]
+    F --> G[Registrar o corregir partidos]
     G --> H{¿Fase completa?}
     H -- No --> G
-    H -- Sí --> I[Avanzar: siguiente ronda o fase]
+    H -- Sí --> I[Avanzar]
     I --> G
     I --> J[Campeón: se guarda en el historial]
-    J --> K[Terminar e iniciar otro campeonato]
+    D -. Archivo .-> K[Cambiar formato o cancelar]
     K --> C
-    J --> L[Historial: podio, premios y palmarés]
 ```

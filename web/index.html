@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#05080f">
   <title>AlphaSport · Gestor de campeonatos</title>
-  <link rel="icon" href="img/balon.svg" type="image/svg+xml">
+  <link rel="icon" href="img/logo.png" type="image/png">
+  <script>try { if (localStorage.getItem('alphasport.tema') === 'claro') document.documentElement.dataset.tema = 'claro'; } catch (e) {}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,10 +23,10 @@
         <span class="linea-media"></span><span class="circulo-central"></span>
         <span class="area izquierda"></span><span class="area derecha"></span>
       </div>
-      <img class="balon-flotante" src="img/balon.svg" alt="">
     </div>
+    <button class="btn fantasma icono tema-login" data-tema-alternar aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro">🌓</button>
     <form id="formLogin" class="login-tarjeta vidrio" autocomplete="off">
-      <div class="marca grande"><img src="img/balon.svg" alt=""><span>Alpha<b>Sport</b></span></div>
+      <img class="logo-login" src="img/logo-texto.png" alt="AlphaSport">
       <p class="login-lema">Gestión profesional de campeonatos de fútbol</p>
       <label class="campo">Usuario<input id="loginUsuario" required autofocus></label>
       <label class="campo">Contraseña<input id="loginClave" type="password" required></label>
@@ -37,7 +38,7 @@
 
   <div id="app" class="app" hidden>
     <aside class="barra-lateral">
-      <div class="marca"><img src="img/balon.svg" alt=""><span>Alpha<b>Sport</b></span></div>
+      <div class="marca-lateral"><img src="img/logo.png" alt=""><span>Alpha<b>Sport</b></span><small>Gestor de campeonatos</small></div>
       <nav class="navegacion" aria-label="Secciones">
         <button data-vista="equipos" class="activa"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg><span>Equipos</span></button>
         <button data-vista="partidos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Partidos</span></button>
@@ -48,12 +49,14 @@
       </nav>
       <div class="lateral-pie">
         <button id="btnHistorial" class="btn fantasma ancho">🏆 Historial</button>
+        <button class="btn fantasma ancho boton-tema" data-tema-alternar>🌓 Modo claro / oscuro</button>
         <span id="chipModo" class="chip modo"></span>
       </div>
     </aside>
 
     <main class="principal">
       <header class="marcador-principal vidrio">
+        <img class="logo-movil" src="img/logo.png" alt="AlphaSport">
         <div class="marcador-info">
           <span class="sobretitulo">Campeonato en curso</span>
           <h1 id="titulo">AlphaSport</h1>
@@ -63,11 +66,14 @@
         <div class="marcador-acciones">
           <button id="btnAvanzar" class="btn primario grande">Iniciar campeonato</button>
           <button id="btnCampeon" class="btn dorado">Ver campeón</button>
+          <button class="btn fantasma icono tema-movil" data-tema-alternar aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro">🌓</button>
           <div class="menu">
             <button id="btnMenu" class="btn fantasma" aria-haspopup="true" aria-expanded="false">☰ Archivo</button>
             <div id="menuArchivo" class="menu-lista vidrio" hidden>
               <button data-accion="nuevo">Nuevo campeonato…</button>
               <button data-accion="siguiente" id="menuSiguiente">Siguiente torneo corto (Clausura)…</button>
+              <button data-accion="cambiarFormato">Cambiar formato del campeonato…</button>
+              <button data-accion="cancelar" class="opcion-peligro">Cancelar campeonato…</button>
               <hr>
               <button data-accion="exportar">Descargar respaldo</button>
               <button data-accion="importar">Abrir respaldo…</button>
@@ -251,7 +257,7 @@
 
   <dialog id="dlgNuevo" class="dialogo ancho-dlg">
     <form id="formNuevo">
-      <h3>Nuevo campeonato</h3>
+      <h3 id="nvTitulo">Nuevo campeonato</h3>
       <label class="campo">Nombre del campeonato<input id="nvNombre" maxlength="80" placeholder="Ej.: Copa Universitaria 2026" required></label>
       <p class="sobretitulo">Formato de competencia</p>
       <div id="tarjetasFormato" class="tarjetas-formato" role="radiogroup"></div>
@@ -278,7 +284,7 @@
         </div>
       </fieldset>
       <fieldset class="grupo"><legend>Criterios de desempate (en orden)</legend><div id="criteriosNuevo"></div></fieldset>
-      <div class="acciones"><button type="button" id="nvCancelar" class="btn fantasma">Cancelar</button><button class="btn primario">Crear campeonato</button></div>
+      <div class="acciones"><button type="button" id="nvCancelar" class="btn fantasma">Cancelar</button><button id="nvCrear" class="btn primario">Crear campeonato</button></div>
     </form>
   </dialog>
 

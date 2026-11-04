@@ -1,53 +1,59 @@
 # AlphaSport · V4
 
-Gestor de campeonatos de fútbol con seis formatos de competencia (liga, eliminación directa, grupos + eliminatorias, torneo corto con liguilla o cuadrangulares, sistema suizo y doble eliminación), desempates configurables, plantillas, tarjetas y suspensiones, fixture automático, historial, premios y palmarés.
+Gestor de campeonatos de fútbol: **Liga**, **Copa (eliminación directa)**, **Tipo Mundial (grupos y eliminatorias)**, **Apertura y Clausura (con liguilla)**, **Tipo Champions (sistema suizo)** y **Doble oportunidad (doble eliminación)**. Incluye desempates configurables, equipos con DT y plantilla, fixture automático, tarjetas y suspensiones por jugador, historial, premios y palmarés.
 
-Esta versión reemplaza las ventanas Swing (JFrame) por una **interfaz web** (HTML, CSS y JavaScript) y organiza el código en cuatro capas: **ui → service → persistence → model**.
+El código está organizado en cuatro capas: **ui → service → persistence → model** (ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)).
 
-## Arquitectura
+## Tres formas de usarlo
 
-| Capa | Java (`src/alphasport/...`) | Web (`web/js/...`) |
+| Versión | Cómo se abre | Guarda en |
 |---|---|---|
-| **ui** | `ui`: servidor local (`ServidorWeb`), API JSON (`ApiControlador`), traducción de datos para la pantalla (`Presentador`) y arranque (`AlphaSportApp`) | `ui/app.js` + `index.html` + `css/estilos.css` |
-| **service** | `service`: casos de uso (`CampeonatoService`), reglas del torneo (`MotorCampeonato`, `TablaPosiciones`, `Sanciones`, ...) y los 6 formatos (`service.formatos`) | `service/motor.js` (reglas), `service/servicioLocal.js` y `service/servicioRemoto.js` |
-| **persistence** | `persistence`: interfaces `RepositorioCampeonato` y `RepositorioHistorial` con implementación en archivos | `persistence/almacen.js` (almacenamiento del navegador) |
-| **model** | `model`: `Campeonato`, `Equipo`, `Persona`, `Jugador`, `Partido`, `Tarjeta`, `Fase`, ... | `model/modelo.js` |
+| **Escritorio (JavaFX)** | Ventana propia de Java, sin navegador | `datos/` |
+| **Web con Java** | Java abre la interfaz en el navegador (`127.0.0.1:8080`) | `datos/` |
+| **Web sola** | Abrir `web/index.html` | el navegador |
 
-Cada capa solo usa a la de abajo. La interfaz es **una sola** para los dos modos:
+Las tres tienen las mismas funciones, el mismo diseño (estadio nocturno con detalles neón y dorados) y los logos de AlphaSport.
 
-- **Programa Java:** `AlphaSportApp` inicia un servidor en `http://127.0.0.1:8080` (solo accesible desde el propio equipo) y abre el navegador. La interfaz detecta la API de Java y le envía todas las acciones; Java aplica las reglas y guarda en `datos/`.
-- **Web independiente:** si se abre `web/index.html` sin Java, la interfaz usa el servicio en JavaScript y guarda en el navegador.
+## Novedades del V4
 
-Las dos respuestas tienen el mismo formato JSON, así que la interfaz no necesita saber cuál está usando. Para pasar a base de datos (Fase 3) solo hay que crear otra implementación de los repositorios de `persistence`.
+- Sin Swing ni JFrame: la versión de escritorio usa **JavaFX** con hojas de estilo CSS.
+- **Modo claro y oscuro** con un botón en el panel lateral (y en el login).
+- Menú **Archivo → Cambiar formato del campeonato…** para corregir un formato elegido por error, conservando los equipos y sus plantillas.
+- Menú **Archivo → Cancelar campeonato…** para descartar un campeonato sin guardarlo en el historial.
+- Nombres y descripciones de los formatos en lenguaje sencillo.
 
 ## Uso en Visual Studio Code
 
-1. Instalar un **JDK 17 o superior** y la extensión **Extension Pack for Java**.
+1. Instalar un **JDK 21 o superior** y la extensión **Extension Pack for Java**.
 2. **File → Open Folder…** → abrir la carpeta `PrototipoA_P4`.
-3. **Run and Debug** (Ctrl+Shift+D) → elegir **AlphaSport** → **F5**. Se abre el navegador; usuario `admin`, contraseña `123`.
-4. Para cerrar: menú **Archivo → Cerrar programa** o Ctrl+C en la terminal.
+3. **Run and Debug** (Ctrl+Shift+D) y elegir:
+   - **AlphaSport Escritorio (JavaFX)**: abre la ventana del programa.
+   - **AlphaSport Web (navegador)**: abre la interfaz en el navegador. Para cerrar: menú **Archivo → Cerrar programa** o Ctrl+C en la terminal.
+   - **Prueba automatica (SimulacionFormatos)**: debe terminar en `TODO BIEN`.
+4. Usuario `admin`, contraseña `123`.
 
-Pruebas:
-- **Prueba automatica (SimulacionFormatos)** en *Run and Debug*: debe terminar en `TODO BIEN`.
-- `web/pruebas/simulacion.html` en el navegador: también debe decir `TODO BIEN`.
+JavaFX 21 ya viene en la carpeta `lib/` (Windows) y VS Code lo usa automáticamente.
 
-Versión web sola: abrir `web/index.html` con doble clic, o con **Live Server** (clic derecho → *Open with Live Server*).
+La versión web sola se abre con doble clic en `web/index.html`, o con **Live Server**. Su prueba automática está en `web/pruebas/simulacion.html` (debe decir `TODO BIEN`).
 
 ## Carpetas
 
 ```
 src/alphasport/
   model/          entidades del dominio
-  persistence/    repositorios (archivos .dat)
+  persistence/    repositorios (interfaces + archivos .dat)
   service/        casos de uso y reglas del torneo
     formatos/     un formato de campeonato por clase
-  ui/             servidor web local y API JSON
+  ui/             servidor web local, API, presentador y arranque
+    escritorio/   ventana JavaFX y su hoja de estilos
 test/alphasport/service/SimulacionFormatos.java
+lib/              JavaFX 21 (base, graphics, controls)
 web/
-  index.html, css/estilos.css, img/
+  index.html, css/estilos.css, img/ (logos)
   js/model, js/persistence, js/service, js/ui
   pruebas/        prueba automática del motor web
-datos/            (se crea al usar el programa Java; no se sube a Git)
+docs/             arquitectura, formatos y reglas
+datos/            se crea al usar el programa (no se sube a Git)
 ```
 
 Autores: Diego Alejandro Amaya Verdecia y Ednilson Contreras.

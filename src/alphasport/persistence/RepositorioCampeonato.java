@@ -13,4 +13,6 @@ public interface RepositorioCampeonato {
     Campeonato cargar() throws PersistenciaException;
 
     boolean existe();
+
+    void eliminar() throws PersistenciaException;
 }

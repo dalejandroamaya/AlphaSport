@@ -51,6 +51,9 @@ public class ApiControlador {
             case "nuevo" -> servicio.crear(texto(cuerpo, "nombre"), TipoFormato.valueOf(texto(cuerpo, "formato")),
                     configuracion(objeto(cuerpo, "config")), Boolean.TRUE.equals(cuerpo.get("mismosEquipos")));
             case "siguiente" -> servicio.siguienteTorneoCorto(texto(cuerpo, "nombre"));
+            case "cancelar" -> servicio.cancelar();
+            case "cambiarFormato" -> servicio.cambiarFormato(texto(cuerpo, "nombre"),
+                    TipoFormato.valueOf(texto(cuerpo, "formato")), configuracion(objeto(cuerpo, "config")));
             case "avanzar" -> mensaje = servicio.avanzar();
             case "equipo/rapido" -> servicio.agregarEquipo(texto(cuerpo, "nombre"));
             case "equipo" -> guardarEquipo(cuerpo);

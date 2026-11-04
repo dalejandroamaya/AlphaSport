@@ -77,6 +77,33 @@ public class CampeonatoService {
         guardar();
     }
 
+    /**
+     * Descarta el campeonato en curso sin guardarlo en el historial (por ejemplo, si se creo por error).
+     */
+    public void cancelar() throws PersistenciaException {
+        exigirCampeonato();
+        campeonato = null;
+        motor = null;
+        repositorio.eliminar();
+    }
+
+    /**
+     * Rehace el campeonato con otro formato y otras reglas conservando los equipos y sus plantillas.
+     * El fixture y los resultados anteriores se descartan.
+     */
+    public void cambiarFormato(String nombre, TipoFormato formato, ConfiguracionTorneo configuracion)
+            throws PersistenciaException {
+        exigirCampeonato();
+        if (configuracion.getCriterios().isEmpty()) {
+            throw new ReglaNegocioException("Escoja al menos un criterio de desempate.");
+        }
+        String limpio = nombre == null || nombre.isBlank() ? campeonato.getNombreCampeonato() : nombre.trim();
+        Campeonato nuevo = new Campeonato(limpio, formato, configuracion);
+        nuevo.importarEquipos(campeonato.getEquipos());
+        usar(nuevo);
+        guardar();
+    }
+
     public void siguienteTorneoCorto(String nombre) throws PersistenciaException {
         exigirCampeonato();
         if (nombre == null || nombre.isBlank()) {

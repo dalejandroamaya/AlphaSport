@@ -295,6 +295,20 @@ function crearServicioLocal() {
       archivarActual();
       usar(nuevo);
     },
+    cancelar: () => {
+      exigir();
+      c = null;
+      m = null;
+      Almacen.campeonato.eliminar();
+    },
+    cambiarFormato: d => {
+      exigir();
+      if (!d.config.criterios.length) throw new ErrorRegla('Escoja al menos un criterio de desempate.');
+      const nombre = String(d.nombre || '').trim() || c.nombre;
+      const nuevo = nuevoCampeonato(nombre, d.formato, Object.assign(configuracionPorDefecto(), d.config));
+      importarEquipos(nuevo, c.equipos);
+      usar(nuevo);
+    },
     siguiente: d => {
       exigir();
       const nombre = String(d.nombre || '').trim();

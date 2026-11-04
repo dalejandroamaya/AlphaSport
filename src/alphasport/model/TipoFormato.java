@@ -5,30 +5,24 @@ package alphasport.model;
  */
 public enum TipoFormato {
 
-    LIGA("Todos contra todos (Liga / Round-Robin)",
-            "Todos los equipos se enfrentan entre si. Gana el que sume mas puntos "
-            + "(3 por victoria, 1 por empate). Puede jugarse a una sola vuelta o a "
-            + "ida y vuelta (doble round-robin, como LaLiga o la Premier League)."),
-    ELIMINACION_DIRECTA("Eliminacion directa (Copa / Knockout)",
-            "El que pierde queda eliminado. Se arma una llave (dieciseisavos, octavos, "
-            + "cuartos...). A partido unico (empate = penales) o a ida y vuelta "
-            + "(avanza el mejor marcador global)."),
-    GRUPOS_Y_ELIMINATORIA("Mixto: fase de grupos + eliminatorias",
-            "Los equipos se dividen en grupos (mini ligas, normalmente de 4). Los mejores "
-            + "de cada grupo pasan a una llave de eliminacion directa hasta la final "
-            + "(como el Mundial o la Copa America)."),
-    TORNEO_CORTO("Torneo corto (Apertura/Clausura) + Liguilla",
-            "Fase regular todos contra todos a una vuelta. Los mejores de la tabla "
-            + "clasifican a una liguilla de eliminacion directa o a cuadrangulares "
-            + "semifinales (como la Liga BetPlay o la Liga MX)."),
-    SUIZO("Sistema suizo (Fase de liga UEFA)",
-            "Todos en una sola tabla, pero cada equipo juega solo un numero limitado de "
-            + "partidos contra rivales distintos. Los primeros pasan directo a la llave "
-            + "y los de la zona media juegan un repechaje (como la Champions League)."),
-    DOBLE_ELIMINACION("Doble eliminacion (Winner / Loser bracket)",
-            "Perder una vez manda al equipo a la llave de perdedores; solo queda fuera "
-            + "al perder dos veces. El campeon de ganadores juega la gran final contra "
-            + "el campeon de perdedores. Ideal para torneos amateur o relampago.");
+    LIGA("Liga",
+            "Todos juegan contra todos. Gana el que sume más puntos al final (3 por ganar, 1 por empatar). "
+            + "Se puede jugar a una vuelta o a ida y vuelta."),
+    ELIMINACION_DIRECTA("Copa (eliminación directa)",
+            "Partidos de llave: el que pierde queda eliminado. Se juegan octavos, cuartos, semifinal y final. "
+            + "Si hay empate, se define por penales."),
+    GRUPOS_Y_ELIMINATORIA("Tipo Mundial (grupos y eliminatorias)",
+            "Primero se juega en grupos pequeños. Los mejores de cada grupo pasan a una llave de eliminación "
+            + "hasta la final, como en el Mundial."),
+    TORNEO_CORTO("Apertura y Clausura (con liguilla)",
+            "Todos contra todos en la fase regular; los mejores de la tabla pasan a la liguilla o a cuadrangulares "
+            + "para definir al campeón, como en la Liga BetPlay."),
+    SUIZO("Tipo Champions (sistema suizo)",
+            "Todos en una sola tabla, pero cada equipo juega solo algunos partidos contra rivales distintos. "
+            + "Los primeros pasan directo a la llave y los del medio juegan un repechaje."),
+    DOBLE_ELIMINACION("Doble oportunidad (doble eliminación)",
+            "Nadie se va al primer tropiezo: quien pierde una vez pasa a la llave de perdedores y solo queda "
+            + "eliminado si pierde dos veces.");
 
     private final String nombre;
     private final String descripcion;

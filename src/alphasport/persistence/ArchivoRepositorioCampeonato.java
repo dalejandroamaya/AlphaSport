@@ -39,4 +39,13 @@ public class ArchivoRepositorioCampeonato implements RepositorioCampeonato {
     public boolean existe() {
         return Files.exists(archivo);
     }
+
+    @Override
+    public void eliminar() throws PersistenciaException {
+        try {
+            Files.deleteIfExists(archivo);
+        } catch (IOException e) {
+            throw new PersistenciaException("No se pudo borrar " + archivo, e);
+        }
+    }
 }

@@ -566,16 +566,21 @@ async function aplicarCriterios() {
 
 let formatoElegido = 'LIGA';
 let nuevoObligatorio = false;
+let cambiandoFormato = false;
 
-function abrirNuevo(obligatorio) {
+function abrirNuevo(obligatorio, cambiar = false) {
   nuevoObligatorio = obligatorio;
+  cambiandoFormato = cambiar;
   $('nvCancelar').hidden = obligatorio;
-  const previos = !obligatorio && E.hay ? E.equipos.filter(e => !e.retirado).length : 0;
+  $('nvTitulo').textContent = cambiar ? 'Cambiar formato del campeonato' : 'Nuevo campeonato';
+  $('nvCrear').textContent = cambiar ? 'Aplicar nuevo formato' : 'Crear campeonato';
+  const previos = !obligatorio && !cambiar && E.hay ? E.equipos.filter(e => !e.retirado).length : 0;
   $('filaMismosEquipos').hidden = previos === 0;
   $('nvMismosEquipos').checked = previos > 0;
   $('textoMismosEquipos').textContent = `Usar los mismos ${previos} equipos de «${E.hay ? E.campeonato.nombre : ''}» (con su DT y jugadores)`;
   const cfg = catalogo.configuracion;
-  $('nvNombre').value = '';
+  $('nvNombre').value = cambiar ? E.campeonato.nombre : '';
+  if (cambiar) formatoElegido = E.campeonato.formato;
   $('nvVictoria').value = cfg.puntosVictoria;
   $('nvEmpate').value = cfg.puntosEmpate;
   $('nvTamGrupo').value = cfg.tamanoGrupo;
@@ -619,6 +624,14 @@ async function crearDesdeFormulario(e) {
     directosSuizo: num('nvDirectos', cfg.directosSuizo), repechajeSuizo: num('nvRepechaje', cfg.repechajeSuizo),
     granFinalConReinicio: $('nvReinicio').checked, criterios: editorNuevo.obtener()
   };
+  if (cambiandoFormato) {
+    const r = await accion('cambiarFormato', { nombre: $('nvNombre').value, formato: formatoElegido, config }, { silencioso: true });
+    if (!r.ok) { mensaje('Error', r.error); return; }
+    $('dlgNuevo').close();
+    mostrarVista('equipos');
+    aviso(`Formato cambiado a «${E.campeonato.formatoNombre}». Se conservaron los ${E.equipos.length} equipos.`);
+    return;
+  }
   const mismos = !$('filaMismosEquipos').hidden && $('nvMismosEquipos').checked;
   const r = await accion('nuevo', { nombre: $('nvNombre').value, formato: formatoElegido, config, mismosEquipos: mismos }, { silencioso: true });
   if (!r.ok) { mensaje('Error', r.error); return; }
@@ -646,6 +659,22 @@ async function accionMenu(nombre) {
         aviso(`Se creó «${nombreNuevo}». El torneo anterior quedó en el historial.`);
         break;
       }
+      case 'cambiarFormato': {
+        const texto = E.campeonato.iniciado
+          ? 'Se conservarán los equipos con su DT y jugadores, pero se borrarán el fixture y todos los resultados del campeonato actual. ¿Continuar?'
+          : 'Puede escoger otro formato y otras reglas. Los equipos registrados se conservan. ¿Continuar?';
+        if (await mensaje('Cambiar formato', texto, { confirmar: true, textoSi: 'Continuar' })) abrirNuevo(false, true);
+        break;
+      }
+      case 'cancelar':
+        if (await mensaje('Cancelar campeonato', `Se descartará «${E.campeonato.nombre}» por completo (equipos, partidos y resultados) y no quedará en el historial. Esta acción no se puede deshacer. ¿Cancelar el campeonato?`,
+          { confirmar: true, textoSi: 'Sí, cancelarlo' })) {
+          const r = await servicio.ejecutar('cancelar');
+          if (!r.ok) { mensaje('Error', r.error); return; }
+          E = r.estado;
+          abrirNuevo(true);
+        }
+        break;
       case 'exportar':
         descargar(await servicio.respaldo());
         break;
@@ -669,7 +698,7 @@ async function accionMenu(nombre) {
       case 'cerrar':
         if (await mensaje('Cerrar programa', 'Se detendrá el programa AlphaSport. Los datos ya están guardados. ¿Cerrar?', { confirmar: true, textoSi: 'Cerrar' })) {
           await servicio.salir();
-          document.body.innerHTML = '<div class="despedida"><img src="img/balon.svg" alt=""><h1>AlphaSport se cerró</h1><p>Ya puede cerrar esta pestaña.</p></div>';
+          document.body.innerHTML = '<div class="despedida"><img src="img/logo.png" alt=""><h1>AlphaSport se cerró</h1><p>Ya puede cerrar esta pestaña.</p></div>';
         }
         break;
     }
@@ -793,7 +822,15 @@ function verCampeon() {
 
 /* ---------------------------------------------------------------- eventos */
 
+function alternarTema() {
+  const claro = document.documentElement.dataset.tema !== 'claro';
+  if (claro) document.documentElement.dataset.tema = 'claro';
+  else delete document.documentElement.dataset.tema;
+  guardarPreferencia('alphasport.tema', claro ? 'claro' : 'oscuro');
+}
+
 function conectarEventos() {
+  document.querySelectorAll('[data-tema-alternar]').forEach(b => b.addEventListener('click', alternarTema));
   editorReglas = editorCriterios($('criteriosReglas'));
   editorNuevo = editorCriterios($('criteriosNuevo'));
   $('formLogin').addEventListener('submit', entrar);
