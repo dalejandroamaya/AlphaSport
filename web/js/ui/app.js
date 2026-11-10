@@ -451,6 +451,9 @@ function htmlPartido(p) {
 let partidoEditando = null;
 let tarjetasTemp = [];
 let cambiosTemp = [];
+/** XI inicial que se está editando: id del equipo → Set con los ids de los titulares. */
+let titularesTemp = new Map();
+const TITULARES = 11;
 
 function abrirPartido(id) {
   const p = E.partidos.find(x => x.id === id);
@@ -478,6 +481,8 @@ function abrirPartido(id) {
   llenarJugadoresTarjeta();
   renderTarjetasTemp();
   cambiosTemp = (p.cambios || []).map(x => Object.assign({}, x));
+  titularesTemp = new Map([[p.local, new Set(p.titularesLocal || [])], [p.visitante, new Set(p.titularesVisitante || [])]]);
+  renderXI();
   $('cbEquipo').innerHTML = $('tjEquipo').innerHTML;
   $('cbMinuto').value = '';
   llenarJugadoresCambio();
@@ -507,6 +512,7 @@ function actualizarFormPartido() {
   // Tarjetas y cambios se anotan mientras se juega («En juego») o después, con el resultado final.
   $('ptTarjetas').disabled = !(jugado || enJuego);
   $('ptCambios').disabled = !(jugado || enJuego);
+  $('ptXI').disabled = !(jugado || enJuego);
   $('tjFilaFechas').hidden = $('tjTipo').value !== 'ROJA';
   const conPenales = jugado && $('ptHayPenales').checked;
   $('ptPL').disabled = !conPenales;
@@ -572,19 +578,75 @@ function movimientos(idEquipo) {
   return { salieron: new Set(delEquipo.map(x => x.sale)), entraron: new Set(delEquipo.map(x => x.entra)) };
 }
 
+const plantillaDe = idEquipo => {
+  const e = equipoPorId(idEquipo);
+  return e ? e.jugadores.filter(j => j.id).sort((a, b) => a.dorsal - b.dorsal) : [];
+};
+/** Cuántos titulares necesita un equipo: 11, o toda la plantilla si tiene menos. */
+const necesariosXI = idEquipo => Math.min(TITULARES, plantillaDe(idEquipo).length);
+
+function renderXI() {
+  const p = partidoEditando;
+  $('xiEquipos').innerHTML = [[p.local, p.localNombre], [p.visitante, p.visitanteNombre]].map(([idEq, nombre]) => {
+    const elegidos = titularesTemp.get(idEq), jugadores = plantillaDe(idEq), necesarios = necesariosXI(idEq);
+    const usados = new Set(cambiosTemp.filter(x => x.equipo === idEq).map(x => x.sale));
+    const completo = elegidos.size === necesarios;
+    const lista = jugadores.length ? jugadores.map(j => {
+      const suspendido = p.suspendidos.some(t => t.jugador === j.id);
+      const marcado = elegidos.has(j.id);
+      // No se puede desmarcar a un titular que ya salió en un cambio, ni marcar más de los necesarios.
+      const bloqueado = (marcado && usados.has(j.id)) || (!marcado && (completo || suspendido));
+      return `<label class="xi-jugador ${marcado ? 'titular' : ''} ${suspendido ? 'suspendido' : ''}" title="${suspendido ? 'Suspendido para este partido' : ''}">
+        <input type="checkbox" data-xi-equipo="${idEq}" value="${j.id}" ${marcado ? 'checked' : ''} ${bloqueado ? 'disabled' : ''}>
+        <b>${j.dorsal}</b><span>${esc(j.nombre)}<small>${esc(j.posicion || '')}${suspendido ? ' · suspendido' : ''}</small></span></label>`;
+    }).join('') : '<p class="sutil">Este equipo no tiene jugadores registrados. Agréguelos en Equipos.</p>';
+    return `<div class="xi-equipo">
+      <div class="xi-cabecera"><b>${esc(nombre)}</b><span class="etiqueta ${completo ? 'jugado' : 'pendiente'}">${elegidos.size}/${necesarios}</span>
+        <button type="button" class="btn mini fantasma" data-xi-rapido="${idEq}" ${jugadores.length ? '' : 'disabled'}>Dorsales más bajos</button>
+        <button type="button" class="btn mini fantasma" data-xi-limpiar="${idEq}" ${elegidos.size && !usados.size ? '' : 'disabled'}>Limpiar</button></div>
+      <div class="xi-lista">${lista}</div></div>`;
+  }).join('');
+}
+
+function alMarcarTitular(e) {
+  const caja = e.target.closest('[data-xi-equipo]');
+  if (!caja) return;
+  const elegidos = titularesTemp.get(Number(caja.dataset.xiEquipo));
+  if (caja.checked) elegidos.add(Number(caja.value)); else elegidos.delete(Number(caja.value));
+  renderXI();
+  llenarJugadoresCambio();
+}
+
+function accionXI(e) {
+  const rapido = e.target.closest('[data-xi-rapido]'), limpiar = e.target.closest('[data-xi-limpiar]');
+  if (!rapido && !limpiar) return;
+  const idEq = Number((rapido || limpiar).dataset.xiRapido || (rapido || limpiar).dataset.xiLimpiar);
+  if (limpiar) titularesTemp.set(idEq, new Set());
+  else {
+    // Los once dorsales más bajos que no estén suspendidos (sirve con los datos de prueba: 1 al 11).
+    const libres = plantillaDe(idEq).filter(j => !partidoEditando.suspendidos.some(t => t.jugador === j.id));
+    titularesTemp.set(idEq, new Set(libres.slice(0, necesariosXI(idEq)).map(j => j.id)));
+  }
+  renderXI();
+  llenarJugadoresCambio();
+}
+
 function llenarJugadoresCambio() {
   const idEquipo = Number($('cbEquipo').value);
-  const equipo = equipoPorId(idEquipo);
-  const jugadores = equipo ? equipo.jugadores.filter(j => j.id).sort((a, b) => a.dorsal - b.dorsal) : [];
+  const jugadores = plantillaDe(idEquipo);
   const { salieron, entraron } = movimientos(idEquipo);
+  const titulares = titularesTemp.get(idEquipo) || new Set();
   const opcion = j => `<option value="${j.id}">#${j.dorsal} ${esc(j.nombre)}${j.posicion ? ' · ' + esc(j.posicion) : ''}</option>`;
-  const vacio = '<option value="">(sin jugadores disponibles)</option>';
-  const pueden = jugadores.filter(j => !salieron.has(j.id));
+  const listo = titulares.size === necesariosXI(idEquipo) && titulares.size > 0;
+  const vacio = `<option value="">${listo ? '(sin jugadores disponibles)' : '(primero escoja el XI inicial)'}</option>`;
+  // Sale: quien está en la cancha (titulares que no han salido y suplentes que ya entraron).
+  const pueden = listo ? jugadores.filter(j => (titulares.has(j.id) || entraron.has(j.id)) && !salieron.has(j.id)) : [];
   const antes = $('cbSale').value;
   $('cbSale').innerHTML = pueden.length ? pueden.map(opcion).join('') : vacio;
   if (pueden.some(j => String(j.id) === antes)) $('cbSale').value = antes;
   const sale = Number($('cbSale').value);
-  const entran = jugadores.filter(j => !salieron.has(j.id) && !entraron.has(j.id) && j.id !== sale);
+  // Entra: solo suplentes que todavía no han entrado.
+  const entran = listo ? jugadores.filter(j => !titulares.has(j.id) && !entraron.has(j.id) && !salieron.has(j.id)) : [];
   const antesEntra = $('cbEntra').value;
   $('cbEntra').innerHTML = entran.length ? entran.map(opcion).join('') : vacio;
   if (entran.some(j => String(j.id) === antesEntra)) $('cbEntra').value = antesEntra;
@@ -608,6 +670,12 @@ function agregarCambio() {
   const entra = equipo && equipo.jugadores.find(j => j.id === Number($('cbEntra').value));
   const minuto = parseInt($('cbMinuto').value, 10);
   if (!(minuto >= 1 && minuto <= 130)) { errorPartido('Escriba el minuto del cambio (entre 1 y 130).'); $('cbMinuto').focus(); return; }
+  const titulares = titularesTemp.get(idEquipo);
+  if (titulares.size !== necesariosXI(idEquipo) || !titulares.size) {
+    errorPartido(`Antes de registrar cambios escoja el XI inicial de ${equipo.nombre} (${titulares.size}/${necesariosXI(idEquipo)}).`);
+    $('xiEquipos').scrollIntoView({ block: 'nearest' });
+    return;
+  }
   if (!sale || !entra) { errorPartido('Escoja el jugador que sale y el que entra. Si no aparecen, registre la plantilla en Equipos.'); return; }
   const { salieron, entraron } = movimientos(idEquipo);
   if (salieron.has(sale.id)) { errorPartido(`${sale.nombre} ya salió en otro cambio.`); return; }
@@ -615,6 +683,7 @@ function agregarCambio() {
   errorPartido('');
   cambiosTemp.push({ equipo: idEquipo, minuto, sale: sale.id, saleNombre: sale.nombre, saleDorsal: sale.dorsal, entra: entra.id, entraNombre: entra.nombre, entraDorsal: entra.dorsal });
   renderCambiosTemp();
+  renderXI();
   llenarJugadoresCambio();
   $('cbSale').focus();
 }
@@ -659,12 +728,28 @@ function datosFormPartido() {
     pl: penales ? entero('ptPL') : SIN_PENALES, pv: penales ? entero('ptPV') : SIN_PENALES,
     tarjetas: tarjetasTemp.map(t => Object.assign({}, t)),
     cambios: cambiosTemp.map(x => Object.assign({}, x)),
+    titularesLocal: [...titularesTemp.get(partidoEditando.local)],
+    titularesVisitante: [...titularesTemp.get(partidoEditando.visitante)],
     fecha: $('ptFecha').value, hora: $('ptHora').value, sede: $('ptSede').value, obs: $('ptObs').value
   };
 }
 
+/** Un XI empezado tiene que quedar completo (o vacío) antes de guardar. */
+function xiCompletos() {
+  for (const [idEq, elegidos] of titularesTemp) {
+    const necesarios = necesariosXI(idEq);
+    if (elegidos.size && elegidos.size !== necesarios) {
+      errorPartido(`El XI inicial de ${equipoPorId(idEq).nombre} tiene ${elegidos.size} de ${necesarios} jugadores. Complételo o pulse «Limpiar».`);
+      $('xiEquipos').scrollIntoView({ block: 'nearest' });
+      return false;
+    }
+  }
+  return true;
+}
+
 async function guardarPartido(accionPartido) {
   if (accionPartido === 'guardar' && !golesCompletos()) return;
+  if (accionPartido === 'guardar' && ['JUGADO', 'EN_JUEGO'].includes($('ptEstado').value) && !xiCompletos()) return;
   const cuerpo = { id: partidoEditando.id, datos: datosFormPartido(), accion: accionPartido, confirmado: false };
   let r = await accion('partido', cuerpo, { silencioso: true });
   if (!r.ok && r.codigo === 'CONFIRMAR') {
@@ -769,6 +854,24 @@ function renderFicha() {
   dibujarFicha(E.partidos.find(p => p.id === fichaElegida));
 }
 
+/** XI inicial de cada equipo con quién salió y quién entró (y en qué minuto). */
+function alineacionesHtml(p) {
+  const cambios = p.cambios || [];
+  if (!(p.titularesLocal || []).length && !(p.titularesVisitante || []).length) return '';
+  const columna = (idEq, nombre, ids) => {
+    const plantilla = plantillaDe(idEq);
+    const jugador = id => plantilla.find(j => j.id === id);
+    const filas = ids.map(jugador).filter(Boolean).sort((a, b) => a.dorsal - b.dorsal).map(j => {
+      const salio = cambios.find(x => x.sale === j.id);
+      return `<li><b>${j.dorsal}</b><span>${esc(j.nombre)}<small>${esc(j.posicion || '')}</small></span>${salio ? `<em class="sale-txt">${ICONO.cambio}${minutoTexto(salio.minuto)}</em>` : ''}</li>`;
+    }).join('');
+    const entraron = cambios.filter(x => x.equipo === idEq).map(x => `<li class="entro"><b>${x.entraDorsal}</b><span>${esc(x.entraNombre)}<small>por #${x.saleDorsal}</small></span><em class="entra-txt">${minutoTexto(x.minuto)}</em></li>`).join('');
+    return `<div class="alineacion"><h4>${esc(nombre)}</h4>${ids.length ? `<ol>${filas}</ol>` : '<p class="sutil pequeno">Sin XI registrado.</p>'}
+      ${entraron ? `<h5>Entraron</h5><ol>${entraron}</ol>` : ''}</div>`;
+  };
+  return `<h3 class="ficha-titulo">XI inicial</h3><div class="alineaciones">${columna(p.local, p.localNombre, p.titularesLocal || [])}${columna(p.visitante, p.visitanteNombre, p.titularesVisitante || [])}</div>`;
+}
+
 function dibujarFicha(p) {
   const cambios = p.cambios || [];
   const am = id => p.tarjetas.filter(t => t.equipo === id && t.tipo !== 'ROJA').length;
@@ -804,6 +907,7 @@ function dibujarFicha(p) {
         ${cifra('Amarillas', am(p.local), am(p.visitante))}
         ${cifra('Rojas', ro(p.local), ro(p.visitante))}
       </div>
+      ${alineacionesHtml(p)}
       <h3 class="ficha-titulo">Minuto a minuto</h3>
       ${eventos.length ? `<ol class="linea-tiempo">${eventos.map(fila).join('')}</ol>`
         : '<p class="sutil ficha-vacia">No se registraron cambios ni tarjetas en este partido. Se anotan al abrir el partido en Partidos.</p>'}
@@ -1352,8 +1456,10 @@ function conectarEventos() {
   $('cbMinuto').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('cbSale').focus(); } });
   $('cbLista').addEventListener('click', e => {
     const b = e.target.closest('[data-quitar-cambio]');
-    if (b) { cambiosTemp.splice(Number(b.dataset.quitarCambio), 1); renderCambiosTemp(); llenarJugadoresCambio(); }
+    if (b) { cambiosTemp.splice(Number(b.dataset.quitarCambio), 1); renderCambiosTemp(); renderXI(); llenarJugadoresCambio(); }
   });
+  $('xiEquipos').addEventListener('change', alMarcarTitular);
+  $('xiEquipos').addEventListener('click', accionXI);
   $('formPartido').addEventListener('submit', e => { e.preventDefault(); guardarPartido('guardar'); });
   $('ptCancelar').addEventListener('click', () => $('dlgPartido').close());
   $('ptWoLocal').addEventListener('click', () => guardarPartido('woLocal'));

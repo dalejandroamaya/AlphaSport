@@ -1220,7 +1220,13 @@ public class Aplicacion extends Application {
             linea.add(minuto, 1, filaEvento);
             filaEvento++;
         }
-        VBox ficha = new VBox(16, filaMeta, marcador, centroCifras, etiqueta("Minuto a minuto", "h3"));
+        VBox ficha = new VBox(16, filaMeta, marcador, centroCifras);
+        if (!Datos.lista(p, "titularesLocal").isEmpty() || !Datos.lista(p, "titularesVisitante").isEmpty()) {
+            HBox alineaciones = new HBox(16, alineacion(p, local, s(p, "localNombre"), Datos.lista(p, "titularesLocal")),
+                    alineacion(p, visitante, s(p, "visitanteNombre"), Datos.lista(p, "titularesVisitante")));
+            ficha.getChildren().addAll(etiqueta("XI inicial", "h3"), alineaciones);
+        }
+        ficha.getChildren().add(etiqueta("Minuto a minuto", "h3"));
         ficha.getChildren().add(eventos.isEmpty()
                 ? etiqueta("No se registraron cambios ni tarjetas en este partido. Se anotan al abrir el partido en Partidos.", "sutil")
                 : linea);
@@ -1232,6 +1238,44 @@ public class Aplicacion extends Application {
             ficha.getStyleClass().add("en-vivo");
         }
         return ficha;
+    }
+
+    /** XI inicial de un equipo con quién salió y quién entró (y en qué minuto). */
+    private Node alineacion(Map<String, Object> p, int idEquipo, String nombre, List<Object> ids) {
+        List<Map<String, Object>> cambios = l(p, "cambios");
+        List<Map<String, Object>> plantilla = l(equipoPorId(idEquipo), "jugadores");
+        VBox columna = new VBox(5, etiqueta(nombre, "jugador-texto", "titulo-alineacion"));
+        if (ids.isEmpty()) {
+            columna.getChildren().add(etiqueta("Sin XI registrado.", "sutil", "pequeno"));
+        }
+        plantilla.stream().filter(j -> ids.contains(n(j, "id"))).sorted(Comparator.comparingInt(j -> n(j, "dorsal"))).forEach(j -> {
+            Map<String, Object> salio = cambios.stream().filter(x -> n(x, "sale") == n(j, "id")).findFirst().orElse(null);
+            HBox fila = new HBox(10, etiqueta(String.valueOf(n(j, "dorsal")), "dorsal"),
+                    new VBox(0, etiqueta(s(j, "nombre"), "jugador-texto"), etiqueta(s(j, "posicion"), "sutil", "pequeno")), espacio());
+            if (salio != null) {
+                HBox marca = new HBox(4, icono(ICONO_SALE, "icono-mini", "icono-sale"), etiqueta(n(salio, "minuto") + "′", "sale-texto"));
+                marca.setAlignment(Pos.CENTER);
+                fila.getChildren().add(marca);
+            }
+            fila.setAlignment(Pos.CENTER_LEFT);
+            fila.getStyleClass().add("fila-alineacion");
+            columna.getChildren().add(fila);
+        });
+        List<Map<String, Object>> entraron = cambios.stream().filter(x -> n(x, "equipo") == idEquipo).toList();
+        if (!entraron.isEmpty()) {
+            columna.getChildren().add(etiqueta("Entraron", "sutil", "pequeno"));
+            for (Map<String, Object> x : entraron) {
+                HBox fila = new HBox(10, etiqueta(String.valueOf(n(x, "entraDorsal")), "dorsal"),
+                        new VBox(0, etiqueta(s(x, "entraNombre"), "jugador-texto"), etiqueta("por #" + n(x, "saleDorsal"), "sutil", "pequeno")),
+                        espacio(), etiqueta(n(x, "minuto") + "′", "entra-texto"));
+                fila.setAlignment(Pos.CENTER_LEFT);
+                fila.getStyleClass().addAll("fila-alineacion", "entro");
+                columna.getChildren().add(fila);
+            }
+        }
+        columna.setPrefWidth(1);
+        HBox.setHgrow(columna, Priority.ALWAYS);
+        return columna;
     }
 
     /** Fila «2  Cambios  0» con una barra a cada lado, como en las transmisiones. */

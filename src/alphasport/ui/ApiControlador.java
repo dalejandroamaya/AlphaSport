@@ -110,8 +110,12 @@ public class ApiControlador {
             datos.setPenalesLocal(jugado ? entero(d.get("pl")) : Partido.SIN_PENALES);
             datos.setPenalesVisitante(jugado ? entero(d.get("pv")) : Partido.SIN_PENALES);
             datos.setTarjetas(tarjetas(lista(d, "tarjetas")), original.getIdLocal());
-            if (d.containsKey("cambios")) { // la carga rapida no envia cambios: se conservan
-                datos.setCambios(cambios(lista(d, "cambios"), original));
+            if (d.containsKey("titularesLocal")) { // la carga rapida no envia el XI ni los cambios: se conservan
+                datos.setTitulares(titulares(lista(d, "titularesLocal"), original.getIdLocal()),
+                        titulares(lista(d, "titularesVisitante"), original.getIdVisitante()));
+            }
+            if (d.containsKey("cambios")) {
+                datos.setCambios(cambios(lista(d, "cambios"), original, datos));
             }
         } else {
             datos.reiniciarResultado();
@@ -163,7 +167,37 @@ public class ApiControlador {
      * Lee los cambios y revisa que tengan sentido en orden de minuto: un
      * jugador que salio no puede volver a entrar y nadie entra dos veces.
      */
-    private ArrayList<Cambio> cambios(List<Object> lista, Partido partido) {
+    /** Jugadores que inician el partido. */
+    public static final int TITULARES = 11;
+
+    /**
+     * Lee el XI inicial de un equipo: jugadores de su plantilla, sin repetir,
+     * y exactamente 11 (o toda la plantilla si tiene menos de 11).
+     */
+    private ArrayList<Integer> titulares(List<Object> lista, int idEquipo) {
+        ArrayList<Integer> ids = new ArrayList<>();
+        if (lista.isEmpty()) {
+            return ids;
+        }
+        alphasport.model.Equipo equipo = servicio.buscarEquipo(idEquipo);
+        for (Object o : lista) {
+            int id = entero(o);
+            if (servicio.getCampeonato().buscarJugador(idEquipo, id) == null) {
+                throw new ReglaNegocioException("Uno de los titulares de " + equipo.getNombreEquipo() + " no está en su plantilla.");
+            }
+            if (!ids.contains(id)) {
+                ids.add(id);
+            }
+        }
+        int necesarios = Math.min(TITULARES, equipo.getJugadores().size());
+        if (ids.size() != necesarios) {
+            throw new ReglaNegocioException("El XI inicial de " + equipo.getNombreEquipo() + " debe tener " + necesarios
+                    + " jugadores (tiene " + ids.size() + ").");
+        }
+        return ids;
+    }
+
+    private ArrayList<Cambio> cambios(List<Object> lista, Partido partido, Partido datos) {
         ArrayList<Cambio> cambios = new ArrayList<>();
         for (Object o : lista) {
             Map<String, Object> c = mapa(o);
@@ -188,7 +222,29 @@ public class ApiControlador {
         cambios.sort(Comparator.comparingInt(Cambio::getMinuto));
         Set<Integer> salieron = new HashSet<>();
         Set<Integer> entraron = new HashSet<>();
+        // Con el XI inicial definido: sale alguien que esta en la cancha y entra un suplente.
+        java.util.Map<Integer, Set<Integer>> enCancha = new java.util.HashMap<>();
+        // («datos» es una copia sin los ids de los equipos: el XI se busca por el partido original)
+        java.util.Map<Integer, List<Integer>> xi = java.util.Map.of(partido.getIdLocal(), datos.getTitularesLocal(),
+                partido.getIdVisitante(), datos.getTitularesVisitante());
+        xi.forEach((idEquipo, ids) -> {
+            if (!ids.isEmpty()) {
+                enCancha.put(idEquipo, new HashSet<>(ids));
+            }
+        });
         for (Cambio c : cambios) {
+            if (!enCancha.containsKey(c.getIdEquipo()) && !lista.isEmpty()) {
+                throw new ReglaNegocioException("Antes de registrar cambios escoja el XI inicial de "
+                        + servicio.getCampeonato().nombreDe(c.getIdEquipo()) + ".");
+            }
+            Set<Integer> cancha = enCancha.get(c.getIdEquipo());
+            if (!cancha.contains(c.getIdSale()) && !salieron.contains(c.getIdSale())) {
+                throw new ReglaNegocioException("#" + c.getDorsalSale() + " " + c.getNombreSale() + " no está en la cancha en el minuto "
+                        + c.getMinuto() + ": solo puede salir un titular o alguien que ya entró.");
+            }
+            if (xi.get(c.getIdEquipo()).contains(c.getIdEntra())) {
+                throw new ReglaNegocioException("#" + c.getDorsalEntra() + " " + c.getNombreEntra() + " es titular: solo pueden entrar suplentes.");
+            }
             if (salieron.contains(c.getIdSale())) {
                 throw new ReglaNegocioException("#" + c.getDorsalSale() + " " + c.getNombreSale() + " ya había salido antes del minuto " + c.getMinuto() + ".");
             }
@@ -198,6 +254,8 @@ public class ApiControlador {
             }
             salieron.add(c.getIdSale());
             entraron.add(c.getIdEntra());
+            cancha.remove(c.getIdSale());
+            cancha.add(c.getIdEntra());
         }
         return cambios;
     }

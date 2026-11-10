@@ -90,7 +90,7 @@ const P = {
     return -1;
   },
   reiniciar(p) {
-    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [] });
+    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [], titularesLocal: [], titularesVisitante: [] });
   },
   tarjetas: p => p.tarjetas || [], // partidos guardados antes de las tarjetas por jugador
   cambios: p => p.cambios || [],   // partidos guardados antes de registrar cambios
@@ -113,7 +113,8 @@ const P = {
     const { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs } = p;
     const tarjetas = P.tarjetas(p).map(t => Object.assign({}, t));
     const cambios = P.cambios(p).map(x => Object.assign({}, x));
-    return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas, cambios };
+    const titularesLocal = (p.titularesLocal || []).slice(), titularesVisitante = (p.titularesVisitante || []).slice();
+    return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas, cambios, titularesLocal, titularesVisitante };
   }
 };
 

@@ -136,6 +136,8 @@ public class Presentador {
         m.put("sede", p.getSede());
         m.put("obs", p.getObservaciones());
         m.put("tarjetas", p.getTarjetas().stream().map(this::tarjeta).collect(Collectors.toList()));
+        m.put("titularesLocal", new ArrayList<>(p.getTitularesLocal()));
+        m.put("titularesVisitante", new ArrayList<>(p.getTitularesVisitante()));
         m.put("cambios", p.getCambios().stream().map(x -> mapa("equipo", x.getIdEquipo(), "minuto", x.getMinuto(),
                 "sale", x.getIdSale(), "saleNombre", x.getNombreSale(), "saleDorsal", x.getDorsalSale(),
                 "entra", x.getIdEntra(), "entraNombre", x.getNombreEntra(), "entraDorsal", x.getDorsalEntra()))

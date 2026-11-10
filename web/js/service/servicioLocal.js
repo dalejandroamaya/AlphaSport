@@ -128,6 +128,7 @@ function crearServicioLocal() {
       fecha: p.fecha || 'Por definir', hora: p.hora || '', sede: p.sede || '', obs: p.obs || '',
       tarjetas: P.tarjetas(p).map(t => Object.assign({ minuto: 0 }, t)),
       cambios: P.cambios(p).map(x => Object.assign({}, x)),
+      titularesLocal: (p.titularesLocal || []).slice(), titularesVisitante: (p.titularesVisitante || []).slice(),
       suspendidos: m.suspendidosEn(p).map(t => ({ jugador: t.jugador, nombre: t.nombre, equipo: t.equipo, equipoNombre: m.nombre(t.equipo) }))
     };
   }
@@ -249,8 +250,24 @@ function crearServicioLocal() {
 
   const MINUTO_MAXIMO = 130; // 90 + prórroga + descuento
 
-  /** Revisa los cambios en orden de minuto: quien salió no vuelve a entrar y nadie entra dos veces. */
-  function leerCambios(lista, p) {
+  const TITULARES = 11;
+
+  /** XI inicial de un equipo: jugadores de su plantilla, exactamente 11 (o toda la plantilla si tiene menos). */
+  function leerTitulares(lista, idEquipo) {
+    const ids = [...new Set(lista.map(Number))];
+    if (!ids.length) return [];
+    const e = c.equipos.find(q => q.id === idEquipo);
+    if (ids.some(id => !e.jugadores.some(j => j.id === id))) throw new ErrorRegla(`Uno de los titulares de ${e.nombre} no está en su plantilla.`);
+    const necesarios = Math.min(TITULARES, e.jugadores.length);
+    if (ids.length !== necesarios) throw new ErrorRegla(`El XI inicial de ${e.nombre} debe tener ${necesarios} jugadores (tiene ${ids.length}).`);
+    return ids;
+  }
+
+  /**
+   * Revisa los cambios en orden de minuto: sale alguien que está en la cancha
+   * (titular o que ya entró), entra un suplente, y quien salió no vuelve.
+   */
+  function leerCambios(lista, p, datos) {
     const cambios = lista.map(x => {
       const equipo = x.equipo | 0;
       if (equipo !== p.local && equipo !== p.visitante) throw new ErrorRegla('Uno de los cambios es de un equipo que no juega este partido.');
@@ -263,12 +280,21 @@ function crearServicioLocal() {
       return { equipo, minuto, sale: sale.id, saleNombre: sale.nombre, saleDorsal: sale.dorsal, entra: entra.id, entraNombre: entra.nombre, entraDorsal: entra.dorsal };
     }).sort((a, b) => a.minuto - b.minuto);
     const salieron = new Set(), entraron = new Set();
+    const titularesDe = id => (id === p.local ? datos.titularesLocal : datos.titularesVisitante) || [];
+    const enCancha = new Map();
+    for (const id of [p.local, p.visitante]) if (titularesDe(id).length) enCancha.set(id, new Set(titularesDe(id)));
     for (const x of cambios) {
+      const cancha = enCancha.get(x.equipo);
+      if (!cancha) throw new ErrorRegla(`Antes de registrar cambios escoja el XI inicial de ${m.nombre(x.equipo)}.`);
+      if (!cancha.has(x.sale) && !salieron.has(x.sale)) throw new ErrorRegla(`#${x.saleDorsal} ${x.saleNombre} no está en la cancha en el minuto ${x.minuto}: solo puede salir un titular o alguien que ya entró.`);
+      if (titularesDe(x.equipo).includes(x.entra)) throw new ErrorRegla(`#${x.entraDorsal} ${x.entraNombre} es titular: solo pueden entrar suplentes.`);
       if (salieron.has(x.sale)) throw new ErrorRegla(`#${x.saleDorsal} ${x.saleNombre} ya había salido antes del minuto ${x.minuto}.`);
       if (salieron.has(x.entra)) throw new ErrorRegla(`#${x.entraDorsal} ${x.entraNombre} ya fue sustituido y no puede volver a entrar.`);
       if (entraron.has(x.entra)) throw new ErrorRegla(`#${x.entraDorsal} ${x.entraNombre} ya había entrado en otro cambio.`);
       salieron.add(x.sale);
       entraron.add(x.entra);
+      cancha.delete(x.sale);
+      cancha.add(x.entra);
     }
     return cambios;
   }
@@ -315,7 +341,12 @@ function crearServicioLocal() {
         if (minuto < 0 || minuto > MINUTO_MAXIMO) throw new ErrorRegla(`El minuto de la tarjeta debe estar entre 1 y ${MINUTO_MAXIMO}.`);
         return Object.assign({}, t, { minuto, fechas: t.tipo === 'ROJA' ? Math.max(1, t.fechas | 0) : 0 });
       }), p.local);
-      if (d.cambios) datos.cambios = leerCambios(d.cambios, p); // la carga rápida no envía cambios: se conservan
+      // la carga rápida no envía el XI ni los cambios: se conservan
+      if (d.titularesLocal) {
+        datos.titularesLocal = leerTitulares(d.titularesLocal, p.local);
+        datos.titularesVisitante = leerTitulares(d.titularesVisitante || [], p.visitante);
+      }
+      if (d.cambios) datos.cambios = leerCambios(d.cambios, p, datos);
     } else {
       P.reiniciar(datos);
       datos.estado = d.estado;

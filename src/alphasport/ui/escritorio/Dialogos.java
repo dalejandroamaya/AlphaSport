@@ -865,12 +865,102 @@ class Dialogos {
         List<Map<String, Object>> puedenSalir = new ArrayList<>();
         List<Map<String, Object>> puedenEntrar = new ArrayList<>();
         Runnable[] llenarCambio = new Runnable[1];
+
+        // ---- XI inicial: id del equipo -> ids de los titulares
+        Map<Integer, java.util.Set<Integer>> titulares = new LinkedHashMap<>();
+        titulares.put(idsEquipos[0], new java.util.LinkedHashSet<>());
+        titulares.put(idsEquipos[1], new java.util.LinkedHashSet<>());
+        Datos.lista(p, "titularesLocal").forEach(o -> titulares.get(idsEquipos[0]).add(((Number) o).intValue()));
+        Datos.lista(p, "titularesVisitante").forEach(o -> titulares.get(idsEquipos[1]).add(((Number) o).intValue()));
+        java.util.function.Function<Integer, List<Map<String, Object>>> plantillaDe = idEq -> l(app.equipoPorId(idEq), "jugadores").stream()
+                .filter(j -> n(j, "id") > 0).sorted(Comparator.comparingInt(j -> n(j, "dorsal"))).toList();
+        // 11 titulares, o toda la plantilla si tiene menos de 11.
+        java.util.function.IntUnaryOperator necesarios = idEq -> Math.min(TITULARES, plantillaDe.apply(idEq).size());
+        java.util.function.IntPredicate xiListo = idEq -> titulares.get(idEq).size() == necesarios.applyAsInt(idEq) && !titulares.get(idEq).isEmpty();
+        HBox columnasXI = new HBox(14);
+        Runnable[] dibujarXI = new Runnable[1];
+        dibujarXI[0] = () -> {
+            columnasXI.getChildren().clear();
+            for (int k = 0; k < 2; k++) {
+                int idEq = idsEquipos[k];
+                java.util.Set<Integer> elegidos = titulares.get(idEq);
+                int faltan = necesarios.applyAsInt(idEq);
+                boolean completo = elegidos.size() == faltan;
+                java.util.Set<Integer> usados = new java.util.HashSet<>();
+                cambios.stream().filter(x -> n(x, "equipo") == idEq).forEach(x -> usados.add(n(x, "sale")));
+                Label cuenta = etiqueta(elegidos.size() + "/" + faltan, "etiqueta", completo ? "etiqueta-jugado" : "etiqueta-pendiente");
+                Button rapido = boton("Dorsales más bajos", "mini", "fantasma");
+                Button limpiar = boton("Limpiar", "mini", "fantasma");
+                limpiar.setDisable(elegidos.isEmpty() || !usados.isEmpty());
+                Label nombreEq = etiqueta(s(p, k == 0 ? "localNombre" : "visitanteNombre"), "h3");
+                cuenta.setMinWidth(Region.USE_PREF_SIZE);
+                HBox filaNombre = new HBox(8, nombreEq, cuenta);
+                filaNombre.setAlignment(Pos.CENTER_LEFT);
+                HBox filaBotones = new HBox(6, rapido, limpiar);
+                VBox cabecera = new VBox(6, filaNombre, filaBotones);
+                VBox lista = new VBox(4);
+                List<Map<String, Object>> jugadores = plantillaDe.apply(idEq);
+                if (jugadores.isEmpty()) {
+                    lista.getChildren().add(etiqueta("Este equipo no tiene jugadores registrados. Agréguelos en Equipos.", "sutil"));
+                }
+                rapido.setDisable(jugadores.isEmpty() || !usados.isEmpty());
+                for (Map<String, Object> j : jugadores) {
+                    int id = n(j, "id");
+                    boolean suspendido = l(p, "suspendidos").stream().anyMatch(x -> n(x, "jugador") == id);
+                    CheckBox caja = new CheckBox("#" + n(j, "dorsal") + "  " + s(j, "nombre") + "  ·  " + s(j, "posicion") + (suspendido ? "  ·  suspendido" : ""));
+                    caja.setSelected(elegidos.contains(id));
+                    // No se desmarca a un titular que ya salió en un cambio, ni se marcan más de los necesarios.
+                    caja.setDisable(caja.isSelected() ? usados.contains(id) : completo || suspendido);
+                    caja.getStyleClass().add("xi-jugador");
+                    if (caja.isSelected()) {
+                        caja.getStyleClass().add("titular");
+                    }
+                    caja.setMaxWidth(Double.MAX_VALUE);
+                    caja.setOnAction(e -> {
+                        if (caja.isSelected()) {
+                            elegidos.add(id);
+                        } else {
+                            elegidos.remove(id);
+                        }
+                        dibujarXI[0].run();
+                        llenarCambio[0].run();
+                    });
+                    lista.getChildren().add(caja);
+                }
+                rapido.setOnAction(e -> {
+                    elegidos.clear();
+                    jugadores.stream().filter(j -> l(p, "suspendidos").stream().noneMatch(x -> n(x, "jugador") == n(j, "id")))
+                            .limit(faltan).forEach(j -> elegidos.add(n(j, "id")));
+                    dibujarXI[0].run();
+                    llenarCambio[0].run();
+                });
+                limpiar.setOnAction(e -> {
+                    elegidos.clear();
+                    dibujarXI[0].run();
+                    llenarCambio[0].run();
+                });
+                ScrollPane desplazable = new ScrollPane(lista);
+                desplazable.setFitToWidth(true);
+                desplazable.setPrefViewportHeight(300);
+                desplazable.getStyleClass().add("desplazable");
+                VBox columna = new VBox(8, cabecera, desplazable);
+                columna.setPrefWidth(1);
+                HBox.setHgrow(columna, Priority.ALWAYS);
+                columnasXI.getChildren().add(columna);
+            }
+        };
+        Label ayudaXI = etiqueta("Marque los 11 jugadores que inician el partido en cada equipo. Los demás quedan como suplentes "
+                + "y son los únicos que pueden entrar en un cambio.", "sutil", "pequeno");
+        ayudaXI.setWrapText(true);
+        VBox grupoXI = grupo("XI inicial", ayudaXI, columnasXI);
         boolean[] llenando = {false};
         llenarCambio[0] = () -> {
             llenando[0] = true;
             int idEquipo = idsEquipos[Math.max(0, cbEquipo.getSelectionModel().getSelectedIndex())];
-            List<Map<String, Object>> plantilla = l(app.equipoPorId(idEquipo), "jugadores").stream().filter(j -> n(j, "id") > 0)
-                    .sorted(Comparator.comparingInt(j -> n(j, "dorsal"))).toList();
+            List<Map<String, Object>> plantilla = plantillaDe.apply(idEquipo);
+            java.util.Set<Integer> xi = titulares.get(idEquipo);
+            boolean listo = xiListo.test(idEquipo);
+            String vacio = listo ? "(sin jugadores disponibles)" : "(primero escoja el XI inicial)";
             java.util.Set<Integer> salieron = new java.util.HashSet<>(), entraron = new java.util.HashSet<>();
             cambios.stream().filter(x -> n(x, "equipo") == idEquipo).forEach(x -> {
                 salieron.add(n(x, "sale"));
@@ -879,8 +969,10 @@ class Dialogos {
             int saleAntes = cbSale.getSelectionModel().getSelectedIndex() >= 0 && cbSale.getSelectionModel().getSelectedIndex() < puedenSalir.size()
                     ? n(puedenSalir.get(cbSale.getSelectionModel().getSelectedIndex()), "id") : -1;
             puedenSalir.clear();
-            plantilla.stream().filter(j -> !salieron.contains(n(j, "id"))).forEach(puedenSalir::add);
-            cbSale.setItems(FXCollections.observableArrayList(puedenSalir.isEmpty() ? List.of("(sin jugadores disponibles)")
+            // Sale: quien está en la cancha (titulares que no han salido y suplentes que ya entraron).
+            plantilla.stream().filter(j -> listo && (xi.contains(n(j, "id")) || entraron.contains(n(j, "id"))) && !salieron.contains(n(j, "id")))
+                    .forEach(puedenSalir::add);
+            cbSale.setItems(FXCollections.observableArrayList(puedenSalir.isEmpty() ? List.of(vacio)
                     : puedenSalir.stream().map(Dialogos::textoJugador).toList()));
             int iSale = 0;
             for (int i = 0; i < puedenSalir.size(); i++) {
@@ -891,9 +983,10 @@ class Dialogos {
             cbSale.getSelectionModel().select(iSale);
             int sale = puedenSalir.isEmpty() ? -1 : n(puedenSalir.get(iSale), "id");
             puedenEntrar.clear();
-            plantilla.stream().filter(j -> !salieron.contains(n(j, "id")) && !entraron.contains(n(j, "id")) && n(j, "id") != sale)
+            // Entra: solo suplentes que todavía no han entrado.
+            plantilla.stream().filter(j -> listo && !xi.contains(n(j, "id")) && !entraron.contains(n(j, "id")) && !salieron.contains(n(j, "id")))
                     .forEach(puedenEntrar::add);
-            cbEntra.setItems(FXCollections.observableArrayList(puedenEntrar.isEmpty() ? List.of("(sin jugadores disponibles)")
+            cbEntra.setItems(FXCollections.observableArrayList(puedenEntrar.isEmpty() ? List.of(vacio)
                     : puedenEntrar.stream().map(Dialogos::textoJugador).toList()));
             cbEntra.getSelectionModel().selectFirst();
             llenando[0] = false;
@@ -924,6 +1017,7 @@ class Dialogos {
                 quitar.setOnAction(e -> {
                     cambios.remove(x);
                     dibujarCambios[0].run();
+                    dibujarXI[0].run();
                     llenarCambio[0].run();
                 });
                 HBox fila = new HBox(10, textos, quitar);
@@ -932,6 +1026,7 @@ class Dialogos {
                 listaCambios.getChildren().add(fila);
             }
         };
+        dibujarXI[0].run();
         llenarCambio[0].run();
         dibujarCambios[0].run();
         Button agregarCambio = boton("Agregar cambio");
@@ -940,6 +1035,12 @@ class Dialogos {
             if (min == null) {
                 mostrarError(err, "Escriba el minuto del cambio (entre 1 y 130).");
                 cbMinuto.requestFocus();
+                return;
+            }
+            int idEqCambio = idsEquipos[cbEquipo.getSelectionModel().getSelectedIndex()];
+            if (!xiListo.test(idEqCambio)) {
+                mostrarError(err, "Antes de registrar cambios escoja el XI inicial de " + cbEquipo.getValue() + " ("
+                        + titulares.get(idEqCambio).size() + "/" + necesarios.applyAsInt(idEqCambio) + ").");
                 return;
             }
             int iSale = cbSale.getSelectionModel().getSelectedIndex(), iEntra = cbEntra.getSelectionModel().getSelectedIndex();
@@ -953,6 +1054,7 @@ class Dialogos {
                     "sale", n(sale, "id"), "saleNombre", s(sale, "nombre"), "saleDorsal", n(sale, "dorsal"),
                     "entra", n(entra, "id"), "entraNombre", s(entra, "nombre"), "entraDorsal", n(entra, "dorsal")));
             dibujarCambios[0].run();
+            dibujarXI[0].run();
             llenarCambio[0].run();
             cbSale.requestFocus();
         });
@@ -986,6 +1088,7 @@ class Dialogos {
             // Tarjetas y cambios se anotan mientras se juega («En juego») o después, con el resultado final.
             grupoTarjetas.setDisable(!(jugado || enJuego));
             grupoCambios.setDisable(!(jugado || enJuego));
+            grupoXI.setDisable(!(jugado || enJuego));
             pl.setDisable(!jugado || !hayPenales.isSelected());
             pv.setDisable(!jugado || !hayPenales.isSelected());
             boolean roja = tjTipo.getSelectionModel().getSelectedIndex() == 1;
@@ -1027,7 +1130,7 @@ class Dialogos {
         Button cancelar = boton("Cancelar", "fantasma");
         HBox botones = new HBox(10, woLocal, woVisitante, borrar, Aplicacion.espacio(), cancelar, guardar);
         botones.setAlignment(Pos.CENTER_LEFT);
-        Stage v = ventana("Partido", cuerpo(app.contexto(p), marcador, new HBox(14, campo("Estado", estado), penales), grupoTarjetas, grupoCambios,
+        Stage v = ventana("Partido", cuerpo(app.contexto(p), marcador, new HBox(14, campo("Estado", estado), penales), grupoTarjetas, grupoXI, grupoCambios,
                 new HBox(12, campo("Fecha", fecha), campo("Hora", hora), campo("Sede", sede), campo("Observaciones", obs)), err, botones), 900);
         cancelar.setOnAction(e -> v.close());
 
@@ -1046,10 +1149,23 @@ class Dialogos {
                 (faltaLocal ? gl : gv).requestFocus();
                 return;
             }
+            int iEst = estado.getSelectionModel().getSelectedIndex();
+            if (accion.equals("guardar") && (iEst == JUGADO || iEst == EN_JUEGO)) {
+                // Un XI empezado tiene que quedar completo (o vacío) antes de guardar.
+                for (int k = 0; k < 2; k++) {
+                    int idEq = idsEquipos[k], elegidos = titulares.get(idEq).size(), faltan = necesarios.applyAsInt(idEq);
+                    if (elegidos > 0 && elegidos != faltan) {
+                        mostrarError(err, "El XI inicial de " + s(p, k == 0 ? "localNombre" : "visitanteNombre") + " tiene " + elegidos
+                                + " de " + faltan + " jugadores. Complételo o pulse «Limpiar».");
+                        return;
+                    }
+                }
+            }
             boolean penal = conPenales && hayPenales.isSelected();
             Map<String, Object> datos = mapa("estado", claves[estado.getSelectionModel().getSelectedIndex()],
                     "gl", faltaLocal ? 0 : Integer.parseInt(gl.getText()), "gv", faltaVisitante ? 0 : Integer.parseInt(gv.getText()), "pl", penal ? pl.getValue() : -1, "pv", penal ? pv.getValue() : -1,
-                    "tarjetas", tarjetas, "cambios", cambios, "fecha", fecha.getValue() == null ? "" : fecha.getValue().toString(),
+                    "tarjetas", tarjetas, "cambios", cambios,
+                    "titularesLocal", new ArrayList<>(titulares.get(idsEquipos[0])), "titularesVisitante", new ArrayList<>(titulares.get(idsEquipos[1])), "fecha", fecha.getValue() == null ? "" : fecha.getValue().toString(),
                     "hora", hora.getText(), "sede", sede.getText(), "obs", obs.getText());
             Map<String, Object> cuerpo = mapa("id", n(p, "id"), "datos", datos, "accion", accion, "confirmado", false);
             Map<String, Object> r = app.ejecutar("partido", cuerpo);
@@ -1077,6 +1193,9 @@ class Dialogos {
         borrar.setOnAction(e -> enviar.accept("borrar"));
         v.showAndWait();
     }
+
+    /** Jugadores que inician el partido. */
+    static final int TITULARES = 11;
 
     private static String textoJugador(Map<String, Object> j) {
         return "#" + n(j, "dorsal") + " " + s(j, "nombre") + (s(j, "posicion").isEmpty() ? "" : " · " + s(j, "posicion"));

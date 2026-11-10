@@ -39,6 +39,8 @@ public class Partido implements Serializable {
     private int rojasVisitante;
     private ArrayList<Tarjeta> tarjetas = new ArrayList<>();
     private ArrayList<Cambio> cambios = new ArrayList<>();
+    private ArrayList<Integer> titularesLocal = new ArrayList<>();     // ids del XI inicial
+    private ArrayList<Integer> titularesVisitante = new ArrayList<>();
 
     private String fecha = "Por definir";
     private String hora = "";
@@ -109,6 +111,8 @@ public class Partido implements Serializable {
         rojasVisitante = 0;
         getTarjetas().clear();
         getCambios().clear();
+        getTitularesLocal().clear();
+        getTitularesVisitante().clear();
     }
 
     /**
@@ -133,6 +137,8 @@ public class Partido implements Serializable {
         for (Cambio c : otro.getCambios()) {
             cambios.add(c.copia());
         }
+        titularesLocal = new ArrayList<>(otro.getTitularesLocal());
+        titularesVisitante = new ArrayList<>(otro.getTitularesVisitante());
         fecha = otro.fecha;
         hora = otro.hora;
         sede = otro.sede;
@@ -335,6 +341,29 @@ public class Partido implements Serializable {
 
     public void setCambios(ArrayList<Cambio> cambios) {
         this.cambios = cambios;
+    }
+
+    public ArrayList<Integer> getTitularesLocal() {
+        if (titularesLocal == null) { // archivos guardados antes de existir el XI inicial
+            titularesLocal = new ArrayList<>();
+        }
+        return titularesLocal;
+    }
+
+    public ArrayList<Integer> getTitularesVisitante() {
+        if (titularesVisitante == null) {
+            titularesVisitante = new ArrayList<>();
+        }
+        return titularesVisitante;
+    }
+
+    public ArrayList<Integer> getTitularesDe(int idEquipo) {
+        return idEquipo == idLocal ? getTitularesLocal() : getTitularesVisitante();
+    }
+
+    public void setTitulares(ArrayList<Integer> local, ArrayList<Integer> visitante) {
+        this.titularesLocal = local;
+        this.titularesVisitante = visitante;
     }
 
     public boolean isEnJuego() {
