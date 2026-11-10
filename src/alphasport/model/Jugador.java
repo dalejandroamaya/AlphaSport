@@ -4,7 +4,17 @@ public class Jugador extends Persona {
 
     private static final long serialVersionUID = 1L;
 
-    public static final String[] POSICIONES = {"Portero", "Defensa", "Mediocampista", "Delantero"};
+    /** Posiciones especificas agrupadas por linea (las que se usan en todo el futbol). */
+    public static final String[][] GRUPOS_POSICIONES = {
+        {"Portería", "Portero"},
+        {"Defensa", "Defensa central", "Líbero", "Lateral derecho", "Lateral izquierdo", "Carrilero derecho", "Carrilero izquierdo"},
+        {"Mediocampo", "Mediocampista defensivo", "Mediocampista central", "Interior derecho", "Interior izquierdo",
+            "Volante derecho", "Volante izquierdo", "Mediocampista ofensivo"},
+        {"Ataque", "Mediapunta", "Extremo derecho", "Extremo izquierdo", "Segundo delantero", "Delantero centro"}
+    };
+
+    public static final String[] POSICIONES = java.util.Arrays.stream(GRUPOS_POSICIONES)
+            .flatMap(g -> java.util.Arrays.stream(g).skip(1)).toArray(String[]::new);
 
     private int id; // no cambia aunque se edite el dorsal (lo usan las tarjetas)
     private int dorsal;

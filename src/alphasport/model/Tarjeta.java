@@ -19,6 +19,7 @@ public class Tarjeta implements Serializable {
     private int dorsal;
     private String tipo;
     private int fechasSuspension;
+    private int minuto; // 0 = sin minuto registrado
 
     public Tarjeta() {
     }
@@ -44,6 +45,7 @@ public class Tarjeta implements Serializable {
         t.dorsal = dorsal;
         t.tipo = tipo;
         t.fechasSuspension = fechasSuspension;
+        t.minuto = minuto;
         return t;
     }
 
@@ -65,6 +67,14 @@ public class Tarjeta implements Serializable {
 
     public String getTipo() {
         return tipo;
+    }
+
+    public int getMinuto() {
+        return minuto;
+    }
+
+    public void setMinuto(int minuto) {
+        this.minuto = Math.max(0, minuto);
     }
 
     public int getFechasSuspension() {

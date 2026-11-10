@@ -52,7 +52,7 @@ public class ReporteService {
         linea(sb, "TARJETAS:");
         for (Sanciones.Registro r : new Sanciones(c).listar()) {
             linea(sb, c.nombreDe(r.getTarjeta().getIdEquipo()) + "\t" + r.getTarjeta()
-                    + (r.getFechasPendientes() > 0 ? "\tle faltan " + r.getFechasPendientes() + " fecha(s)" : ""));
+                    + (r.getFechasPendientes() > 0 ? (r.getFechasPendientes() == 1 ? "\tle falta 1 fecha" : "\tle faltan " + r.getFechasPendientes() + " fechas") : ""));
         }
         linea(sb, "");
         linea(sb, c.isTerminado() ? "CAMPEON: " + c.nombreDe(c.getIdCampeon()) : "CAMPEONATO EN CURSO");

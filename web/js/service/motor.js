@@ -2,6 +2,9 @@
 
 /* Reglas del torneo (web): fixture, tablas, desempates, llaves, sanciones y premios. Mismas reglas que el servicio Java. */
 
+/** Texto en singular o plural según la cantidad (evita «partido(s)»). */
+function plural(n, uno, varios) { return n === 1 ? uno : varios; }
+
 function azar(semilla) {
   let a = semilla >>> 0;
   return function () {
@@ -387,7 +390,7 @@ class Motor {
     const i = this.c.fases.length - 1, fase = this.c.fases[i];
     const pendientes = this.contarPendientes(i);
     if (pendientes > 0) {
-      throw new Error(`Faltan ${pendientes} partido(s) por jugar en la fase actual. Los aplazados o suspendidos deben reprogramarse y jugarse (o darse por W.O.).`);
+      throw new Error(`${plural(pendientes, 'Falta 1 partido', `Faltan ${pendientes} partidos`)} por jugar en la fase actual. Los aplazados o suspendidos deben reprogramarse y jugarse (o darse por W.O.).`);
     }
     const error = this.validarRondaDefinida(fase, i);
     if (error) throw new Error(error);
@@ -409,7 +412,7 @@ class Motor {
     const i = this.c.fases.length - 1, fase = this.c.fases[i], pend = this.contarPendientes(i);
     let texto = 'Fase actual: ' + fase.nombre;
     if (fase.tipo !== 'LIGA' && fase.tipo !== 'GRUPOS') texto += ' · ronda ' + this.ultimaRonda(i);
-    return texto + (pend > 0 ? ` · ${pend} partido(s) pendiente(s)` : ' · completa, pulse «Avanzar»');
+    return texto + (pend > 0 ? ` · ${plural(pend, '1 partido pendiente', `${pend} partidos pendientes`)}` : ' · completa: pulse «Cerrar ronda y avanzar»');
   }
 
   agregarFase(fase) {
@@ -462,7 +465,7 @@ class Motor {
     const p = {
       id: this.c.sigPartido++, paso: this.c.paso, fase, grupo: '', ronda, nombreRonda,
       serie: '', pierna: 0, llave: '', eliminatorio: false, local, visitante,
-      estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [],
+      estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [],
       fecha: 'Por definir', hora: '', sede: eq && eq.estadio ? eq.estadio : '', obs: ''
     };
     this.c.partidos.push(p);
@@ -819,7 +822,7 @@ class Motor {
         n++;
       }
     }
-    return `Equipo «${e.nombre}» retirado. ${n} partido(s) pendiente(s) se dieron por W.O. 3-0 a favor del rival.`;
+    return `Equipo «${e.nombre}» retirado. ${n === 0 ? 'No tenía partidos pendientes.' : plural(n, '1 partido pendiente se dio', `${n} partidos pendientes se dieron`) + ' por W.O. 3-0 a favor del rival.'}`;
   }
 }
 

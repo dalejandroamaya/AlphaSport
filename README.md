@@ -12,7 +12,7 @@ El código está organizado en cuatro capas: **ui → service → persistence �
 | **Web con Java** | Java abre la interfaz en el navegador (`127.0.0.1:8080`) | `datos/` |
 | **Web sola** | Abrir `web/index.html` | el navegador |
 
-Las tres tienen las mismas funciones, el mismo diseño (estadio nocturno con detalles neón y dorados) y los logos de AlphaSport.
+Las tres tienen las mismas funciones, el mismo diseño («Estadio bajo reflectores»: vidrio sobre fotos de estadio, focos animados y dorado para los logros, en modo oscuro y claro) y los logos de AlphaSport. El sistema visual está documentado en [DESIGN.md](DESIGN.md).
 
 ## Novedades del V4
 
@@ -21,6 +21,12 @@ Las tres tienen las mismas funciones, el mismo diseño (estadio nocturno con det
 - Menú **Archivo → Cambiar formato del campeonato…** para corregir un formato elegido por error, conservando los equipos y sus plantillas.
 - Menú **Archivo → Cancelar campeonato…** para descartar un campeonato sin guardarlo en el historial.
 - Nombres y descripciones de los formatos en lenguaje sencillo.
+- **Posiciones específicas** al armar la plantilla, agrupadas por línea: Portero; Defensa central, Líbero, Laterales y Carrileros; Mediocampista defensivo, central y ofensivo, Interiores y Volantes; Mediapunta, Extremos, Segundo delantero y Delantero centro.
+- **Cambios durante el partido**: en el partido se anota el minuto, quién sale y quién entra (por ejemplo, minuto 66: sale el 11 y entra el 7). El minuto se conserva para anotar seguido varios cambios hechos a la vez. Un jugador sustituido no puede volver a entrar.
+- Estado **«En juego»**: el marcador, las tarjetas y los cambios se guardan en vivo mientras se juega. Ese partido no cuenta en la tabla hasta que pasa a «Jugado».
+- Las tarjetas ahora pueden llevar **minuto** (opcional).
+- Sección **Estadísticas**: se escoge un partido y se ve su ficha, con el marcador, los cambios, las amarillas y las rojas de cada equipo y la línea de tiempo minuto a minuto. Debajo sigue la tabla de tarjetas y sanciones.
+- **Datos de prueba** (botón en Equipos): crea equipos inventados con DT, estadio y plantilla completa de 20 jugadores (nombre, documento, dorsal y posición) a partir de una **semilla**. La misma semilla genera siempre los mismos datos, en la web y en el escritorio. Con el campeonato ya iniciado solo completa las plantillas vacías.
 
 ## Uso en Visual Studio Code
 

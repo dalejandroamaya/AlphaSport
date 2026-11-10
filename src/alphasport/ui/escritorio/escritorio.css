@@ -1,305 +1,501 @@
+/* =====================================================================
+   AlphaSport · Escritorio (JavaFX) · Estadio bajo reflectores
+   El mismo sistema de DESIGN.md traducido a JavaFX: foto del estadio
+   desenfocada detrás de paneles translúcidos, focos que se encienden,
+   Bricolage Grotesque para títulos y cifras, Onest para la interfaz.
+   Verde = acción y juego. Dorado = logros.
+   ===================================================================== */
 .raiz {
-    -fondo: #04070d;
-    -panel: rgba(14, 24, 40, 0.78);
-    -panel-solido: #0d1726;
-    -campo: #050a14;
-    -superficie: #08101c;
-    -borde: rgba(120, 255, 190, 0.16);
-    -borde-fuerte: rgba(120, 255, 190, 0.38);
-    -texto: #e8f1ff;
-    -sutil: #8a9bb8;
-    -cesped: #1fe08a;
-    -cesped-2: #0bb36a;
-    -oro: #f6c453;
-    -rojo: #ff4d6a;
-    -ambar: #ffb547;
-    -fx-font-family: "Segoe UI", "Inter", sans-serif;
+    -fondo: #05080f;
+    -vidrio: rgba(14, 22, 38, 0.66);
+    -vidrio-alto: rgba(24, 34, 56, 0.74);
+    -vidrio-denso: rgba(10, 16, 28, 0.94);
+    -vidrio-borde: rgba(255, 255, 255, 0.13);
+    -vidrio-luz: rgba(255, 255, 255, 0.18);
+    -campo: rgba(4, 8, 16, 0.6);
+    -pantalla: rgba(2, 5, 10, 0.72);
+    -borde: rgba(255, 255, 255, 0.1);
+    -texto: #eef4ff;
+    -sutil: #a3b2ca;
+    -cesped: #2ee598;
+    -cesped-2: #10b36c;
+    -cesped-suave: rgba(46, 229, 152, 0.15);
+    -oro: #f7c75a;
+    -oro-2: #d39a22;
+    -oro-texto: #f7c75a;
+    -rojo: #ff6b81;
+    -rojo-suave: #ffa3b1;
+    -ambar: #ffb950;
+    -cian: #74dcff;
+    -haz: rgba(225, 242, 255, 0.34);
+    -fx-font-family: "Onest", "Segoe UI", sans-serif;
     -fx-font-size: 14px;
     -fx-text-fill: -texto;
-    -fx-background-color: radial-gradient(center 85% 0%, radius 70%, rgba(31, 224, 138, 0.14), transparent), -fondo;
+    -fx-background-color: -fondo;
     -fx-accent: -cesped;
-    -fx-focus-color: -cesped;
-    -fx-faint-focus-color: rgba(31, 224, 138, 0.18);
+    -fx-focus-color: -cian;
+    -fx-faint-focus-color: transparent;
 }
 
 .raiz.claro {
-    -fondo: #eef3f8;
-    -panel: rgba(255, 255, 255, 0.9);
-    -panel-solido: #ffffff;
-    -campo: #ffffff;
-    -superficie: #f3f7fb;
-    -borde: rgba(8, 120, 72, 0.18);
-    -borde-fuerte: rgba(8, 140, 84, 0.42);
+    -fondo: #eaf1f7;
+    -vidrio: rgba(255, 255, 255, 0.72);
+    -vidrio-alto: rgba(255, 255, 255, 0.84);
+    -vidrio-denso: rgba(255, 255, 255, 0.97);
+    -vidrio-borde: rgba(255, 255, 255, 0.9);
+    -vidrio-luz: rgba(255, 255, 255, 1);
+    -campo: rgba(255, 255, 255, 0.86);
+    -pantalla: #0e1a2b;
+    -borde: rgba(11, 23, 38, 0.11);
     -texto: #0b1726;
-    -sutil: #56667e;
-    -cesped: #079a5b;
-    -cesped-2: #057a47;
-    -oro: #c48a06;
-    -rojo: #d42a48;
-    -ambar: #c27a00;
+    -sutil: #4b5b73;
+    -cesped: #078a52;
+    -cesped-2: #056b40;
+    -cesped-suave: rgba(7, 138, 82, 0.13);
+    -oro: #e0a62a;
+    -oro-2: #b07a0a;
+    -oro-texto: #865c00;
+    -rojo: #c8243f;
+    -rojo-suave: #c8243f;
+    -ambar: #a86400;
+    -cian: #08739f;
+    -haz: rgba(255, 250, 236, 0.75);
 }
+.raiz.coronacion { -haz: rgba(255, 214, 120, 0.5); }
 
+/* ------------------------------------------------------------------ escenario: foto, velo y focos */
+.foto-fondo { -fx-background-color: -fondo; }
+.velo {
+    -fx-background-color:
+        linear-gradient(to bottom, rgba(4, 8, 16, 0.55) 0%, rgba(4, 8, 16, 0.7) 45%, rgba(3, 10, 8, 0.84) 100%),
+        radial-gradient(center 50% 115%, radius 60%, rgba(46, 229, 152, 0.16), transparent);
+}
+.raiz.claro .velo {
+    -fx-background-color:
+        linear-gradient(to bottom, rgba(240, 246, 252, 0.52) 0%, rgba(240, 246, 252, 0.68) 50%, rgba(236, 246, 240, 0.78) 100%),
+        radial-gradient(center 50% 115%, radius 60%, rgba(7, 138, 82, 0.12), transparent);
+}
+.raiz.coronacion .velo {
+    -fx-background-color:
+        linear-gradient(to bottom, rgba(4, 8, 16, 0.55) 0%, rgba(4, 8, 16, 0.7) 45%, rgba(10, 8, 3, 0.84) 100%),
+        radial-gradient(center 50% 110%, radius 65%, rgba(247, 199, 90, 0.26), transparent);
+}
+.haz { -fx-fill: linear-gradient(to bottom, -haz 0%, rgba(255, 255, 255, 0.06) 55%, transparent 100%); -fx-blend-mode: screen; }
+.raiz.claro .haz { -fx-blend-mode: src-over; }
+
+/* ------------------------------------------------------------------ texto */
 .label, .check-box, .toggle-button, .menu-item .label, .tab .tab-label { -fx-text-fill: -texto; }
 .sutil { -fx-text-fill: -sutil; }
-.pequeno { -fx-font-size: 12px; }
+.pequeno { -fx-font-size: 13px; }
 .centro { -fx-text-alignment: center; -fx-alignment: center; }
-.error { -fx-text-fill: -rojo; -fx-font-weight: bold; }
-.advertencia { -fx-text-fill: -ambar; -fx-font-weight: bold; }
-.sobretitulo { -fx-text-fill: -cesped; -fx-font-size: 11px; -fx-font-weight: bold; }
-.oro { -fx-text-fill: -oro; }
-.h2 { -fx-font-size: 22px; -fx-font-weight: bold; }
-.h3 { -fx-font-size: 17px; -fx-font-weight: bold; }
-.titulo { -fx-font-size: 30px; -fx-font-weight: bold; }
-.campo-titulo { -fx-text-fill: -sutil; -fx-font-size: 12px; }
+.error { -fx-text-fill: -rojo; -fx-font-family: "Onest SemiBold"; }
+.advertencia { -fx-text-fill: -ambar; -fx-font-family: "Onest SemiBold"; }
+.sobretitulo { -fx-text-fill: -cesped; -fx-font-size: 13px; -fx-font-family: "Onest SemiBold"; }
+.oro { -fx-text-fill: -oro-texto; }
+.h2 { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 28px; }
+.h3 { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 19px; }
+.titulo { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 40px; }
+.campo-titulo { -fx-text-fill: -sutil; -fx-font-size: 13px; -fx-font-family: "Onest Medium"; }
+.credito-foto { -fx-text-fill: rgba(238, 244, 255, 0.72); -fx-font-size: 11px; }
+.raiz.claro .credito-foto { -fx-text-fill: rgba(11, 23, 38, 0.7); }
 
+/* ------------------------------------------------------------------ vidrio */
 .vidrio {
-    -fx-background-color: -panel;
-    -fx-background-radius: 16;
-    -fx-border-color: -borde;
-    -fx-border-radius: 16;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 24, 0.1, 0, 8);
+    -fx-background-color: -vidrio-luz, linear-gradient(to bottom, -vidrio-alto, -vidrio);
+    -fx-background-insets: 0, 1 0 0 0;
+    -fx-background-radius: 22;
+    -fx-border-color: -vidrio-borde;
+    -fx-border-radius: 22;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.42), 30, 0, 0, 12);
 }
+.raiz.claro .vidrio { -fx-effect: dropshadow(gaussian, rgba(20, 40, 70, 0.18), 30, 0, 0, 12); }
 
-/* botones */
+/* ------------------------------------------------------------------ iconos */
+.icono { -fx-fill: transparent; -fx-stroke: -texto; -fx-stroke-width: 1.9; -fx-stroke-line-cap: round; -fx-stroke-line-join: round; }
+.icono-mini { -fx-scale-x: 0.68; -fx-scale-y: 0.68; -fx-stroke: -sutil; }
+.btn .icono { -fx-stroke: -texto; }
+
+/* ------------------------------------------------------------------ botones */
 .btn {
-    -fx-background-color: rgba(31, 224, 138, 0.1);
+    -fx-background-color: rgba(255, 255, 255, 0.08);
     -fx-background-radius: 999;
-    -fx-border-color: -borde-fuerte;
+    -fx-border-color: -vidrio-borde;
     -fx-border-radius: 999;
     -fx-text-fill: -texto;
-    -fx-font-weight: bold;
-    -fx-padding: 8 16;
+    -fx-font-family: "Onest SemiBold";
+    -fx-font-size: 14px;
+    -fx-padding: 9 18;
+    -fx-min-height: 42;
+    -fx-graphic-text-gap: 8;
     -fx-cursor: hand;
 }
-.btn:hover { -fx-background-color: rgba(31, 224, 138, 0.2); }
-.btn:disabled { -fx-opacity: 0.4; }
-.btn.primario {
-    -fx-background-color: linear-gradient(to bottom right, -cesped, -cesped-2);
+.btn:hover { -fx-background-color: rgba(255, 255, 255, 0.15); -fx-border-color: rgba(255, 255, 255, 0.28); }
+.btn:pressed { -fx-scale-x: 0.97; -fx-scale-y: 0.97; }
+.btn:focused { -fx-border-color: -cian; }
+.btn:disabled { -fx-opacity: 0.42; }
+.raiz.claro .btn { -fx-background-color: rgba(255, 255, 255, 0.7); -fx-border-color: rgba(11, 23, 38, 0.13); }
+.raiz.claro .btn:hover { -fx-background-color: rgba(255, 255, 255, 0.95); -fx-border-color: rgba(11, 23, 38, 0.24); }
+/* El principal brilla como el césped bajo los focos. */
+.btn.primario, .raiz.claro .btn.primario {
+    -fx-background-color: rgba(255, 255, 255, 0.5), linear-gradient(to bottom, #5af0b0, -cesped 45%, -cesped-2);
+    -fx-background-insets: 0, 1 0 0 0;
     -fx-border-color: transparent;
-    -fx-text-fill: #02130b;
-    -fx-effect: dropshadow(gaussian, rgba(31, 224, 138, 0.45), 18, 0.2, 0, 4);
+    -fx-text-fill: #03170d;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 16, 0, 0, 6);
 }
-.btn.primario:hover { -fx-background-color: linear-gradient(to bottom right, #3cf3a0, -cesped); }
-.btn.dorado {
-    -fx-background-color: linear-gradient(to bottom right, #f6c453, #c98f12);
+.btn.primario:hover { -fx-background-color: rgba(255, 255, 255, 0.6), linear-gradient(to bottom, #7af5c2, #44eca4 45%, -cesped); }
+.raiz.claro .btn.primario { -fx-background-color: rgba(255, 255, 255, 0.35), linear-gradient(to bottom, #19a86b, -cesped 50%, -cesped-2); -fx-text-fill: white; }
+.btn.dorado, .raiz.claro .btn.dorado, .btn.primario.dorado {
+    -fx-background-color: rgba(255, 255, 255, 0.55), linear-gradient(to bottom, #ffe39a, #f7c75a 45%, #d39a22);
+    -fx-background-insets: 0, 1 0 0 0;
     -fx-border-color: transparent;
-    -fx-text-fill: #241500;
-    -fx-effect: dropshadow(gaussian, rgba(246, 196, 83, 0.35), 18, 0.2, 0, 4);
+    -fx-text-fill: #2a1900;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 16, 0, 0, 6);
 }
-.btn.fantasma { -fx-background-color: transparent; -fx-border-color: rgba(128, 140, 160, 0.35); }
-.btn.fantasma:hover { -fx-background-color: rgba(128, 140, 160, 0.12); }
-.btn.peligro { -fx-background-color: rgba(255, 77, 106, 0.1); -fx-border-color: rgba(255, 77, 106, 0.5); -fx-text-fill: -rojo; }
-.btn.peligro:hover { -fx-background-color: rgba(255, 77, 106, 0.2); }
-.btn.mini { -fx-padding: 4 11; -fx-font-size: 12px; }
-.btn.grande { -fx-padding: 12 24; -fx-font-size: 15px; }
+.btn.dorado:hover { -fx-background-color: rgba(255, 255, 255, 0.65), linear-gradient(to bottom, #fff0c0, #ffd477 45%, #e0a62a); }
+.btn.fantasma { -fx-background-color: transparent; }
+.btn.sobre-foto { -fx-text-fill: white; -fx-border-color: rgba(255, 255, 255, 0.3); }
+.btn.sobre-foto:hover { -fx-background-color: rgba(255, 255, 255, 0.12); }
+/* Las acciones destructivas pesan menos: texto rojo sin relleno hasta que se señalan. */
+.btn.peligro, .raiz.claro .btn.peligro { -fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: -rojo-suave; }
+.btn.peligro:hover, .raiz.claro .btn.peligro:hover { -fx-background-color: rgba(255, 107, 129, 0.16); }
+.btn.mini { -fx-padding: 5 12; -fx-font-size: 13px; -fx-min-height: 32; }
+.btn.grande { -fx-padding: 13 26; -fx-font-size: 15px; -fx-min-height: 50; }
+.btn.icono-solo { -fx-padding: 0; -fx-min-width: 44; -fx-min-height: 44; -fx-pref-width: 44; -fx-pref-height: 44; }
 .menu-archivo > .arrow-button { -fx-padding: 0; }
 .menu-archivo > .arrow-button > .arrow { -fx-padding: 0; -fx-shape: ""; }
 .menu-archivo > .label { -fx-text-fill: -texto; }
-.context-menu { -fx-background-color: -panel-solido; -fx-background-radius: 12; -fx-border-color: -borde-fuerte; -fx-border-radius: 12; -fx-padding: 6; }
-.menu-item { -fx-background-radius: 8; -fx-padding: 8 14; }
-.menu-item:focused { -fx-background-color: rgba(31, 224, 138, 0.16); }
+.context-menu {
+    -fx-background-color: -vidrio-denso;
+    -fx-background-radius: 16;
+    -fx-border-color: -vidrio-borde;
+    -fx-border-radius: 16;
+    -fx-padding: 7;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 24, 0, 0, 10);
+}
+.context-menu .separator .line { -fx-border-color: -borde transparent transparent transparent; }
+.menu-item { -fx-background-radius: 10; -fx-padding: 9 14; }
+.menu-item .label { -fx-font-size: 14px; }
+.menu-item:focused { -fx-background-color: rgba(128, 140, 160, 0.16); }
 .opcion-peligro .label { -fx-text-fill: -rojo; }
 
-/* campos */
+/* ------------------------------------------------------------------ campos */
 .text-field, .password-field, .combo-box, .spinner, .date-picker {
     -fx-background-color: -campo;
-    -fx-background-radius: 10;
-    -fx-border-color: rgba(128, 140, 160, 0.3);
-    -fx-border-radius: 10;
+    -fx-background-radius: 12;
+    -fx-border-color: -borde;
+    -fx-border-radius: 12;
     -fx-text-fill: -texto;
-    -fx-prompt-text-fill: -sutil;
+    -fx-prompt-text-fill: #8796ae;
+    -fx-min-height: 44;
 }
-.text-field, .password-field { -fx-padding: 9 12; }
-.text-field:focused, .password-field:focused, .combo-box:focused, .spinner:focused { -fx-border-color: -cesped; }
-.combo-box .list-cell { -fx-text-fill: -texto; -fx-background-color: transparent; }
-.combo-box-popup .list-view { -fx-background-color: -panel-solido; -fx-border-color: -borde-fuerte; }
-.combo-box-popup .list-cell { -fx-background-color: -panel-solido; -fx-text-fill: -texto; -fx-padding: 7 12; }
-.combo-box-popup .list-cell:hover, .combo-box-popup .list-cell:selected { -fx-background-color: rgba(31, 224, 138, 0.2); }
+.text-field, .password-field { -fx-padding: 10 14; }
+.text-field:hover, .password-field:hover, .combo-box:hover { -fx-border-color: rgba(128, 140, 160, 0.45); }
+.text-field:focused, .password-field:focused, .combo-box:focused, .spinner:focused, .date-picker:focused { -fx-border-color: -cesped; }
+.combo-box .list-cell { -fx-text-fill: -texto; -fx-background-color: transparent; -fx-padding: 4 10; }
+.combo-box-popup .list-view { -fx-background-color: -vidrio-denso; -fx-background-radius: 12; -fx-border-color: -vidrio-borde; -fx-border-radius: 12; -fx-padding: 5; }
+.combo-box-popup .list-cell { -fx-background-color: transparent; -fx-text-fill: -texto; -fx-padding: 8 12; -fx-background-radius: 8; }
+.combo-box-popup .list-cell:hover, .combo-box-popup .list-cell:selected { -fx-background-color: -cesped-suave; }
 .spinner .text-field { -fx-background-color: transparent; -fx-border-color: transparent; }
 .spinner .increment-arrow-button, .spinner .decrement-arrow-button { -fx-background-color: transparent; }
 .spinner .increment-arrow, .spinner .decrement-arrow, .combo-box .arrow { -fx-background-color: -sutil; }
-.check-box .box { -fx-background-color: -campo; -fx-border-color: rgba(128, 140, 160, 0.45); -fx-border-radius: 5; -fx-background-radius: 5; }
+.date-picker .arrow-button { -fx-background-color: transparent; }
+.check-box .box { -fx-background-color: -campo; -fx-border-color: rgba(128, 140, 160, 0.5); -fx-border-radius: 6; -fx-background-radius: 6; }
 .check-box:selected .box { -fx-background-color: -cesped; -fx-border-color: -cesped; }
-.check-box:selected .mark { -fx-background-color: #02130b; }
+.check-box:selected .mark { -fx-background-color: #03170d; }
 
-/* login */
-.login {
-    -fx-background-color: linear-gradient(to bottom, transparent 55%, rgba(11, 63, 37, 0.85) 100%),
-        radial-gradient(center 20% 0%, radius 60%, rgba(31, 224, 138, 0.25), transparent),
-        radial-gradient(center 80% 0%, radius 60%, rgba(71, 215, 255, 0.18), transparent), -fondo;
-}
-.login-tarjeta { -fx-padding: 30 34; }
-.logo-login { -fx-effect: dropshadow(gaussian, rgba(31, 224, 138, 0.45), 30, 0.15, 0, 0); }
+/* ------------------------------------------------------------------ login */
+.login-tarjeta { -fx-padding: 34 32 30 32; }
+.logo-login { -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 22, 0, 0, 12); }
 
-/* estructura */
-.barra-lateral {
-    -fx-background-color: linear-gradient(to bottom, rgba(10, 18, 32, 0.96), rgba(4, 7, 13, 0.96));
-    -fx-border-color: transparent -borde transparent transparent;
-    -fx-padding: 24 16;
-}
-.raiz.claro .barra-lateral { -fx-background-color: linear-gradient(to bottom, #ffffff, #f2f6fa); }
-.marca-lateral { -fx-padding: 0 0 14 0; -fx-border-color: transparent transparent -borde transparent; }
-.logo-lateral { -fx-effect: dropshadow(gaussian, rgba(31, 224, 138, 0.4), 20, 0.1, 0, 0); }
-.marca-nombre { -fx-font-size: 22px; -fx-font-weight: bold; }
-.marca-sub { -fx-text-fill: -sutil; -fx-font-size: 10px; }
+/* ------------------------------------------------------------------ estructura */
+.barra-lateral { -fx-padding: 22 14; }
+.marca-lateral { -fx-padding: 0 0 16 0; -fx-border-color: transparent transparent -borde transparent; }
+.logo-lateral { -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 18, 0, 0, 8); }
+.marca-nombre { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 23px; }
+.marca-sub { -fx-text-fill: -sutil; -fx-font-size: 12px; }
 .nav {
     -fx-background-color: transparent;
-    -fx-background-radius: 12;
+    -fx-background-radius: 14;
     -fx-border-color: transparent;
-    -fx-border-radius: 12;
+    -fx-border-radius: 14;
     -fx-text-fill: -sutil;
-    -fx-font-weight: bold;
+    -fx-font-family: "Onest Medium";
+    -fx-font-size: 15px;
     -fx-padding: 11 14;
     -fx-alignment: center-left;
     -fx-cursor: hand;
 }
-.nav:hover { -fx-background-color: rgba(128, 140, 160, 0.1); -fx-text-fill: -texto; }
+.nav:hover { -fx-background-color: rgba(128, 140, 160, 0.12); -fx-text-fill: -texto; }
 .nav:selected {
-    -fx-background-color: linear-gradient(to right, rgba(31, 224, 138, 0.22), rgba(31, 224, 138, 0.02));
-    -fx-border-color: -borde-fuerte;
+    -fx-background-color: linear-gradient(to right, rgba(46, 229, 152, 0.22), rgba(46, 229, 152, 0.05));
+    -fx-border-color: rgba(46, 229, 152, 0.3);
     -fx-text-fill: -texto;
+    -fx-font-family: "Onest SemiBold";
 }
+.raiz.claro .nav:selected { -fx-background-color: linear-gradient(to right, rgba(7, 138, 82, 0.17), rgba(7, 138, 82, 0.04)); -fx-border-color: rgba(7, 138, 82, 0.26); }
+.icono-nav { -fx-fill: transparent; -fx-stroke: -sutil; -fx-stroke-width: 1.8; -fx-stroke-line-cap: round; -fx-stroke-line-join: round; }
+.nav:hover .icono-nav { -fx-stroke: -texto; }
+.nav:selected .icono-nav { -fx-stroke: -cesped; }
 .chip {
-    -fx-background-color: rgba(128, 140, 160, 0.12);
+    -fx-background-color: rgba(255, 255, 255, 0.08);
     -fx-background-radius: 999;
-    -fx-border-color: rgba(128, 140, 160, 0.3);
+    -fx-border-color: -borde;
     -fx-border-radius: 999;
-    -fx-padding: 4 12;
-    -fx-font-size: 12px;
-    -fx-font-weight: bold;
+    -fx-padding: 4 13;
+    -fx-font-size: 13px;
+    -fx-font-family: "Onest Medium";
 }
-.chip-modo { -fx-text-fill: #47d7ff; }
-.marcador-principal {
-    -fx-padding: 24 28;
-    -fx-background-color: linear-gradient(to right, rgba(31, 224, 138, 0.16), transparent 45%, rgba(246, 196, 83, 0.1)), -panel;
+.raiz.claro .chip { -fx-background-color: rgba(255, 255, 255, 0.7); }
+.chip-estado { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(46, 229, 152, 0.36); -fx-font-family: "Onest SemiBold"; }
+.marcador-principal.terminado .chip-estado { -fx-text-fill: -oro-texto; -fx-background-color: rgba(247, 199, 90, 0.17); -fx-border-color: rgba(247, 199, 90, 0.55); }
+.chip-modo { -fx-text-fill: -cian; }
+.marcador-principal { -fx-padding: 26 30; }
+.marcador-principal.terminado {
+    -fx-background-color: rgba(247, 199, 90, 0.6), linear-gradient(to right, rgba(247, 199, 90, 0.2), -vidrio 55%);
+    -fx-background-insets: 0, 2 0 0 0;
+    -fx-border-color: rgba(247, 199, 90, 0.55);
 }
-.estado-vivo { -fx-text-fill: -sutil; }
+.raiz.claro .marcador-principal.terminado {
+    -fx-background-color: rgba(224, 166, 42, 0.6), radial-gradient(center 0% 0%, radius 45%, rgba(224, 166, 42, 0.14), transparent), linear-gradient(to bottom, -vidrio-alto, -vidrio);
+    -fx-background-insets: 0, 2 0 0 0, 2 0 0 0;
+}
+.estado-vivo { -fx-text-fill: -sutil; -fx-font-size: 14px; }
+.estado-vivo.en-juego { -fx-text-fill: -sutil; }
 .desplazable, .desplazable > .viewport { -fx-background-color: transparent; -fx-background: transparent; }
 .scroll-bar { -fx-background-color: transparent; }
-.scroll-bar .thumb { -fx-background-color: rgba(128, 140, 160, 0.4); -fx-background-radius: 8; }
+.scroll-bar .thumb { -fx-background-color: rgba(128, 140, 160, 0.38); -fx-background-radius: 8; }
 .scroll-bar .increment-button, .scroll-bar .decrement-button { -fx-padding: 0; }
-.vacio { -fx-padding: 34; -fx-alignment: center; -fx-text-fill: -sutil; }
+.scroll-bar .increment-arrow, .scroll-bar .decrement-arrow { -fx-shape: ""; -fx-padding: 0; }
+.vacio { -fx-padding: 40; -fx-alignment: center; -fx-text-fill: -sutil; -fx-font-size: 15px; }
 .aviso {
-    -fx-background-color: -panel-solido;
-    -fx-background-radius: 14;
-    -fx-border-color: -borde-fuerte;
-    -fx-border-radius: 14;
-    -fx-padding: 12 20;
-    -fx-font-weight: bold;
-    -fx-effect: dropshadow(gaussian, rgba(31, 224, 138, 0.25), 24, 0.1, 0, 6);
+    -fx-background-color: -vidrio-denso;
+    -fx-background-radius: 999;
+    -fx-border-color: -vidrio-borde;
+    -fx-border-radius: 999;
+    -fx-padding: 13 22;
+    -fx-font-family: "Onest SemiBold";
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 24, 0, 0, 10);
 }
 
+/* ------------------------------------------------------------------ vistas */
+.cabecera-vista { -fx-padding: 20 24; }
+
 /* equipos */
-.tarjeta-equipo { -fx-padding: 16; }
-.tarjeta-equipo:hover { -fx-border-color: -borde-fuerte; }
-.escudo-texto { -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 16px; -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.6), 4, 0.3, 0, 1); }
+.tarjeta-equipo { -fx-padding: 18; }
+.tarjeta-equipo:hover { -fx-border-color: rgba(255, 255, 255, 0.26); }
+.escudo-texto { -fx-text-fill: white; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 19px; -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 4, 0, 0, 2); }
 
 /* partidos */
-.titulo-bloque, .titulo-ronda { -fx-text-fill: -sutil; -fx-font-weight: bold; -fx-font-size: 12px; }
-.titulo-ronda { -fx-text-fill: -cesped; }
-.partido { -fx-padding: 14 16; -fx-cursor: hand; }
-.partido:hover { -fx-border-color: -borde-fuerte; -fx-effect: dropshadow(gaussian, rgba(31, 224, 138, 0.22), 24, 0.1, 0, 6); }
-.equipo-partido { -fx-font-weight: bold; }
+.titulo-bloque { -fx-text-fill: -texto; -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 17px; -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 10, 0, 0, 1); }
+.raiz.claro .titulo-bloque { -fx-effect: dropshadow(gaussian, rgba(255, 255, 255, 0.9), 10, 0, 0, 0); }
+.titulo-ronda { -fx-text-fill: -cesped; -fx-font-family: "Onest SemiBold"; -fx-font-size: 14px; }
+.partido { -fx-padding: 15 18; -fx-cursor: hand; }
+.partido:hover { -fx-border-color: rgba(255, 255, 255, 0.3); -fx-translate-y: -2; }
+.equipo-partido { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 17px; }
 .ganador { -fx-text-fill: -cesped; }
-.resultado { -fx-background-color: #020509; -fx-background-radius: 10; -fx-border-color: rgba(255, 255, 255, 0.08); -fx-border-radius: 10; -fx-padding: 6 12; -fx-min-width: 90; }
-.led { -fx-text-fill: #1fe08a; -fx-font-size: 22px; -fx-font-weight: bold; -fx-font-family: "Consolas", monospace; -fx-effect: dropshadow(gaussian, rgba(31, 224, 138, 0.7), 10, 0.2, 0, 0); }
-.vs { -fx-text-fill: #8a9bb8; -fx-font-weight: bold; }
-.penales-texto { -fx-text-fill: #f6c453; -fx-font-size: 11px; }
-.etiqueta { -fx-background-radius: 999; -fx-border-radius: 999; -fx-padding: 2 9; -fx-font-size: 11px; -fx-font-weight: bold; }
-.etiqueta-jugado { -fx-text-fill: -cesped; -fx-background-color: rgba(31, 224, 138, 0.12); -fx-border-color: rgba(31, 224, 138, 0.35); }
-.etiqueta-pendiente { -fx-text-fill: #47d7ff; -fx-background-color: rgba(71, 215, 255, 0.1); -fx-border-color: rgba(71, 215, 255, 0.3); }
-.etiqueta-aplazado, .etiqueta-suspendido { -fx-text-fill: -ambar; -fx-background-color: rgba(255, 181, 71, 0.12); -fx-border-color: rgba(255, 181, 71, 0.35); }
+/* El marcador como la pantalla gigante del estadio. */
+.resultado {
+    -fx-background-color: -pantalla;
+    -fx-background-radius: 14;
+    -fx-border-color: rgba(255, 255, 255, 0.1);
+    -fx-border-radius: 14;
+    -fx-padding: 5 14;
+    -fx-min-width: 100;
+}
+.cifras { -fx-text-fill: white; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 27px; }
+.vs { -fx-text-fill: #a3b2ca; -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 15px; }
+.penales-texto { -fx-text-fill: #f7c75a; -fx-font-size: 12px; -fx-font-family: "Onest SemiBold"; }
+.etiqueta { -fx-background-radius: 999; -fx-border-radius: 999; -fx-padding: 2 10; -fx-font-size: 12px; -fx-font-family: "Onest SemiBold"; }
+.etiqueta-jugado { -fx-text-fill: -cesped; -fx-background-color: rgba(46, 229, 152, 0.13); -fx-border-color: rgba(46, 229, 152, 0.32); }
+.etiqueta-pendiente { -fx-text-fill: -cian; -fx-background-color: rgba(116, 220, 255, 0.11); -fx-border-color: rgba(116, 220, 255, 0.3); }
+.etiqueta-aplazado, .etiqueta-suspendido { -fx-text-fill: -ambar; -fx-background-color: rgba(255, 185, 80, 0.13); -fx-border-color: rgba(255, 185, 80, 0.32); }
+.etiqueta-retirado { -fx-text-fill: -rojo; -fx-background-color: rgba(255, 107, 129, 0.12); -fx-border-color: rgba(255, 107, 129, 0.32); }
 
-/* tablas */
-.table-view { -fx-background-color: -panel; -fx-background-radius: 14; -fx-border-color: -borde; -fx-border-radius: 14; -fx-padding: 4; }
+/* tablas: la pantalla gigante */
+.table-view {
+    -fx-background-color: -vidrio-luz, linear-gradient(to bottom, -vidrio-alto, -vidrio);
+    -fx-background-insets: 0, 1 0 0 0;
+    -fx-background-radius: 22;
+    -fx-border-color: -vidrio-borde;
+    -fx-border-radius: 22;
+    -fx-padding: 8 10;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 30, 0, 0, 12);
+}
+.raiz.claro .table-view { -fx-effect: dropshadow(gaussian, rgba(20, 40, 70, 0.16), 30, 0, 0, 12); }
 .table-view .column-header-background { -fx-background-color: transparent; }
-.table-view .column-header, .table-view .filler { -fx-background-color: transparent; -fx-border-color: transparent transparent -borde transparent; -fx-size: 40; }
-.table-view .column-header .label { -fx-text-fill: -sutil; -fx-font-size: 11px; -fx-font-weight: bold; }
-.table-row-cell { -fx-background-color: transparent; -fx-border-color: transparent transparent rgba(128, 140, 160, 0.14) transparent; }
-.table-row-cell:hover { -fx-background-color: rgba(128, 140, 160, 0.08); }
-.table-row-cell:selected { -fx-background-color: rgba(31, 224, 138, 0.14); }
-.table-cell { -fx-text-fill: -texto; -fx-padding: 0 10; -fx-alignment: center-left; -fx-border-color: transparent; -fx-background-color: transparent; }
+.table-view .column-header, .table-view .filler { -fx-background-color: transparent; -fx-border-color: transparent; -fx-size: 42; }
+.table-view .column-header .label { -fx-text-fill: -sutil; -fx-font-size: 12px; -fx-font-family: "Onest SemiBold"; }
+.table-row-cell { -fx-background-color: transparent; -fx-background-radius: 12; -fx-border-color: transparent; }
+.table-row-cell:odd { -fx-background-color: rgba(255, 255, 255, 0.04); -fx-background-insets: 2 0; }
+.raiz.claro .table-row-cell:odd { -fx-background-color: rgba(255, 255, 255, 0.6); }
+.table-row-cell:hover { -fx-background-color: rgba(255, 255, 255, 0.08); -fx-background-insets: 2 0; }
+.table-row-cell:selected { -fx-background-color: -cesped-suave; -fx-background-insets: 2 0; }
+.table-cell { -fx-text-fill: -texto; -fx-padding: 0 10; -fx-alignment: center-left; -fx-border-color: transparent; -fx-background-color: transparent; -fx-font-size: 14px; }
 .num.table-cell, .table-column.num { -fx-alignment: center; }
-.table-row-cell.clasifica { -fx-border-color: transparent transparent rgba(128, 140, 160, 0.14) -cesped; -fx-border-width: 0 0 1 4; }
-.table-row-cell.repechaje { -fx-border-color: transparent transparent rgba(128, 140, 160, 0.14) -ambar; -fx-border-width: 0 0 1 4; }
+.table-column.puntos { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 20px; }
+.table-column.posicion { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 15px; }
+.table-row-cell.clasifica .table-column.posicion { -fx-text-fill: -cesped; }
+.table-row-cell.repechaje .table-column.posicion { -fx-text-fill: -ambar; }
+/* El líder queda bajo un foco dorado. */
+.table-row-cell.lider { -fx-background-color: linear-gradient(to right, rgba(247, 199, 90, 0.3), rgba(247, 199, 90, 0.05) 70%); -fx-background-insets: 2 0; }
+.raiz.claro .table-row-cell.lider { -fx-background-color: linear-gradient(to right, rgba(224, 166, 42, 0.32), rgba(224, 166, 42, 0.05) 70%); }
+.table-row-cell.lider .table-column.puntos, .table-row-cell.lider .table-column.posicion { -fx-text-fill: -oro-texto; }
 .table-view .placeholder .label { -fx-text-fill: -sutil; }
 
 /* llaves */
-.llave-fase { -fx-padding: 20; }
-.cruce { -fx-background-color: -superficie; -fx-background-radius: 12; -fx-border-color: rgba(128, 140, 160, 0.2); -fx-border-radius: 12; }
-.lado { -fx-padding: 9 12; }
-.lado.gana { -fx-background-color: linear-gradient(to right, rgba(31, 224, 138, 0.2), transparent); -fx-background-radius: 12; }
-.lado.gana .label { -fx-text-fill: -cesped; -fx-font-weight: bold; }
-.lado-goles { -fx-text-fill: -sutil; }
+.llave-fase { -fx-padding: 22; }
+.cruce { -fx-background-color: -pantalla; -fx-background-radius: 14; -fx-border-color: rgba(255, 255, 255, 0.1); -fx-border-radius: 14; }
+.lado { -fx-padding: 10 13; }
+.lado-nombre, .lado-goles { -fx-text-fill: white; }
+.lado-goles { -fx-text-fill: #a3b2ca; -fx-font-family: "Bricolage Grotesque ExtraBold"; }
+.lado.gana { -fx-background-color: linear-gradient(to right, rgba(46, 229, 152, 0.22), transparent); -fx-background-radius: 14; }
+.lado.gana .label { -fx-text-fill: #2ee598; -fx-font-family: "Onest Bold"; }
+.lado.gana .lado-goles { -fx-font-family: "Bricolage Grotesque ExtraBold"; }
 .campeon-caja {
-    -fx-padding: 24;
-    -fx-background-color: radial-gradient(center 50% 0%, radius 90%, rgba(246, 196, 83, 0.32), -panel-solido);
-    -fx-background-radius: 16;
-    -fx-border-color: rgba(246, 196, 83, 0.5);
-    -fx-border-radius: 16;
-    -fx-effect: dropshadow(gaussian, rgba(246, 196, 83, 0.3), 40, 0.1, 0, 0);
+    -fx-padding: 22 26;
+    -fx-background-color: rgba(247, 199, 90, 0.6), linear-gradient(to right, rgba(247, 199, 90, 0.3), -vidrio 62%);
+    -fx-background-insets: 0, 2 0 0 0;
+    -fx-background-radius: 22;
+    -fx-border-color: rgba(247, 199, 90, 0.55);
+    -fx-border-radius: 22;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 30, 0, 0, 12);
 }
-.trofeo { -fx-font-size: 42px; }
-.campeon-nombre { -fx-font-size: 26px; -fx-font-weight: bold; -fx-text-fill: -oro; }
+.campeon-nombre { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 32px; -fx-text-fill: -oro-texto; }
+.campeon-sub { -fx-font-family: "Onest SemiBold"; -fx-text-fill: -oro-texto; }
 
 /* reglas */
-.tarjeta { -fx-padding: 22; }
+.tarjeta { -fx-padding: 24; }
 .regla { -fx-text-fill: -sutil; }
-.criterio, .fila-lista { -fx-background-color: -superficie; -fx-background-radius: 10; -fx-border-color: rgba(128, 140, 160, 0.18); -fx-border-radius: 10; -fx-padding: 7 10; }
-.orden { -fx-background-color: -cesped; -fx-background-radius: 999; -fx-text-fill: #02130b; -fx-font-weight: bold; -fx-min-width: 26; -fx-min-height: 26; -fx-alignment: center; }
-.dorsal { -fx-background-color: rgba(31, 224, 138, 0.15); -fx-background-radius: 8; -fx-text-fill: -cesped; -fx-font-weight: bold; -fx-min-width: 32; -fx-min-height: 28; -fx-alignment: center; }
+.criterio, .fila-lista { -fx-background-color: -campo; -fx-background-radius: 14; -fx-border-color: -borde; -fx-border-radius: 14; -fx-padding: 8 12; }
+.orden { -fx-background-color: -cesped; -fx-background-radius: 999; -fx-text-fill: #03170d; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-min-width: 30; -fx-min-height: 30; -fx-alignment: center; }
+.dorsal { -fx-background-color: -cesped-suave; -fx-background-radius: 10; -fx-text-fill: -cesped; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-min-width: 34; -fx-min-height: 30; -fx-alignment: center; }
 
-/* dialogos */
-.dialogo { -fx-background-color: linear-gradient(to bottom, #0e1a2c, #070d18); }
-.raiz.claro.dialogo { -fx-background-color: linear-gradient(to bottom, #ffffff, #f3f7fb); }
-.msg-texto { -fx-text-fill: -texto; -fx-font-size: 14px; }
-.grupo { -fx-border-color: rgba(128, 140, 160, 0.25); -fx-border-radius: 14; -fx-padding: 16; }
+/* ------------------------------------------------------------------ ventanas suaves */
+.dialogo-sombra { -fx-background-color: transparent; }
+.dialogo-panel {
+    -fx-background-color: rgba(255, 255, 255, 0.16), linear-gradient(to bottom, #172338, #0a1120);
+    -fx-background-insets: 0, 1 0 0 0;
+    -fx-background-radius: 28;
+    -fx-border-color: rgba(255, 255, 255, 0.13);
+    -fx-border-radius: 28;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.6), 24, 0, 0, 10);
+}
+.raiz.claro .dialogo-panel {
+    -fx-background-color: white, linear-gradient(to bottom, #ffffff, #f2f6fa);
+    -fx-border-color: rgba(11, 23, 38, 0.1);
+    -fx-effect: dropshadow(gaussian, rgba(20, 40, 70, 0.32), 24, 0, 0, 10);
+}
+.msg-texto { -fx-text-fill: -texto; -fx-font-size: 15px; }
+.grupo { -fx-border-color: -borde; -fx-border-radius: 18; -fx-background-color: rgba(255, 255, 255, 0.025); -fx-background-radius: 18; -fx-padding: 16; }
 .tarjeta-formato {
-    -fx-background-color: -superficie;
-    -fx-background-radius: 14;
-    -fx-border-color: rgba(128, 140, 160, 0.25);
-    -fx-border-radius: 14;
-    -fx-padding: 14;
+    -fx-background-color: rgba(255, 255, 255, 0.04);
+    -fx-background-radius: 18;
+    -fx-border-color: -borde;
+    -fx-border-radius: 18;
+    -fx-padding: 15;
     -fx-alignment: top-left;
     -fx-cursor: hand;
 }
-.tarjeta-formato:hover { -fx-border-color: -borde-fuerte; }
-.tarjeta-formato:selected { -fx-background-color: linear-gradient(to bottom right, rgba(31, 224, 138, 0.2), -superficie); -fx-border-color: -cesped; }
-.formato-nombre { -fx-font-weight: bold; -fx-font-size: 14px; }
+.raiz.claro .tarjeta-formato { -fx-background-color: rgba(255, 255, 255, 0.7); }
+.tarjeta-formato:hover { -fx-border-color: rgba(128, 140, 160, 0.45); }
+.tarjeta-formato:selected { -fx-background-color: linear-gradient(to bottom right, rgba(46, 229, 152, 0.22), rgba(46, 229, 152, 0.04)); -fx-border-color: -cesped; }
+.formato-nombre { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 16px; }
 .tarjeta-formato:selected .formato-nombre { -fx-text-fill: -cesped; }
-.formato-desc { -fx-text-fill: -sutil; -fx-font-size: 12px; }
+.formato-desc { -fx-text-fill: -sutil; -fx-font-size: 13px; }
+/* Marcador del partido: la pantalla gigante. */
 .marcador-partido {
-    -fx-padding: 18;
-    -fx-background-color: radial-gradient(center 50% 0%, radius 80%, rgba(31, 224, 138, 0.18), transparent), #03070e;
-    -fx-background-radius: 16;
-    -fx-border-color: -borde;
-    -fx-border-radius: 16;
+    -fx-padding: 22;
+    -fx-background-color: radial-gradient(center 50% 0%, radius 80%, rgba(46, 229, 152, 0.16), transparent), -pantalla;
+    -fx-background-radius: 22;
+    -fx-border-color: rgba(255, 255, 255, 0.1);
+    -fx-border-radius: 22;
 }
-.raiz.claro .marcador-partido { -fx-background-color: radial-gradient(center 50% 0%, radius 80%, rgba(7, 154, 91, 0.14), transparent), #f3f7fb; }
-.equipo-nombre { -fx-font-size: 17px; -fx-font-weight: bold; }
-.led-campo { -fx-pref-width: 100; -fx-background-color: #010307; }
-.led-campo .text-field { -fx-text-fill: #1fe08a; -fx-font-size: 26px; -fx-font-weight: bold; -fx-alignment: center; -fx-font-family: "Consolas", monospace; }
-.led-separador { -fx-font-size: 26px; -fx-text-fill: -sutil; }
+.raiz.claro .marcador-partido { -fx-background-color: radial-gradient(center 50% 0%, radius 80%, rgba(46, 229, 152, 0.14), transparent), #0e1a2b; }
+.equipo-nombre { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 22px; -fx-text-fill: white; }
+.led-campo { -fx-pref-width: 100; -fx-background-color: rgba(0, 0, 0, 0.45); }
+.text-field.led-gol {
+    -fx-pref-width: 86; -fx-pref-height: 70; -fx-background-color: rgba(0, 0, 0, 0.45); -fx-border-color: rgba(255, 255, 255, 0.18); -fx-border-radius: 16; -fx-background-radius: 16;
+    -fx-text-fill: white; -fx-prompt-text-fill: #5d6b82; -fx-font-size: 40px; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-alignment: center;
+}
+.text-field.led-gol:focused { -fx-border-color: -cesped; }
+.text-field.campo-invalido { -fx-border-color: -rojo; }
+.led-campo .text-field { -fx-text-fill: #f7c75a; -fx-font-size: 22px; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-alignment: center; }
+.led-separador { -fx-font-size: 30px; -fx-text-fill: #a3b2ca; -fx-font-family: "Bricolage Grotesque ExtraBold"; }
 .tab-pane .tab-header-background { -fx-background-color: transparent; }
-.tab-pane .tab { -fx-background-color: transparent; -fx-background-radius: 999; -fx-border-color: rgba(128, 140, 160, 0.3); -fx-border-radius: 999; -fx-padding: 4 12; }
-.tab-pane .tab:selected { -fx-background-color: rgba(31, 224, 138, 0.18); -fx-border-color: -cesped; }
-.tab-pane .tab:selected .tab-label { -fx-text-fill: -cesped; }
+.tab-pane .tab { -fx-background-color: transparent; -fx-background-radius: 999; -fx-border-color: -borde; -fx-border-radius: 999; -fx-padding: 5 14; }
+.tab-pane .tab:selected { -fx-background-color: -cesped; -fx-border-color: -cesped; }
+.tab-pane .tab:selected .tab-label { -fx-text-fill: #03170d; -fx-font-family: "Onest SemiBold"; }
 .tab-pane > .tab-content-area { -fx-padding: 14 0 0 0; }
-.lista-historial { -fx-background-color: transparent; -fx-border-color: -borde; -fx-border-radius: 12; }
-.lista-historial .list-cell { -fx-background-color: -superficie; -fx-text-fill: -texto; -fx-padding: 10; -fx-border-color: transparent transparent rgba(128, 140, 160, 0.18) transparent; }
-.lista-historial .list-cell:selected { -fx-background-color: rgba(31, 224, 138, 0.18); }
+.lista-historial { -fx-background-color: transparent; -fx-border-color: -borde; -fx-border-radius: 14; -fx-background-radius: 14; }
+.lista-historial .list-cell { -fx-background-color: transparent; -fx-text-fill: -texto; -fx-padding: 11; -fx-border-color: transparent transparent -borde transparent; }
+.lista-historial .list-cell:selected { -fx-background-color: -cesped-suave; }
 .lista-historial .list-cell:empty { -fx-background-color: transparent; }
-.puesto { -fx-padding: 14; -fx-background-radius: 14; -fx-border-radius: 14; }
-.puesto.oro { -fx-background-color: rgba(246, 196, 83, 0.14); -fx-border-color: rgba(246, 196, 83, 0.55); -fx-padding: 22 14; }
-.puesto.plata { -fx-background-color: rgba(207, 216, 230, 0.08); -fx-border-color: rgba(207, 216, 230, 0.4); }
-.puesto.bronce { -fx-background-color: rgba(208, 138, 77, 0.1); -fx-border-color: rgba(208, 138, 77, 0.45); }
-.puesto.oro .label { -fx-text-fill: -oro; }
-.puesto.bronce .label { -fx-text-fill: #d08a4d; }
-.puesto-nombre { -fx-font-size: 16px; -fx-font-weight: bold; }
-.premio { -fx-background-color: -superficie; -fx-background-radius: 12; -fx-border-color: rgba(128, 140, 160, 0.18); -fx-border-radius: 12; -fx-padding: 12; }
-.premio-valor { -fx-font-weight: bold; -fx-font-size: 14px; }
+.puesto { -fx-padding: 15; -fx-background-radius: 18; -fx-border-radius: 18; }
+.puesto.oro { -fx-background-color: linear-gradient(to bottom, rgba(247, 199, 90, 0.24), rgba(247, 199, 90, 0.05)); -fx-border-color: rgba(247, 199, 90, 0.55); -fx-padding: 22 15; }
+.puesto.plata { -fx-background-color: rgba(211, 219, 232, 0.08); -fx-border-color: rgba(211, 219, 232, 0.4); }
+.puesto.bronce { -fx-background-color: rgba(220, 154, 98, 0.1); -fx-border-color: rgba(220, 154, 98, 0.45); }
+.puesto.oro .label { -fx-text-fill: -oro-texto; }
+.puesto.bronce .label { -fx-text-fill: #dc9a62; }
+.raiz.claro .puesto.bronce .label { -fx-text-fill: #9a5a24; }
+.puesto-nombre { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 19px; }
+.premio { -fx-background-color: rgba(255, 255, 255, 0.04); -fx-background-radius: 16; -fx-border-color: -borde; -fx-border-radius: 16; -fx-padding: 13; }
+.premio-valor { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 16px; }
 .jugador-texto, .criterio-texto, .lado-nombre { -fx-text-fill: -texto; }
+.cruce .lado-nombre { -fx-text-fill: white; }
 
-.icono-nav { -fx-fill: transparent; -fx-stroke: -sutil; -fx-stroke-width: 1.8; -fx-stroke-line-cap: round; -fx-stroke-line-join: round; }
-.nav:hover .icono-nav { -fx-stroke: -texto; }
-.nav:selected .icono-nav { -fx-stroke: -cesped; -fx-effect: dropshadow(gaussian, rgba(31, 224, 138, 0.6), 8, 0.2, 0, 0); }
+/* ------------------------------------------------------------------ coronación */
+.dialogo-campeon { -fx-border-color: rgba(247, 199, 90, 0.55); }
+.raiz.claro .dialogo-campeon { -fx-background-color: #0a1120; -fx-border-color: rgba(247, 199, 90, 0.55); }
+.foto-campeon { -fx-background-color: #070d18; }
+.velo-campeon {
+    -fx-background-color:
+        radial-gradient(center 50% 22%, radius 60%, rgba(247, 199, 90, 0.34), transparent),
+        linear-gradient(to bottom, rgba(10, 14, 24, 0.55), rgba(6, 10, 18, 0.9));
+}
+.campeon-titulo { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 54px; -fx-text-fill: #f7c75a; }
+.campeon-torneo { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 20px; -fx-text-fill: white; }
+.campeon-dt { -fx-text-fill: #c3cfe2; }
+.campeon-tablero { -fx-background-color: rgba(255, 255, 255, 0.09); -fx-background-radius: 16; -fx-border-color: rgba(255, 255, 255, 0.15); -fx-border-radius: 16; -fx-padding: 9 4; }
+.campeon-cifra { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 28px; -fx-text-fill: white; }
+.campeon-cifra-texto { -fx-font-size: 12px; -fx-text-fill: #c3cfe2; }
+
+/* ------------------------------------------------------------------ detalles */
+.punto-vivo { -fx-fill: -cesped; }
+.estado-vivo.terminado .punto-vivo { -fx-fill: -oro-texto; }
+.date-picker > .arrow-button { -fx-background-color: transparent; -fx-padding: 0 10; }
+.date-picker > .arrow-button > .calendar-button { -fx-background-color: -sutil; }
+.date-picker .text-field { -fx-background-color: transparent; -fx-border-color: transparent; }
+
+/* ------------------------------------------------------------------ partido en juego, cambios y minutos */
+.etiqueta-en_juego { -fx-text-fill: -rojo; -fx-background-color: rgba(255, 107, 129, 0.13); -fx-border-color: rgba(255, 107, 129, 0.34); }
+.partido.en-vivo, .ficha.en-vivo { -fx-border-color: rgba(255, 107, 129, 0.42); }
+.incidencias { -fx-border-color: -borde transparent transparent transparent; -fx-border-width: 1 0 0 0; -fx-padding: 8 0 0 0; }
+.minuto, .minuto-eje {
+    -fx-background-color: -pantalla; -fx-background-radius: 8; -fx-text-fill: white; -fx-padding: 2 7;
+    -fx-font-family: "Bricolage Grotesque SemiBold"; -fx-font-size: 13px;
+}
+.minuto-eje { -fx-background-radius: 10; -fx-border-color: rgba(255, 255, 255, 0.14); -fx-border-radius: 10; -fx-padding: 4 8; -fx-font-size: 14px; }
+.raiz.claro .minuto, .raiz.claro .minuto-eje { -fx-background-color: #0e1a2b; }
+.entra-texto { -fx-text-fill: -cesped; -fx-font-family: "Onest SemiBold"; }
+.sale-texto { -fx-text-fill: -sutil; }
+.icono-entra { -fx-stroke: -cesped; -fx-stroke-width: 2.4; }
+.icono-sale { -fx-stroke: -rojo; -fx-stroke-width: 2.4; }
+.campo-minuto { -fx-alignment: center; }
+.grupo-lista { -fx-text-fill: -cesped; -fx-font-family: "Onest SemiBold"; -fx-font-size: 12px; -fx-opacity: 1; -fx-background-color: transparent; }
+
+/* ------------------------------------------------------------------ ficha del partido */
+.ficha { -fx-padding: 20 22; }
+.ficha-goles { -fx-text-fill: white; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 40px; }
+.marcador-partido .equipo-nombre.ganador { -fx-text-fill: #2ee598; }
+.cifra-duelo { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 19px; -fx-text-fill: -texto; }
+.barra-fondo { -fx-background-color: rgba(255, 255, 255, 0.09); -fx-background-radius: 99; }
+.raiz.claro .barra-fondo { -fx-background-color: rgba(11, 23, 38, 0.09); }
+.barra-local { -fx-background-color: -cesped; -fx-background-radius: 99; }
+.barra-visitante { -fx-background-color: -cian; -fx-background-radius: 99; }
+.evento {
+    -fx-background-color: -campo; -fx-background-radius: 14; -fx-border-color: -borde; -fx-border-radius: 14; -fx-padding: 9 13;
+}
+.carton { -fx-background-radius: 2; -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 2, 0, 0, 1); }
+.carton-amarilla { -fx-background-color: #ffd233; }
+.carton-roja { -fx-background-color: #ff3b5c; }

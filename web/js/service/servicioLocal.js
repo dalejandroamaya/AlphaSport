@@ -126,7 +126,8 @@ function crearServicioLocal() {
       localNombre: m.nombre(p.local), visitanteNombre: m.nombre(p.visitante), estado: p.estado, jugado: P.jugado(p),
       gl: p.gl, gv: p.gv, pl: p.pl, pv: p.pv, penales: P.tienePenales(p), ganador: P.jugado(p) ? P.ganador(p) : -1,
       fecha: p.fecha || 'Por definir', hora: p.hora || '', sede: p.sede || '', obs: p.obs || '',
-      tarjetas: P.tarjetas(p).map(t => Object.assign({}, t)),
+      tarjetas: P.tarjetas(p).map(t => Object.assign({ minuto: 0 }, t)),
+      cambios: P.cambios(p).map(x => Object.assign({}, x)),
       suspendidos: m.suspendidosEn(p).map(t => ({ jugador: t.jugador, nombre: t.nombre, equipo: t.equipo, equipoNombre: m.nombre(t.equipo) }))
     };
   }
@@ -215,8 +216,8 @@ function crearServicioLocal() {
     });
     l.push('', 'TARJETAS:');
     for (const { tarjeta: t, pendientes } of m.listarTarjetas()) {
-      l.push([m.nombre(t.equipo), `#${t.dorsal} ${t.nombre}`, t.tipo === 'ROJA' ? `Roja (${t.fechas} fecha/s)` : 'Amarilla',
-        pendientes ? `le faltan ${pendientes} fecha(s)` : ''].join('\t'));
+      l.push([m.nombre(t.equipo), `#${t.dorsal} ${t.nombre}`, t.tipo === 'ROJA' ? `Roja (${plural(t.fechas, '1 fecha', `${t.fechas} fechas`)})` : 'Amarilla',
+        pendientes ? plural(pendientes, 'le falta 1 fecha', `le faltan ${pendientes} fechas`) : ''].join('\t'));
     }
     l.push('', m.terminado() ? 'CAMPEON: ' + m.nombre(c.campeon) : 'CAMPEONATO EN CURSO');
     return l.join('\r\n');
@@ -246,14 +247,75 @@ function crearServicioLocal() {
     equipo.jugadores = d.jugadores.map(j => ({ id: j.id || m.nuevoIdJugador(), nombre: j.nombre.trim(), documento: String(j.documento || '').trim(), dorsal: j.dorsal, posicion: j.posicion }));
   }
 
+  const MINUTO_MAXIMO = 130; // 90 + prórroga + descuento
+
+  /** Revisa los cambios en orden de minuto: quien salió no vuelve a entrar y nadie entra dos veces. */
+  function leerCambios(lista, p) {
+    const cambios = lista.map(x => {
+      const equipo = x.equipo | 0;
+      if (equipo !== p.local && equipo !== p.visitante) throw new ErrorRegla('Uno de los cambios es de un equipo que no juega este partido.');
+      const minuto = x.minuto | 0;
+      if (minuto < 1 || minuto > MINUTO_MAXIMO) throw new ErrorRegla(`El minuto del cambio debe estar entre 1 y ${MINUTO_MAXIMO}.`);
+      const e = c.equipos.find(q => q.id === equipo);
+      const sale = e && e.jugadores.find(j => j.id === x.sale), entra = e && e.jugadores.find(j => j.id === x.entra);
+      if (!sale || !entra) throw new ErrorRegla('Uno de los cambios es de un jugador que ya no existe.');
+      if (sale.id === entra.id) throw new ErrorRegla('En un cambio el jugador que sale y el que entra deben ser distintos.');
+      return { equipo, minuto, sale: sale.id, saleNombre: sale.nombre, saleDorsal: sale.dorsal, entra: entra.id, entraNombre: entra.nombre, entraDorsal: entra.dorsal };
+    }).sort((a, b) => a.minuto - b.minuto);
+    const salieron = new Set(), entraron = new Set();
+    for (const x of cambios) {
+      if (salieron.has(x.sale)) throw new ErrorRegla(`#${x.saleDorsal} ${x.saleNombre} ya había salido antes del minuto ${x.minuto}.`);
+      if (salieron.has(x.entra)) throw new ErrorRegla(`#${x.entraDorsal} ${x.entraNombre} ya fue sustituido y no puede volver a entrar.`);
+      if (entraron.has(x.entra)) throw new ErrorRegla(`#${x.entraDorsal} ${x.entraNombre} ya había entrado en otro cambio.`);
+      salieron.add(x.sale);
+      entraron.add(x.entra);
+    }
+    return cambios;
+  }
+
+  /** Equipos de prueba con plantilla completa generados con una semilla (mismo algoritmo que la versión Java). */
+  function cargarDatosPrueba(d) {
+    exigir();
+    const semilla = d.semilla | 0;
+    const pedidos = Math.max(0, Math.min(DatosPrueba.MAXIMO_EQUIPOS, d.cantidad | 0));
+    if (pedidos > 0) exigirNoIniciado();
+    const completar = d.completar !== false;
+    const sinPlantilla = completar ? c.equipos.filter(e => !e.retirado && !e.jugadores.length) : [];
+    if (!pedidos && !sinPlantilla.length) {
+      throw new ErrorRegla(completar ? 'Todos los equipos ya tienen plantilla. Indique cuántos equipos nuevos crear.' : 'Indique cuántos equipos de prueba crear.');
+    }
+    const r = DatosPrueba.generar(semilla, pedidos, c.equipos.map(e => e.nombre), sinPlantilla.length);
+    const conIds = jugadores => jugadores.map(j => Object.assign(j, { id: m.nuevoIdJugador() }));
+    for (const e of r.equipos) {
+      const equipo = m.agregarEquipo(e.nombre);
+      equipo.estadio = e.estadio;
+      equipo.dt = e.dt;
+      equipo.jugadores = e.jugadores;
+      conIds(equipo.jugadores);
+    }
+    sinPlantilla.forEach((e, i) => { e.jugadores = conIds(r.plantillas[i]); });
+    const creados = r.equipos.length;
+    let texto = creados ? plural(creados, '1 equipo de prueba creado', `${creados} equipos de prueba creados`) : '';
+    if (sinPlantilla.length) texto += (texto ? '; plantilla completada en ' : 'Plantilla completada en ') + plural(sinPlantilla.length, '1 equipo', `${sinPlantilla.length} equipos`);
+    if (creados < pedidos) texto += ' (no hay más nombres de prueba libres)';
+    return `${texto}. Semilla ${semilla}.`;
+  }
+
   function guardarPartido({ id, datos: d, accion, confirmado }) {
     const p = c.partidos.find(x => x.id === id);
     if (!p) throw new ErrorRegla('El partido no existe.');
     const datos = P.datos(p);
-    if (d.estado === 'JUGADO') {
-      datos.estado = 'JUGADO';
-      Object.assign(datos, { gl: Math.max(0, d.gl | 0), gv: Math.max(0, d.gv | 0), pl: d.pl, pv: d.pv });
-      P.ponerTarjetas(datos, d.tarjetas.map(t => Object.assign({}, t, { fechas: t.tipo === 'ROJA' ? Math.max(1, t.fechas | 0) : 0 })), p.local);
+    if (d.estado === 'JUGADO' || d.estado === 'EN_JUEGO') {
+      // «En juego»: el marcador, las tarjetas y los cambios se registran en vivo (sin penales).
+      const jugado = d.estado === 'JUGADO';
+      datos.estado = d.estado;
+      Object.assign(datos, { gl: Math.max(0, d.gl | 0), gv: Math.max(0, d.gv | 0), pl: jugado ? d.pl : SIN_PENALES, pv: jugado ? d.pv : SIN_PENALES });
+      P.ponerTarjetas(datos, d.tarjetas.map(t => {
+        const minuto = t.minuto | 0;
+        if (minuto < 0 || minuto > MINUTO_MAXIMO) throw new ErrorRegla(`El minuto de la tarjeta debe estar entre 1 y ${MINUTO_MAXIMO}.`);
+        return Object.assign({}, t, { minuto, fechas: t.tipo === 'ROJA' ? Math.max(1, t.fechas | 0) : 0 });
+      }), p.local);
+      if (d.cambios) datos.cambios = leerCambios(d.cambios, p); // la carga rápida no envía cambios: se conservan
     } else {
       P.reiniciar(datos);
       datos.estado = d.estado;
@@ -326,6 +388,7 @@ function crearServicioLocal() {
       if (m.terminado()) archivarActual();
       return mensaje;
     },
+    semilla: d => cargarDatosPrueba(d),
     'equipo/rapido': d => {
       exigir();
       exigirNoIniciado();
@@ -362,7 +425,9 @@ function crearServicioLocal() {
         modo: 'web',
         formatos: Object.entries(FORMATOS).map(([clave, f]) => ({ clave, nombre: f.nombre, descripcion: f.descripcion })),
         criterios: Object.entries(CRITERIOS).map(([clave, texto]) => ({ clave, texto })),
-        posiciones: ['Portero', 'Defensa', 'Mediocampista', 'Delantero'],
+        posiciones: GRUPOS_POSICIONES.flatMap(g => g.posiciones),
+        gruposPosiciones: GRUPOS_POSICIONES.map(g => ({ grupo: g.grupo, posiciones: g.posiciones.slice() })),
+        semillaMaximoEquipos: DatosPrueba.MAXIMO_EQUIPOS,
         configuracion: configuracionPorDefecto()
       };
     },

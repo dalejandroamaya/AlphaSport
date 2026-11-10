@@ -46,7 +46,10 @@ public class Presentador {
             criterios.add(mapa("clave", c.name(), "texto", c.getDescripcion()));
         }
         return mapa("modo", "java", "formatos", formatos, "criterios", criterios,
-                "posiciones", Arrays.asList(Jugador.POSICIONES), "configuracion", configuracion(new ConfiguracionTorneo()));
+                "posiciones", Arrays.asList(Jugador.POSICIONES),
+                "gruposPosiciones", Arrays.stream(Jugador.GRUPOS_POSICIONES).map(g -> mapa("grupo", g[0],
+                        "posiciones", Arrays.asList(g).subList(1, g.length))).collect(Collectors.toList()),
+                "semillaMaximoEquipos", alphasport.service.DatosPrueba.MAXIMO_EQUIPOS, "configuracion", configuracion(new ConfiguracionTorneo()));
     }
 
     public Map<String, Object> estado() {
@@ -133,13 +136,18 @@ public class Presentador {
         m.put("sede", p.getSede());
         m.put("obs", p.getObservaciones());
         m.put("tarjetas", p.getTarjetas().stream().map(this::tarjeta).collect(Collectors.toList()));
+        m.put("cambios", p.getCambios().stream().map(x -> mapa("equipo", x.getIdEquipo(), "minuto", x.getMinuto(),
+                "sale", x.getIdSale(), "saleNombre", x.getNombreSale(), "saleDorsal", x.getDorsalSale(),
+                "entra", x.getIdEntra(), "entraNombre", x.getNombreEntra(), "entraDorsal", x.getDorsalEntra()))
+                .collect(Collectors.toList()));
         m.put("suspendidos", suspendidos);
         return m;
     }
 
     private Map<String, Object> tarjeta(Tarjeta t) {
         return mapa("equipo", t.getIdEquipo(), "jugador", t.getIdJugador(), "nombre", t.getNombreJugador(),
-                "dorsal", t.getDorsal(), "tipo", t.isRoja() ? "ROJA" : "AMARILLA", "fechas", t.getFechasSuspension());
+                "dorsal", t.getDorsal(), "tipo", t.isRoja() ? "ROJA" : "AMARILLA", "fechas", t.getFechasSuspension(),
+                "minuto", t.getMinuto());
     }
 
     private List<Object> tablas(Campeonato c, MotorCampeonato motor, ResumenCampeonato resumen) {

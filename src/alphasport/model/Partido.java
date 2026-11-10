@@ -38,6 +38,7 @@ public class Partido implements Serializable {
     private int amarillasVisitante;
     private int rojasVisitante;
     private ArrayList<Tarjeta> tarjetas = new ArrayList<>();
+    private ArrayList<Cambio> cambios = new ArrayList<>();
 
     private String fecha = "Por definir";
     private String hora = "";
@@ -107,6 +108,7 @@ public class Partido implements Serializable {
         amarillasVisitante = 0;
         rojasVisitante = 0;
         getTarjetas().clear();
+        getCambios().clear();
     }
 
     /**
@@ -126,6 +128,10 @@ public class Partido implements Serializable {
         tarjetas = new ArrayList<>();
         for (Tarjeta t : otro.getTarjetas()) {
             tarjetas.add(t.copia());
+        }
+        cambios = new ArrayList<>();
+        for (Cambio c : otro.getCambios()) {
+            cambios.add(c.copia());
         }
         fecha = otro.fecha;
         hora = otro.hora;
@@ -318,6 +324,21 @@ public class Partido implements Serializable {
             tarjetas = new ArrayList<>();
         }
         return tarjetas;
+    }
+
+    public ArrayList<Cambio> getCambios() {
+        if (cambios == null) { // archivos guardados antes de existir los cambios
+            cambios = new ArrayList<>();
+        }
+        return cambios;
+    }
+
+    public void setCambios(ArrayList<Cambio> cambios) {
+        this.cambios = cambios;
+    }
+
+    public boolean isEnJuego() {
+        return estado == EstadoPartido.EN_JUEGO;
     }
 
     /**

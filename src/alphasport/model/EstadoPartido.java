@@ -2,6 +2,7 @@ package alphasport.model;
 
 public enum EstadoPartido {
     PENDIENTE("Pendiente"),
+    EN_JUEGO("En juego"), // se esta jugando: marcador, tarjetas y cambios en vivo, aun no cuenta en la tabla
     JUGADO("Jugado"),
     APLAZADO("Aplazado"),
     SUSPENDIDO("Suspendido");

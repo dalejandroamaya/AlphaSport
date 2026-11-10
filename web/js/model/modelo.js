@@ -41,7 +41,7 @@ const CRITERIOS = {
   SORTEO: 'Sorteo'
 };
 
-const ESTADOS = { PENDIENTE: 'Pendiente', JUGADO: 'Jugado', APLAZADO: 'Aplazado', SUSPENDIDO: 'Suspendido' };
+const ESTADOS = { PENDIENTE: 'Pendiente', EN_JUEGO: 'En juego', JUGADO: 'Jugado', APLAZADO: 'Aplazado', SUSPENDIDO: 'Suspendido' };
 
 const LLAVE_GANADORES = 'Ganadores';
 const LLAVE_PERDEDORES = 'Perdedores';
@@ -90,9 +90,10 @@ const P = {
     return -1;
   },
   reiniciar(p) {
-    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [] });
+    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [] });
   },
   tarjetas: p => p.tarjetas || [], // partidos guardados antes de las tarjetas por jugador
+  cambios: p => p.cambios || [],   // partidos guardados antes de registrar cambios
   // guarda las tarjetas por jugador y actualiza los totales por equipo (juego limpio)
   // (p puede ser el partido o la copia de sus datos, por eso se pasa el id del local)
   ponerTarjetas(p, tarjetas, idLocal) {
@@ -111,7 +112,8 @@ const P = {
     // copia del resultado y la programacion (lo que se puede editar)
     const { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs } = p;
     const tarjetas = P.tarjetas(p).map(t => Object.assign({}, t));
-    return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas };
+    const cambios = P.cambios(p).map(x => Object.assign({}, x));
+    return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas, cambios };
   }
 };
 

@@ -91,7 +91,8 @@ public class MotorCampeonato {
 
         int pendientes = contarPendientes(indice);
         if (pendientes > 0) {
-            throw new IllegalStateException("Faltan " + pendientes + " partido(s) por jugar en la fase actual.\n"
+            throw new IllegalStateException((pendientes == 1 ? "Falta 1 partido" : "Faltan " + pendientes + " partidos")
+                    + " por jugar en la fase actual.\n"
                     + "Los aplazados o suspendidos deben reprogramarse y jugarse (o darse por W.O.).");
         }
         String error = validarRondaDefinida(fase, indice);
@@ -140,8 +141,8 @@ public class MotorCampeonato {
         if (fase.getTipo() != TipoFase.LIGA && fase.getTipo() != TipoFase.GRUPOS) {
             texto += " - ronda " + ultimaRonda(indice);
         }
-        return texto + (pendientes > 0 ? " - " + pendientes + " partido(s) pendiente(s)"
-                : " - completa, pulse \"Avanzar\"");
+        return texto + (pendientes > 0 ? " - " + (pendientes == 1 ? "1 partido pendiente" : pendientes + " partidos pendientes")
+                : " - completa: pulse \"Cerrar ronda y avanzar\"");
     }
 
     private void agregarFase(Fase fase) {
@@ -937,7 +938,8 @@ public class MotorCampeonato {
                 cantidad++;
             }
         }
-        return "Equipo '" + equipo.getNombreEquipo() + "' retirado. " + cantidad
-                + " partido(s) pendiente(s) se dieron por W.O. 3-0 a favor del rival.";
+        return "Equipo '" + equipo.getNombreEquipo() + "' retirado. " + (cantidad == 0 ? "No tenía partidos pendientes."
+                : (cantidad == 1 ? "1 partido pendiente se dio" : cantidad + " partidos pendientes se dieron")
+                        + " por W.O. 3-0 a favor del rival.");
     }
 }

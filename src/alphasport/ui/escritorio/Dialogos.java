@@ -25,6 +25,7 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Spinner;
@@ -32,6 +33,7 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TextFormatter;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.FlowPane;
@@ -39,8 +41,25 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.animation.FadeTransition;
+import javafx.animation.Interpolator;
+import javafx.animation.TranslateTransition;
+import javafx.scene.Group;
+import javafx.scene.effect.BlurType;
+import javafx.scene.effect.DropShadow;
+import javafx.scene.input.KeyCode;
+import javafx.scene.layout.Pane;
+import javafx.scene.layout.Region;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Paint;
+import javafx.scene.paint.Stop;
+import javafx.scene.shape.SVGPath;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
+import javafx.util.Duration;
 
 /**
  * Ventanas emergentes de la version de escritorio.
@@ -55,25 +74,106 @@ class Dialogos {
 
     /* ---------------------------------------------------------------- base */
 
+    /*
+     * Ventana suave: sin el marco de Windows, con esquinas redondeadas, sombra, borde de luz y entrada animada.
+     * Se arrastra desde cualquier zona libre y se cierra con Esc.
+     */
     private Stage ventana(String titulo, Node contenido, double ancho) {
-        Stage v = new Stage();
+        return ventana(titulo, contenido, ancho, "dialogo");
+    }
+
+    private Stage ventana(String titulo, Node contenido, double ancho, String clase) {
+        Stage v = new Stage(StageStyle.TRANSPARENT);
         v.initOwner(app.stage);
         v.initModality(Modality.APPLICATION_MODAL);
         v.setTitle(titulo);
         ScrollPane desplazable = new ScrollPane(contenido);
         desplazable.setFitToWidth(true);
         desplazable.getStyleClass().add("desplazable");
-        StackPane raiz = new StackPane(desplazable);
-        raiz.getStyleClass().addAll("raiz", "dialogo");
+        StackPane panel = new StackPane(desplazable);
+        panel.getStyleClass().addAll("dialogo-panel", clase);
+        StackPane raiz = new StackPane(panel);
+        raiz.getStyleClass().addAll("raiz", "dialogo-sombra");
         if (app.claro) {
             raiz.getStyleClass().add("claro");
         }
-        Scene escena = new Scene(raiz, ancho, -1);
+        raiz.setPadding(new Insets(24));
+        Scene escena = new Scene(raiz, ancho + 48, -1);
+        escena.setFill(Color.TRANSPARENT);
         escena.getStylesheets().add(app.hojaEstilos());
+        // Alto según el ancho real: así los textos largos (que se parten en varias líneas) no dejan los botones fuera.
+        raiz.applyCss();
+        desplazable.setPrefViewportHeight(contenido.prefHeight(ancho - 4));
+        escena.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ESCAPE) {
+                v.close();
+            }
+        });
+        double[] origen = new double[2];
+        raiz.setOnMousePressed(e -> { origen[0] = e.getScreenX() - v.getX(); origen[1] = e.getScreenY() - v.getY(); });
+        raiz.setOnMouseDragged(e -> { v.setX(e.getScreenX() - origen[0]); v.setY(e.getScreenY() - origen[1]); });
         v.setScene(escena);
         v.getIcons().add(Aplicacion.imagen("logo.png"));
-        v.setMaxHeight(app.stage.getHeight() - 40);
+        v.setMaxHeight(app.stage.getHeight() - 20);
+        v.setOnShown(e -> {
+            v.setX(app.stage.getX() + (app.stage.getWidth() - v.getWidth()) / 2);
+            v.setY(app.stage.getY() + Math.max(10, (app.stage.getHeight() - v.getHeight()) / 2));
+            panel.setScaleX(.97);
+            panel.setScaleY(.97);
+            panel.setOpacity(0);
+            javafx.animation.ScaleTransition crecer = new javafx.animation.ScaleTransition(Duration.millis(380), panel);
+            crecer.setToX(1);
+            crecer.setToY(1);
+            FadeTransition aparecer = new FadeTransition(Duration.millis(320), panel);
+            aparecer.setToValue(1);
+            javafx.animation.ParallelTransition t = new javafx.animation.ParallelTransition(crecer, aparecer);
+            t.setInterpolator(Interpolator.SPLINE(.22, 1, .36, 1));
+            crecer.setInterpolator(Interpolator.SPLINE(.22, 1, .36, 1));
+            t.play();
+        });
         return v;
+    }
+
+    /** Trofeo dibujado con trazos SVG y degradado dorado (JavaFX no carga archivos SVG). */
+    static Group trofeo(double escala) {
+        Paint oro = new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.web("#fff0b8")), new Stop(.35, Color.web("#f6c453")), new Stop(.75, Color.web("#d9a02a")), new Stop(1, Color.web("#9c6a0c")));
+        SVGPath asaIzq = new SVGPath();
+        asaIzq.setContent("M32 26H17c-4.5 0-7 3.4-7 7.5C10 50 22 60 35 62");
+        SVGPath asaDer = new SVGPath();
+        asaDer.setContent("M88 26h15c4.5 0 7 3.4 7 7.5C110 50 98 60 85 62");
+        for (SVGPath asa : List.of(asaIzq, asaDer)) {
+            asa.setFill(Color.TRANSPARENT);
+            asa.setStroke(oro);
+            asa.setStrokeWidth(7);
+            asa.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        }
+        SVGPath copa = new SVGPath();
+        copa.setContent("M28 12h64v30c0 26-14 43-32 45-18-2-32-19-32-45z");
+        copa.setFill(oro);
+        SVGPath brillo = new SVGPath();
+        brillo.setContent("M36 18v22c0 16 6 28 14 34");
+        brillo.setFill(Color.TRANSPARENT);
+        brillo.setStroke(Color.rgb(255, 255, 255, .45));
+        brillo.setStrokeWidth(4);
+        brillo.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        SVGPath estrella = new SVGPath();
+        estrella.setContent("M60 32l3.5 9.2 9.8.5-7.6 6.2 2.5 9.5L60 52l-8.2 5.4 2.5-9.5-7.6-6.2 9.8-.5z");
+        estrella.setFill(Color.web("#fff6d6"));
+        SVGPath pie = new SVGPath();
+        pie.setContent("M53 86h14v16H53zM42 100h36v7H42z");
+        pie.setFill(oro);
+        SVGPath base = new SVGPath();
+        base.setContent("M34 107h52l6 23H28z");
+        base.setFill(new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE, new Stop(0, Color.web("#2a3443")), new Stop(1, Color.web("#121821"))));
+        SVGPath placa = new SVGPath();
+        placa.setContent("M46 113h28v9H46z");
+        placa.setFill(oro);
+        Group g = new Group(asaIzq, asaDer, copa, brillo, estrella, pie, base, placa);
+        g.setScaleX(escala);
+        g.setScaleY(escala);
+        g.setEffect(new DropShadow(BlurType.GAUSSIAN, Color.rgb(0, 0, 0, .5), 18, 0, 0, 10));
+        return new Group(g);
     }
 
     private static VBox cuerpo(String titulo, Node... nodos) {
@@ -135,9 +235,86 @@ class Dialogos {
             mensaje("Campeón", "El campeonato aún no termina.\n" + s(m(app.E, "campeonato"), "estado"));
             return;
         }
-        mensaje("🏆 Campeón del torneo", s(f, "nombre") + "\n\nDirector técnico: " + s(f, "dt") + "\nJugados: " + n(f, "pj")
-                + "   Ganados: " + n(f, "g") + "   Empatados: " + n(f, "e") + "   Perdidos: " + n(f, "p")
-                + "\nGoles a favor: " + n(f, "gf") + "   Goles en contra: " + n(f, "gc"));
+        // Coronación: trofeo bajo tres focos dorados, el nombre del campeón y sus cifras en tableros.
+        Group copa = trofeo(1.1);
+        StackPane escena = new StackPane(rayosDorados(), copa);
+        escena.setPrefHeight(190);
+        Label nombre = etiqueta(s(f, "nombre"), "campeon-titulo");
+        Label torneo = etiqueta("Campeón de " + s(m(app.E, "campeonato"), "nombre"), "campeon-torneo");
+        Label dt = etiqueta("Director técnico: " + s(f, "dt"), "campeon-dt");
+        HBox cifras = new HBox(8);
+        String[][] datos = {{"pj", "Jugados"}, {"g", "Ganados"}, {"e", "Empates"}, {"p", "Perdidos"}, {"gf", "A favor"}, {"gc", "En contra"}};
+        for (String[] d : datos) {
+            VBox tablero = new VBox(0, etiqueta(String.valueOf(n(f, d[0])), "campeon-cifra"), etiqueta(d[1], "campeon-cifra-texto"));
+            tablero.setAlignment(Pos.CENTER);
+            tablero.getStyleClass().add("campeon-tablero");
+            HBox.setHgrow(tablero, Priority.ALWAYS);
+            tablero.setMaxWidth(Double.MAX_VALUE);
+            cifras.getChildren().add(tablero);
+        }
+        Button tabla = boton("Ver la tabla final", "fantasma", "sobre-foto");
+        Button cerrar = boton("Celebrar y cerrar", "dorado");
+        cerrar.setDefaultButton(true);
+        HBox botones = new HBox(10, tabla, cerrar);
+        botones.setAlignment(Pos.CENTER);
+        VBox cuerpo = new VBox(6, escena, nombre, torneo, dt, new Region(), cifras, new Region(), botones);
+        cuerpo.setAlignment(Pos.CENTER);
+        cuerpo.setPadding(new Insets(28, 26, 24, 26));
+        VBox.setVgrow(cuerpo.getChildren().get(4), Priority.NEVER);
+        ((Region) cuerpo.getChildren().get(4)).setMinHeight(10);
+        ((Region) cuerpo.getChildren().get(6)).setMinHeight(12);
+        Stage v = ventana("Campeón del torneo", cuerpo, 640, "dialogo-campeon");
+        StackPane panel = (StackPane) ((StackPane) v.getScene().getRoot()).getChildren().get(0);
+        Region foto = new Region();
+        foto.getStyleClass().add("foto-campeon");
+        foto.setStyle("-fx-background-image: url('" + alphasport.ui.Arranque.CARPETA_WEB.resolve("img").resolve("estadio-noche.jpg").toUri()
+                + "'); -fx-background-size: cover; -fx-background-position: center 60%;");
+        Region velo = new Region();
+        velo.getStyleClass().add("velo-campeon");
+        panel.getChildren().addAll(0, List.of(foto, velo));
+        javafx.scene.shape.Rectangle recorte = new javafx.scene.shape.Rectangle();
+        recorte.widthProperty().bind(panel.widthProperty());
+        recorte.heightProperty().bind(panel.heightProperty());
+        recorte.setArcWidth(56);
+        recorte.setArcHeight(56);
+        panel.setClip(recorte);
+        // El trofeo se alza y los focos de la ventana principal se vuelven dorados mientras dura la celebración.
+        copa.setTranslateY(36);
+        copa.setOpacity(0);
+        TranslateTransition alzar = new TranslateTransition(Duration.millis(1100), copa);
+        alzar.setToY(0);
+        alzar.setDelay(Duration.millis(150));
+        alzar.setInterpolator(Interpolator.SPLINE(.22, 1, .36, 1));
+        FadeTransition aparecer = new FadeTransition(Duration.millis(700), copa);
+        aparecer.setToValue(1);
+        aparecer.setDelay(Duration.millis(150));
+        v.setOnShowing(e -> { alzar.play(); aparecer.play(); app.coronacion(true); });
+        v.setOnHidden(e -> app.coronacion(false));
+        tabla.setOnAction(e -> { v.close(); app.mostrarVista("posiciones"); });
+        cerrar.setOnAction(e -> v.close());
+        v.showAndWait();
+    }
+
+    private static Pane rayosDorados() {
+        Pane capa = new Pane();
+        capa.setMouseTransparent(true);
+        double[][] focos = {{0.18, -14}, {0.5, 0}, {0.82, 14}};
+        for (double[] fo : focos) {
+            SVGPath h = new SVGPath();
+            h.setContent("M-14 0 L14 0 L120 260 L-120 260 Z");
+            h.setFill(new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE, new Stop(0, Color.rgb(255, 214, 120, .55)), new Stop(1, Color.TRANSPARENT)));
+            h.setEffect(new javafx.scene.effect.GaussianBlur(10));
+            h.setBlendMode(javafx.scene.effect.BlendMode.SCREEN);
+            h.layoutXProperty().bind(capa.widthProperty().multiply(fo[0]));
+            h.setLayoutY(-40);
+            h.setRotate(fo[1]);
+            capa.getChildren().add(h);
+            FadeTransition encender = new FadeTransition(Duration.millis(1400), h);
+            encender.setFromValue(0);
+            encender.setToValue(1);
+            encender.play();
+        }
+        return capa;
     }
 
     private static Label error() {
@@ -164,7 +341,7 @@ class Dialogos {
     }
 
     private static VBox grupo(String titulo, Node... nodos) {
-        VBox v = new VBox(12, etiqueta(titulo.toUpperCase(), "sobretitulo"));
+        VBox v = new VBox(12, etiqueta(titulo, "sobretitulo"));
         v.getChildren().addAll(nodos);
         v.getStyleClass().add("grupo");
         return v;
@@ -175,6 +352,16 @@ class Dialogos {
         s.setEditable(true);
         s.setPrefWidth(110);
         return s;
+    }
+
+    /** Casilla de goles del marcador LED: solo admite 0 a 99 y puede quedar vacía. */
+    private static TextField gol(String valor, String nombreAccesible) {
+        TextField t = new TextField(valor);
+        t.setTextFormatter(new TextFormatter<String>(cambio -> cambio.getControlNewText().matches("\\d{0,2}") ? cambio : null));
+        t.setPromptText("–");
+        t.setAccessibleText(nombreAccesible);
+        t.getStyleClass().add("led-gol");
+        return t;
     }
 
     /* ---------------------------------------------------------------- criterios */
@@ -354,7 +541,7 @@ class Dialogos {
         cancelar.setManaged(!obligatorio);
         Button crear = boton(cambiar ? "Aplicar nuevo formato" : "Crear campeonato", "primario");
         String titulo = cambiar ? "Cambiar formato del campeonato" : "Nuevo campeonato";
-        Stage v = ventana(titulo, cuerpo(titulo, campo("Nombre del campeonato", nombre), etiqueta("FORMATO DE COMPETENCIA", "sobretitulo"),
+        Stage v = ventana(titulo, cuerpo(titulo, campo("Nombre del campeonato", nombre), etiqueta("Formato de competencia", "campo-titulo"),
                 tarjetas, grupo("Reglas del formato", campos, checks), grupo("Criterios de desempate (en orden)", criterios), err,
                 acciones(cancelar, crear)), 960);
         if (obligatorio) {
@@ -403,9 +590,7 @@ class Dialogos {
         Spinner<Integer> dorsal = numero(1, 99, 1);
         TextField jgNombre = new TextField();
         TextField jgDocumento = new TextField();
-        ComboBox<String> posicion = new ComboBox<>(FXCollections.observableArrayList(
-                Datos.lista(app.catalogo, "posiciones").stream().map(String::valueOf).toList()));
-        posicion.getSelectionModel().selectFirst();
+        ComboBox<String> posicion = comboPosiciones();
         Label errJugador = error();
         VBox lista = new VBox(6);
         Runnable[] dibujar = new Runnable[1];
@@ -489,6 +674,56 @@ class Dialogos {
         v.showAndWait();
     }
 
+    /** Encabezado de grupo dentro de la lista de posiciones (no se puede elegir). */
+    private static final String GRUPO = "\u0000";
+
+    /**
+     * Lista de posiciones agrupada por línea (Portería, Defensa, Mediocampo,
+     * Ataque). Los encabezados se ven distintos y no se pueden escoger.
+     */
+    private ComboBox<String> comboPosiciones() {
+        List<String> items = new ArrayList<>();
+        List<Map<String, Object>> grupos = l(app.catalogo, "gruposPosiciones");
+        if (grupos.isEmpty()) {
+            Datos.lista(app.catalogo, "posiciones").forEach(p -> items.add(String.valueOf(p)));
+        }
+        for (Map<String, Object> g : grupos) {
+            items.add(GRUPO + s(g, "grupo"));
+            Datos.lista(g, "posiciones").forEach(p -> items.add(String.valueOf(p)));
+        }
+        ComboBox<String> combo = new ComboBox<>(FXCollections.observableArrayList(items));
+        combo.setCellFactory(lv -> new ListCell<>() {
+            @Override
+            protected void updateItem(String item, boolean vacia) {
+                super.updateItem(item, vacia);
+                getStyleClass().remove("grupo-lista");
+                boolean grupo = !vacia && item != null && item.startsWith(GRUPO);
+                setText(vacia || item == null ? null : grupo ? item.substring(1) : item);
+                setDisable(grupo);
+                if (grupo) {
+                    getStyleClass().add("grupo-lista");
+                }
+            }
+        });
+        combo.setButtonCell(new ListCell<>() {
+            @Override
+            protected void updateItem(String item, boolean vacia) {
+                super.updateItem(item, vacia);
+                setText(vacia || item == null ? null : item.replace(GRUPO, ""));
+            }
+        });
+        // Si se llega a escoger un encabezado (con el teclado), pasa a la primera posición del grupo.
+        combo.getSelectionModel().selectedIndexProperty().addListener((o, antes, ahora) -> {
+            int i = ahora.intValue();
+            if (i >= 0 && items.get(i).startsWith(GRUPO) && i + 1 < items.size()) {
+                javafx.application.Platform.runLater(() -> combo.getSelectionModel().select(i + 1));
+            }
+        });
+        combo.getSelectionModel().select(items.isEmpty() ? -1 : items.get(0).startsWith(GRUPO) ? 1 : 0);
+        combo.setVisibleRowCount(14);
+        return combo;
+    }
+
     private static boolean tieneDorsal(List<Map<String, Object>> jugadores, int dorsal) {
         return jugadores.stream().anyMatch(j -> n(j, "dorsal") == dorsal);
     }
@@ -496,14 +731,16 @@ class Dialogos {
     /* ---------------------------------------------------------------- partido */
 
     void partido(Map<String, Object> p) {
-        Spinner<Integer> gl = numero(0, 99, n(p, "gl"));
-        Spinner<Integer> gv = numero(0, 99, n(p, "gv"));
-        gl.getStyleClass().add("led-campo");
-        gv.getStyleClass().add("led-campo");
-        ComboBox<String> estado = new ComboBox<>(FXCollections.observableArrayList("Jugado", "Pendiente", "Aplazado", "Suspendido"));
-        String[] claves = {"JUGADO", "PENDIENTE", "APLAZADO", "SUSPENDIDO"};
-        String actual = s(p, "estado").equals("PENDIENTE") ? "JUGADO" : s(p, "estado");
-        estado.getSelectionModel().select(List.of(claves).indexOf(actual));
+        // Un partido sin jugar abre con el marcador vacío: así nunca se guarda un 0:0 que no ocurrió.
+        boolean yaJugado = b(p, "jugado");
+        // Un partido «En juego» conserva el marcador que lleva.
+        boolean conMarcador = Aplicacion.conMarcador(p);
+        TextField gl = gol(conMarcador ? String.valueOf(n(p, "gl")) : "", "Goles " + s(p, "localNombre"));
+        TextField gv = gol(conMarcador ? String.valueOf(n(p, "gv")) : "", "Goles " + s(p, "visitanteNombre"));
+        ComboBox<String> estado = new ComboBox<>(FXCollections.observableArrayList("Jugado", "En juego", "Pendiente", "Aplazado", "Suspendido"));
+        String[] claves = {"JUGADO", "EN_JUEGO", "PENDIENTE", "APLAZADO", "SUSPENDIDO"};
+        final int JUGADO = 0, EN_JUEGO = 1, PENDIENTE = 2;
+        estado.getSelectionModel().select(Math.max(0, List.of(claves).indexOf(s(p, "estado"))));
         CheckBox hayPenales = new CheckBox("Se definió por penales");
         hayPenales.setSelected(b(p, "penales"));
         Spinner<Integer> pl = numero(0, 99, Math.max(0, n(p, "pl")));
@@ -536,10 +773,12 @@ class Dialogos {
         ComboBox<String> tjTipo = new ComboBox<>(FXCollections.observableArrayList("Amarilla", "Roja"));
         tjTipo.getSelectionModel().selectFirst();
         Spinner<Integer> tjFechas = numero(1, 20, 1);
+        TextField tjMinuto = minuto("–");
         VBox campoFechas = campo("Fechas fuera", tjFechas);
         VBox listaTarjetas = new VBox(6);
         Runnable[] dibujarTarjetas = new Runnable[1];
         dibujarTarjetas[0] = () -> {
+            tarjetas.sort(Comparator.comparingInt(t -> n(t, "minuto") > 0 ? n(t, "minuto") : 999));
             listaTarjetas.getChildren().clear();
             if (tarjetas.isEmpty()) {
                 listaTarjetas.getChildren().add(etiqueta("Sin tarjetas en este partido.", "sutil"));
@@ -547,7 +786,7 @@ class Dialogos {
             for (Map<String, Object> t : tarjetas) {
                 boolean roja = s(t, "tipo").equals("ROJA");
                 Map<String, Object> eq = app.equipoPorId(n(t, "equipo"));
-                Label texto = etiqueta((roja ? "Roja" : "Amarilla") + " · #" + n(t, "dorsal") + " " + s(t, "nombre") + " · " + s(eq, "nombre")
+                Label texto = etiqueta((n(t, "minuto") > 0 ? n(t, "minuto") + "′   " : "") + (roja ? "Roja" : "Amarilla") + " · #" + n(t, "dorsal") + " " + s(t, "nombre") + " · " + s(eq, "nombre")
                         + (roja ? " · " + n(t, "fechas") + (n(t, "fechas") == 1 ? " fecha" : " fechas") + " fuera" : ""), "jugador-texto");
                 HBox.setHgrow(texto, Priority.ALWAYS);
                 texto.setMaxWidth(Double.MAX_VALUE);
@@ -569,6 +808,12 @@ class Dialogos {
             int iJugador = tjJugador.getSelectionModel().getSelectedIndex();
             if (opciones.isEmpty() || iJugador < 0) {
                 mostrarError(err, "Este equipo no tiene jugadores registrados. Agréguelos en la sección Equipos.");
+                return;
+            }
+            Integer minutoTarjeta = leerMinuto(tjMinuto, true);
+            if (minutoTarjeta == null) {
+                mostrarError(err, "El minuto de la tarjeta debe estar entre 1 y 130 (o vacío si no se sabe).");
+                tjMinuto.requestFocus();
                 return;
             }
             mostrarError(err, null);
@@ -593,16 +838,132 @@ class Dialogos {
                 fechas = 1;
             }
             tarjetas.add(mapa("equipo", idsEquipos[tjEquipo.getSelectionModel().getSelectedIndex()], "jugador", idJugador,
-                    "nombre", s(jugador, "nombre"), "dorsal", n(jugador, "dorsal"), "tipo", roja ? "ROJA" : "AMARILLA", "fechas", roja ? fechas : 0));
+                    "nombre", s(jugador, "nombre"), "dorsal", n(jugador, "dorsal"), "tipo", roja ? "ROJA" : "AMARILLA", "fechas", roja ? fechas : 0, "minuto", minutoTarjeta));
             dibujarTarjetas[0].run();
         });
-        HBox filaTarjeta = new HBox(10, campo("Equipo", tjEquipo), campo("Jugador", tjJugador), campo("Tarjeta", tjTipo), campoFechas, agregarTarjeta);
+        HBox filaTarjeta = new HBox(10, campo("Equipo", tjEquipo), campo("Jugador", tjJugador), campo("Tarjeta", tjTipo), campo("Minuto", tjMinuto), campoFechas, agregarTarjeta);
         filaTarjeta.setAlignment(Pos.BOTTOM_LEFT);
         List<Map<String, Object>> suspendidos = l(p, "suspendidos");
         Label avisoSuspendidos = etiqueta(suspendidos.isEmpty() ? "Sin jugadores suspendidos para este partido."
                 : "Suspendidos para este partido: " + String.join(", ", suspendidos.stream()
                         .map(x -> s(x, "nombre") + " (" + s(x, "equipoNombre") + ")").toList()), suspendidos.isEmpty() ? "sutil" : "advertencia");
         VBox grupoTarjetas = grupo("Tarjetas por jugador", filaTarjeta, listaTarjetas, avisoSuspendidos);
+
+        // ---- cambios: en el minuto indicado sale un jugador y entra otro del mismo equipo
+        List<Map<String, Object>> cambios = new ArrayList<>();
+        for (Map<String, Object> x : l(p, "cambios")) {
+            cambios.add(new LinkedHashMap<>(x));
+        }
+        ComboBox<String> cbEquipo = new ComboBox<>(FXCollections.observableArrayList(s(p, "localNombre"), s(p, "visitanteNombre")));
+        cbEquipo.getSelectionModel().selectFirst();
+        cbEquipo.setMaxWidth(Double.MAX_VALUE);
+        TextField cbMinuto = minuto("66");
+        ComboBox<String> cbSale = new ComboBox<>();
+        ComboBox<String> cbEntra = new ComboBox<>();
+        cbSale.setPrefWidth(260);
+        cbEntra.setPrefWidth(260);
+        List<Map<String, Object>> puedenSalir = new ArrayList<>();
+        List<Map<String, Object>> puedenEntrar = new ArrayList<>();
+        Runnable[] llenarCambio = new Runnable[1];
+        boolean[] llenando = {false};
+        llenarCambio[0] = () -> {
+            llenando[0] = true;
+            int idEquipo = idsEquipos[Math.max(0, cbEquipo.getSelectionModel().getSelectedIndex())];
+            List<Map<String, Object>> plantilla = l(app.equipoPorId(idEquipo), "jugadores").stream().filter(j -> n(j, "id") > 0)
+                    .sorted(Comparator.comparingInt(j -> n(j, "dorsal"))).toList();
+            java.util.Set<Integer> salieron = new java.util.HashSet<>(), entraron = new java.util.HashSet<>();
+            cambios.stream().filter(x -> n(x, "equipo") == idEquipo).forEach(x -> {
+                salieron.add(n(x, "sale"));
+                entraron.add(n(x, "entra"));
+            });
+            int saleAntes = cbSale.getSelectionModel().getSelectedIndex() >= 0 && cbSale.getSelectionModel().getSelectedIndex() < puedenSalir.size()
+                    ? n(puedenSalir.get(cbSale.getSelectionModel().getSelectedIndex()), "id") : -1;
+            puedenSalir.clear();
+            plantilla.stream().filter(j -> !salieron.contains(n(j, "id"))).forEach(puedenSalir::add);
+            cbSale.setItems(FXCollections.observableArrayList(puedenSalir.isEmpty() ? List.of("(sin jugadores disponibles)")
+                    : puedenSalir.stream().map(Dialogos::textoJugador).toList()));
+            int iSale = 0;
+            for (int i = 0; i < puedenSalir.size(); i++) {
+                if (n(puedenSalir.get(i), "id") == saleAntes) {
+                    iSale = i;
+                }
+            }
+            cbSale.getSelectionModel().select(iSale);
+            int sale = puedenSalir.isEmpty() ? -1 : n(puedenSalir.get(iSale), "id");
+            puedenEntrar.clear();
+            plantilla.stream().filter(j -> !salieron.contains(n(j, "id")) && !entraron.contains(n(j, "id")) && n(j, "id") != sale)
+                    .forEach(puedenEntrar::add);
+            cbEntra.setItems(FXCollections.observableArrayList(puedenEntrar.isEmpty() ? List.of("(sin jugadores disponibles)")
+                    : puedenEntrar.stream().map(Dialogos::textoJugador).toList()));
+            cbEntra.getSelectionModel().selectFirst();
+            llenando[0] = false;
+        };
+        cbEquipo.setOnAction(e -> llenarCambio[0].run());
+        cbSale.setOnAction(e -> {
+            if (!llenando[0]) {
+                llenarCambio[0].run();
+            }
+        });
+        VBox listaCambios = new VBox(6);
+        Runnable[] dibujarCambios = new Runnable[1];
+        dibujarCambios[0] = () -> {
+            cambios.sort(Comparator.comparingInt(x -> n(x, "minuto")));
+            listaCambios.getChildren().clear();
+            if (cambios.isEmpty()) {
+                listaCambios.getChildren().add(etiqueta("Sin cambios en este partido.", "sutil"));
+            }
+            for (Map<String, Object> x : cambios) {
+                Label min = etiqueta(n(x, "minuto") + "′", "minuto");
+                Label sale = etiqueta("Sale #" + n(x, "saleDorsal") + " " + s(x, "saleNombre"), "sale-texto");
+                Label entra = etiqueta("Entra #" + n(x, "entraDorsal") + " " + s(x, "entraNombre"), "entra-texto");
+                Label equipo = etiqueta("· " + s(app.equipoPorId(n(x, "equipo")), "nombre"), "sutil");
+                HBox textos = new HBox(8, min, Aplicacion.iconoCambio(), sale, entra, equipo);
+                textos.setAlignment(Pos.CENTER_LEFT);
+                HBox.setHgrow(textos, Priority.ALWAYS);
+                Button quitar = boton("Quitar", "mini", "peligro");
+                quitar.setOnAction(e -> {
+                    cambios.remove(x);
+                    dibujarCambios[0].run();
+                    llenarCambio[0].run();
+                });
+                HBox fila = new HBox(10, textos, quitar);
+                fila.setAlignment(Pos.CENTER_LEFT);
+                fila.getStyleClass().add("fila-lista");
+                listaCambios.getChildren().add(fila);
+            }
+        };
+        llenarCambio[0].run();
+        dibujarCambios[0].run();
+        Button agregarCambio = boton("Agregar cambio");
+        agregarCambio.setOnAction(e -> {
+            Integer min = leerMinuto(cbMinuto, false);
+            if (min == null) {
+                mostrarError(err, "Escriba el minuto del cambio (entre 1 y 130).");
+                cbMinuto.requestFocus();
+                return;
+            }
+            int iSale = cbSale.getSelectionModel().getSelectedIndex(), iEntra = cbEntra.getSelectionModel().getSelectedIndex();
+            if (puedenSalir.isEmpty() || puedenEntrar.isEmpty() || iSale < 0 || iEntra < 0) {
+                mostrarError(err, "Escoja el jugador que sale y el que entra. Si no aparecen, registre la plantilla en Equipos.");
+                return;
+            }
+            mostrarError(err, null);
+            Map<String, Object> sale = puedenSalir.get(iSale), entra = puedenEntrar.get(iEntra);
+            cambios.add(mapa("equipo", idsEquipos[cbEquipo.getSelectionModel().getSelectedIndex()], "minuto", min,
+                    "sale", n(sale, "id"), "saleNombre", s(sale, "nombre"), "saleDorsal", n(sale, "dorsal"),
+                    "entra", n(entra, "id"), "entraNombre", s(entra, "nombre"), "entraDorsal", n(entra, "dorsal")));
+            dibujarCambios[0].run();
+            llenarCambio[0].run();
+            cbSale.requestFocus();
+        });
+        VBox campoEquipoCambio = campo("Equipo", cbEquipo);
+        HBox.setHgrow(campoEquipoCambio, Priority.ALWAYS);
+        HBox filaCambio1 = new HBox(10, campoEquipoCambio, campo("Minuto", cbMinuto));
+        HBox filaCambio2 = new HBox(10, campo("Sale", cbSale), campo("Entra", cbEntra), agregarCambio);
+        filaCambio1.setAlignment(Pos.BOTTOM_LEFT);
+        filaCambio2.setAlignment(Pos.BOTTOM_LEFT);
+        VBox grupoCambios = grupo("Cambios", filaCambio1, filaCambio2, listaCambios,
+                etiqueta("El minuto se conserva para anotar seguido varios cambios hechos al mismo tiempo.", "sutil", "pequeno"));
 
         DatePicker fecha = new DatePicker();
         if (s(p, "fecha").matches("\\d{4}-\\d{2}-\\d{2}")) {
@@ -613,12 +974,18 @@ class Dialogos {
         TextField sede = new TextField(s(p, "sede"));
         TextField obs = new TextField(s(p, "obs"));
 
+        Button guardar = boton("Guardar", "primario");
         Runnable actualizar = () -> {
-            boolean jugado = estado.getSelectionModel().getSelectedIndex() == 0;
-            gl.setDisable(!jugado);
-            gv.setDisable(!jugado);
+            int iEstado = estado.getSelectionModel().getSelectedIndex();
+            boolean jugado = iEstado == JUGADO, enJuego = iEstado == EN_JUEGO;
+            // En un partido pendiente se puede escribir el marcador directamente; al hacerlo pasa a «Jugado».
+            gl.setDisable(!(jugado || enJuego || iEstado == PENDIENTE));
+            gv.setDisable(!(jugado || enJuego || iEstado == PENDIENTE));
+            guardar.setText(enJuego ? "Guardar en vivo" : !jugado ? "Guardar" : yaJugado ? "Guardar resultado" : "Registrar resultado");
             hayPenales.setDisable(!jugado);
-            grupoTarjetas.setDisable(!jugado);
+            // Tarjetas y cambios se anotan mientras se juega («En juego») o después, con el resultado final.
+            grupoTarjetas.setDisable(!(jugado || enJuego));
+            grupoCambios.setDisable(!(jugado || enJuego));
             pl.setDisable(!jugado || !hayPenales.isSelected());
             pv.setDisable(!jugado || !hayPenales.isSelected());
             boolean roja = tjTipo.getSelectionModel().getSelectedIndex() == 1;
@@ -628,6 +995,17 @@ class Dialogos {
         estado.setOnAction(e -> actualizar.run());
         hayPenales.setOnAction(e -> actualizar.run());
         tjTipo.setOnAction(e -> actualizar.run());
+        for (TextField campoGol : List.of(gl, gv)) {
+            campoGol.textProperty().addListener((propiedad, antes, ahora) -> {
+                if (!ahora.isEmpty() && estado.getSelectionModel().getSelectedIndex() == PENDIENTE) {
+                    estado.getSelectionModel().select(JUGADO);
+                    actualizar.run();
+                }
+                if (!ahora.isEmpty()) {
+                    campoGol.getStyleClass().remove("campo-invalido");
+                }
+            });
+        }
         actualizar.run();
 
         Label local = etiqueta(s(p, "localNombre"), "equipo-nombre");
@@ -644,19 +1022,34 @@ class Dialogos {
         Button woLocal = boton("W.O. gana local", "mini", "fantasma");
         Button woVisitante = boton("W.O. gana visitante", "mini", "fantasma");
         Button borrar = boton("Borrar resultado", "mini", "peligro");
+        borrar.setVisible(conMarcador);
+        borrar.setManaged(conMarcador);
         Button cancelar = boton("Cancelar", "fantasma");
-        Button guardar = boton("Guardar", "primario");
         HBox botones = new HBox(10, woLocal, woVisitante, borrar, Aplicacion.espacio(), cancelar, guardar);
         botones.setAlignment(Pos.CENTER_LEFT);
-        Stage v = ventana("Partido", cuerpo(app.contexto(p), marcador, new HBox(14, campo("Estado", estado), penales), grupoTarjetas,
+        Stage v = ventana("Partido", cuerpo(app.contexto(p), marcador, new HBox(14, campo("Estado", estado), penales), grupoTarjetas, grupoCambios,
                 new HBox(12, campo("Fecha", fecha), campo("Hora", hora), campo("Sede", sede), campo("Observaciones", obs)), err, botones), 900);
         cancelar.setOnAction(e -> v.close());
 
         java.util.function.Consumer<String> enviar = accion -> {
+            boolean faltaLocal = gl.getText().isBlank(), faltaVisitante = gv.getText().isBlank();
+            if (accion.equals("guardar") && estado.getSelectionModel().getSelectedIndex() == JUGADO && (faltaLocal || faltaVisitante)) {
+                if (faltaLocal) {
+                    gl.getStyleClass().add("campo-invalido");
+                }
+                if (faltaVisitante) {
+                    gv.getStyleClass().add("campo-invalido");
+                }
+                mostrarError(err, faltaLocal && faltaVisitante
+                        ? "Escriba los goles de los dos equipos para registrar el resultado, o cambie el estado a «Pendiente»."
+                        : "Falta el marcador de " + s(p, faltaLocal ? "localNombre" : "visitanteNombre") + ". Escriba 0 si no marcó goles.");
+                (faltaLocal ? gl : gv).requestFocus();
+                return;
+            }
             boolean penal = conPenales && hayPenales.isSelected();
             Map<String, Object> datos = mapa("estado", claves[estado.getSelectionModel().getSelectedIndex()],
-                    "gl", gl.getValue(), "gv", gv.getValue(), "pl", penal ? pl.getValue() : -1, "pv", penal ? pv.getValue() : -1,
-                    "tarjetas", tarjetas, "fecha", fecha.getValue() == null ? "" : fecha.getValue().toString(),
+                    "gl", faltaLocal ? 0 : Integer.parseInt(gl.getText()), "gv", faltaVisitante ? 0 : Integer.parseInt(gv.getText()), "pl", penal ? pl.getValue() : -1, "pv", penal ? pv.getValue() : -1,
+                    "tarjetas", tarjetas, "cambios", cambios, "fecha", fecha.getValue() == null ? "" : fecha.getValue().toString(),
                     "hora", hora.getText(), "sede", sede.getText(), "obs", obs.getText());
             Map<String, Object> cuerpo = mapa("id", n(p, "id"), "datos", datos, "accion", accion, "confirmado", false);
             Map<String, Object> r = app.ejecutar("partido", cuerpo);
@@ -685,6 +1078,85 @@ class Dialogos {
         v.showAndWait();
     }
 
+    private static String textoJugador(Map<String, Object> j) {
+        return "#" + n(j, "dorsal") + " " + s(j, "nombre") + (s(j, "posicion").isEmpty() ? "" : " · " + s(j, "posicion"));
+    }
+
+    /** Campo corto para un minuto de juego (solo cifras). */
+    private static TextField minuto(String ejemplo) {
+        TextField t = new TextField();
+        t.setPromptText(ejemplo);
+        t.setPrefColumnCount(3);
+        t.setPrefWidth(80);
+        t.getStyleClass().add("campo-minuto");
+        t.setTextFormatter(new TextFormatter<String>(c -> c.getControlNewText().matches("\\d{0,3}") ? c : null));
+        return t;
+    }
+
+    /** Minuto escrito (1 a 130). Si se permite vacío devuelve 0; si no es válido, null. */
+    private static Integer leerMinuto(TextField t, boolean vacioPermitido) {
+        if (t.getText().isBlank()) {
+            return vacioPermitido ? 0 : null;
+        }
+        int m = Integer.parseInt(t.getText());
+        return m >= 1 && m <= 130 ? m : null;
+    }
+
+    /* ---------------------------------------------------------------- datos de prueba */
+
+    void datosPrueba() {
+        boolean iniciado = b(m(app.E, "campeonato"), "iniciado");
+        int maximo = n(app.catalogo, "semillaMaximoEquipos") > 0 ? n(app.catalogo, "semillaMaximoEquipos") : 32;
+        java.util.Random azar = new java.util.Random();
+        TextField semilla = new TextField(String.valueOf(10000 + azar.nextInt(90000)));
+        semilla.setTextFormatter(new TextFormatter<String>(c -> c.getControlNewText().matches("\\d{0,9}") ? c : null));
+        Button otra = boton("Otra", "mini", "fantasma");
+        otra.setOnAction(e -> semilla.setText(String.valueOf(10000 + azar.nextInt(90000))));
+        HBox filaSemilla = new HBox(8, semilla, otra);
+        filaSemilla.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(semilla, Priority.ALWAYS);
+        Spinner<Integer> cantidad = numero(0, maximo, iniciado ? 0 : 8);
+        cantidad.setDisable(iniciado);
+        CheckBox completar = new CheckBox("Completar también la plantilla de los equipos que no tienen jugadores");
+        completar.setSelected(true);
+        completar.setWrapText(true);
+        long vacios = l(app.E, "equipos").stream().filter(e -> !b(e, "retirado") && l(e, "jugadores").isEmpty()).count();
+        String avisoTexto = iniciado
+                ? "El campeonato ya inició: solo se pueden completar plantillas (" + vacios + (vacios == 1 ? " equipo sin jugadores)." : " equipos sin jugadores).")
+                : vacios > 0 ? "Hay " + vacios + (vacios == 1 ? " equipo" : " equipos") + " sin jugadores." : "";
+        Label explicacion = etiqueta("Crea equipos inventados con director técnico, estadio y plantilla completa de 20 jugadores "
+                + "(nombre, documento, dorsal y posición). La misma semilla genera siempre los mismos datos.", "sutil");
+        explicacion.setWrapText(true);
+        Label err = error();
+        Button cancelar = boton("Cancelar", "fantasma");
+        Button cargar = boton("Cargar datos", "primario");
+        HBox campos = new HBox(12, campo("Semilla", filaSemilla), campo("Equipos nuevos", cantidad));
+        VBox contenido = cuerpo("Datos de prueba", explicacion, campos, completar);
+        if (!avisoTexto.isEmpty()) {
+            contenido.getChildren().add(etiqueta(avisoTexto, "sutil", "pequeno"));
+        }
+        contenido.getChildren().addAll(err, acciones(cancelar, cargar));
+        Stage v = ventana("Datos de prueba", contenido, 520);
+        cancelar.setOnAction(e -> v.close());
+        Runnable enviar = () -> {
+            if (semilla.getText().isBlank()) {
+                mostrarError(err, "Escriba una semilla (un número entero).");
+                return;
+            }
+            Map<String, Object> r = app.ejecutar("semilla", mapa("semilla", Integer.parseInt(semilla.getText()),
+                    "cantidad", cantidad.getValue(), "completar", completar.isSelected()));
+            if (!b(r, "ok")) {
+                mostrarError(err, s(r, "error"));
+                return;
+            }
+            v.close();
+            app.aviso(s(r, "mensaje"));
+        };
+        cargar.setOnAction(e -> enviar.run());
+        semilla.setOnAction(e -> enviar.run());
+        v.showAndWait();
+    }
+
     /* ---------------------------------------------------------------- historial */
 
     void historial() {
@@ -694,7 +1166,7 @@ class Dialogos {
         HBox.setHgrow(detalle, Priority.ALWAYS);
         ListView<String> campeonatos = new ListView<>(FXCollections.observableArrayList(lista.stream()
                 .map(h -> s(h, "nombre") + "\n" + s(h, "formato") + "\n" + s(h, "fecha") + " · "
-                        + (s(h, "campeon").isEmpty() ? "Sin terminar" : "🏆 " + s(h, "campeon"))).toList()));
+                        + (s(h, "campeon").isEmpty() ? "Sin terminar" : "Campeón: " + s(h, "campeon"))).toList()));
         campeonatos.setPrefWidth(290);
         campeonatos.getStyleClass().add("lista-historial");
         Stage[] ventana = new Stage[1];
@@ -707,7 +1179,7 @@ class Dialogos {
                 ? etiqueta("Todavía no hay campeonatos en el historial. Se guardan solos al terminar un campeonato.", "sutil")
                 : new HBox(18, campeonatos, detalle);
         TableView<Map<String, Object>> palmares = Aplicacion.tabla(l(datos, "palmares"), new String[][]{{"Equipo", "equipo"},
-            {"🏆", "titulos", "60"}, {"2.º", "sub", "60"}, {"Podios", "podios", "75"}, {"Torneos", "participaciones", "80"},
+            {"Títulos", "titulos", "70"}, {"2.º", "sub", "60"}, {"Podios", "podios", "75"}, {"Torneos", "participaciones", "80"},
             {"PJ", "pj", "60"}, {"G", "g", "55"}, {"E", "e", "55"}, {"P", "p", "55"}, {"GF", "gf", "60"}, {"GC", "gc", "60"}, {"Pts", "pts", "65"}});
         TabPane pestanas = new TabPane(new Tab("Campeonatos", pestanaCampeonatos), new Tab("Palmarés histórico", palmares));
         pestanas.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
@@ -742,7 +1214,7 @@ class Dialogos {
         podio.setAlignment(Pos.BOTTOM_CENTER);
         FlowPane premios = new FlowPane(10, 10);
         for (Map<String, Object> p : l(h, "premios")) {
-            VBox premio = new VBox(2, etiqueta(s(p, "titulo").replaceAll("^[^\\p{L}]+", "").toUpperCase(), "sobretitulo"), etiqueta(s(p, "valor"), "premio-valor"),
+            VBox premio = new VBox(2, etiqueta(s(p, "titulo").replaceAll("^[^\\p{L}]+", ""), "sobretitulo"), etiqueta(s(p, "valor"), "premio-valor"),
                     etiqueta(s(p, "detalle"), "sutil", "pequeno"));
             premio.getStyleClass().add("premio");
             premio.setPrefWidth(200);

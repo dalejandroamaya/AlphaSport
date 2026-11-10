@@ -18,12 +18,20 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javafx.animation.FadeTransition;
+import javafx.animation.Interpolator;
+import javafx.animation.ParallelTransition;
 import javafx.animation.PauseTransition;
+import javafx.animation.RotateTransition;
 import javafx.animation.SequentialTransition;
+import javafx.animation.TranslateTransition;
+import javafx.scene.effect.GaussianBlur;
+import javafx.scene.layout.Pane;
+import javafx.scene.text.Font;
 import javafx.application.Application;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -67,7 +75,7 @@ import javafx.util.Duration;
 public class Aplicacion extends Application {
 
     static final String[] VISTAS = {"equipos", "partidos", "posiciones", "llaves", "sanciones", "reglas"};
-    static final String[] NOMBRES_VISTAS = {"Equipos", "Partidos", "Posiciones", "Llaves", "Tarjetas", "Reglas"};
+    static final String[] NOMBRES_VISTAS = {"Equipos", "Partidos", "Posiciones", "Llaves", "Estadísticas", "Reglas"};
     static final String[] ICONOS_VISTAS = {
         "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z",
         "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM3 10h18M8 3v4M16 3v4",
@@ -75,6 +83,15 @@ public class Aplicacion extends Application {
         "M3 4h5v6H3M3 14h5v6H3M8 7h4v10H8M12 12h5M17 9h4v6h-4",
         "M6.5 4h6a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 5 15.5v-10A1.5 1.5 0 0 1 6.5 4ZM15 7h3a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6a1.5 1.5 0 0 1-1.5-1.5V18",
         "M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7"};
+    /* Iconos de trazo (24x24) en lugar de emojis. */
+    static final String ICONO_TROFEO = "M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z";
+    static final String ICONO_LUNA = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z";
+    static final String ICONO_MENU = "M4 7h16M4 12h16M4 17h16";
+    static final String ICONO_PERSONA = "M12 4a4 4 0 1 1 0 8a4 4 0 1 1 0-8ZM4 21c0-4 4-6 8-6s8 2 8 6";
+    static final String ICONO_SALE = "M17 4v14M13 14l4 4 4-4";
+    static final String ICONO_ENTRA = "M7 20V6M3 10l4-4 4 4";
+    static final String ICONO_DADO = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18ZM12 7l3.5 2.6-1.3 4.1H9.8L8.5 9.6Z";
+    static final String ICONO_ESTADIO = "M3 10c0-2 4-4 9-4s9 2 9 4v7c0 2-4 4-9 4s-9-2-9-4zM3 10c0 2 4 4 9 4s9-2 9-4";
 
     Stage stage;
     CampeonatoService servicio;
@@ -91,6 +108,11 @@ public class Aplicacion extends Application {
     private final Label chipFormato = new Label();
     private final Label chipEquipos = new Label();
     private final Label estado = new Label();
+    private final Label chipEstado = new Label();
+    private final Button btnCampeon = new Button("Ver campeón");
+    private HBox cabeceraTorneo;
+    private String vistaAnimada = "";
+    private Region fotoFondo;
     private final Button btnAvanzar = new Button();
     private final MenuItem itemSiguiente = new MenuItem("Siguiente torneo corto (Clausura)…");
     private final Map<String, ToggleButton> navegacion = new LinkedHashMap<>();
@@ -101,6 +123,7 @@ public class Aplicacion extends Application {
     private int filtroEquipo = -1;
     private int tablaElegida;
     private String filtroSanciones = "todas";
+    private int fichaElegida = -1;
 
     @Override
     public void start(Stage stage) {
@@ -109,6 +132,7 @@ public class Aplicacion extends Application {
         api = new ApiControlador(servicio, new AutenticacionService());
         catalogo = api.consultar("catalogo");
         dialogos = new Dialogos(this);
+        cargarFuentes();
         scene = new Scene(new StackPane(), 1280, 820);
         scene.getStylesheets().add(hojaEstilos());
         stage.setTitle("AlphaSport · Gestor de campeonatos");
@@ -131,12 +155,87 @@ public class Aplicacion extends Application {
         return new Image(Arranque.CARPETA_WEB.resolve("img").resolve(nombre).toUri().toString(), true);
     }
 
-    private void ponerRaiz(Parent raiz) {
-        raiz.getStyleClass().add("raiz");
-        if (claro) {
-            raiz.getStyleClass().add("claro");
+    /** Bricolage Grotesque (títulos y cifras) y Onest (interfaz), las mismas fuentes de la web, guardadas en web/fuentes. */
+    private static void cargarFuentes() {
+        Path carpeta = Arranque.CARPETA_WEB.resolve("fuentes");
+        if (!Files.isDirectory(carpeta)) {
+            return;
         }
-        scene.setRoot(raiz);
+        try (var archivos = Files.list(carpeta)) {
+            archivos.filter(p -> p.toString().endsWith(".ttf")).forEach(p -> Font.loadFont(p.toUri().toString(), 14));
+        } catch (Exception e) {
+            // Sin las fuentes propias se usa Segoe UI, definido como respaldo en el CSS.
+        }
+    }
+
+    static SVGPath icono(String trazo, String... clases) {
+        SVGPath s = new SVGPath();
+        s.setContent(trazo);
+        s.getStyleClass().add("icono");
+        s.getStyleClass().addAll(clases);
+        return s;
+    }
+
+    /*
+     * Escenario común a todas las pantallas: la foto del estadio (noche o día) levemente desenfocada,
+     * un velo para la lectura y dos haces de reflector que se encienden al abrir y oscilan despacio.
+     */
+    private StackPane escenario(Node contenido) {
+        fotoFondo = new Region();
+        fotoFondo.getStyleClass().add("foto-fondo");
+        fotoFondo.setEffect(new GaussianBlur(4));
+        fotoFondo.setMouseTransparent(true);
+        actualizarFoto();
+        Region velo = new Region();
+        velo.getStyleClass().add("velo");
+        velo.setMouseTransparent(true);
+        Pane capaFocos = new Pane(haz(true), haz(false));
+        capaFocos.setMouseTransparent(true);
+        StackPane s = new StackPane(fotoFondo, velo, capaFocos, contenido);
+        s.setMinSize(0, 0);
+        return s;
+    }
+
+    private SVGPath haz(boolean izquierdo) {
+        SVGPath h = new SVGPath();
+        h.setContent("M-26 0 L26 0 L330 1100 L-330 1100 Z");
+        h.getStyleClass().add("haz");
+        h.setEffect(new GaussianBlur(18));
+        h.setOpacity(0);
+        h.layoutXProperty().bind(scene.widthProperty().multiply(izquierdo ? 0.2 : 0.8));
+        h.setLayoutY(-60);
+        double giro = izquierdo ? -22 : 22;
+        h.getTransforms().add(new javafx.scene.transform.Rotate(giro, 0, 0));
+        FadeTransition encender = new FadeTransition(Duration.millis(1600), h);
+        encender.setDelay(Duration.millis(izquierdo ? 150 : 350));
+        encender.setFromValue(0);
+        encender.setToValue(1);
+        encender.setInterpolator(Interpolator.EASE_OUT);
+        RotateTransition oscilar = new RotateTransition(Duration.seconds(14), h);
+        oscilar.setByAngle(izquierdo ? 5 : -5);
+        oscilar.setAutoReverse(true);
+        oscilar.setCycleCount(RotateTransition.INDEFINITE);
+        oscilar.setInterpolator(Interpolator.EASE_BOTH);
+        encender.setOnFinished(e -> oscilar.play());
+        encender.play();
+        return h;
+    }
+
+    private void actualizarFoto() {
+        if (fotoFondo == null) {
+            return;
+        }
+        Path foto = Arranque.CARPETA_WEB.resolve("img").resolve(claro ? "estadio-dia.jpg" : "estadio-noche.jpg");
+        fotoFondo.setStyle("-fx-background-image: url('" + foto.toUri() + "'); -fx-background-size: cover; -fx-background-position: center 62%;");
+    }
+
+    private void ponerRaiz(Parent raiz) {
+        StackPane escena = escenario(raiz);
+        escena.getStyleClass().add("raiz");
+        if (claro) {
+            escena.getStyleClass().add("claro");
+        }
+        scene.setRoot(escena);
     }
 
     void alternarTema() {
@@ -146,10 +245,21 @@ public class Aplicacion extends Application {
         } else {
             scene.getRoot().getStyleClass().remove("claro");
         }
+        actualizarFoto();
+    }
+
+    /** En la coronación, los focos del estadio se vuelven dorados. */
+    void coronacion(boolean activa) {
+        if (activa) {
+            scene.getRoot().getStyleClass().add("coronacion");
+        } else {
+            scene.getRoot().getStyleClass().remove("coronacion");
+        }
     }
 
     Button botonTema(String texto) {
         Button b = boton(texto, "fantasma");
+        b.setGraphic(icono(ICONO_LUNA));
         b.setOnAction(e -> alternarTema());
         return b;
     }
@@ -167,6 +277,15 @@ public class Aplicacion extends Application {
         l.getStyleClass().addAll(clases);
         l.setWrapText(true);
         return l;
+    }
+
+    /** Flechas de cambio: verde la del que entra, roja la del que sale. */
+    static Node iconoCambio() {
+        SVGPath entra = icono(ICONO_ENTRA, "icono-mini", "icono-entra");
+        SVGPath sale = icono(ICONO_SALE, "icono-mini", "icono-sale");
+        HBox h = new HBox(-6, entra, sale);
+        h.setAlignment(Pos.CENTER);
+        return h;
     }
 
     static Region espacio() {
@@ -235,19 +354,23 @@ public class Aplicacion extends Application {
             }
         });
         VBox tarjeta = new VBox(12, logo, etiqueta("Gestión profesional de campeonatos de fútbol", "sutil", "centro"),
-                etiqueta("Usuario", "campo-titulo"), usuario, etiqueta("Contraseña", "campo-titulo"), clave, error, entrar,
-                etiqueta("Usuario de prueba: admin · Contraseña: 123", "sutil", "pequeno", "centro"));
+                etiqueta("Usuario", "campo-titulo"), usuario, etiqueta("Contraseña", "campo-titulo"), clave, error, entrar);
         tarjeta.setAlignment(Pos.CENTER);
         tarjeta.getChildren().stream().filter(x -> x.getStyleClass().contains("campo-titulo"))
                 .forEach(x -> ((Label) x).setMaxWidth(Double.MAX_VALUE));
         tarjeta.getStyleClass().addAll("vidrio", "login-tarjeta");
-        tarjeta.setMaxSize(460, Region.USE_PREF_SIZE);
-        Button tema = botonTema("🌓");
+        tarjeta.setMaxSize(440, Region.USE_PREF_SIZE);
+        Button tema = botonTema("");
+        tema.getStyleClass().add("icono-solo");
         StackPane.setAlignment(tema, Pos.TOP_RIGHT);
         StackPane.setMargin(tema, new Insets(18));
-        StackPane fondo = new StackPane(tarjeta, tema);
+        Label credito = etiqueta(claro ? "Foto: Miguel Ramírez · Unsplash" : "Foto: Josemar Duarte · Unsplash", "credito-foto");
+        StackPane.setAlignment(credito, Pos.BOTTOM_RIGHT);
+        StackPane.setMargin(credito, new Insets(0, 16, 12, 0));
+        StackPane fondo = new StackPane(tarjeta, tema, credito);
         fondo.getStyleClass().add("login");
         ponerRaiz(fondo);
+        entrada(tarjeta, 350);
         usuario.requestFocus();
     }
 
@@ -259,7 +382,8 @@ public class Aplicacion extends Application {
         logo.setFitWidth(150);
         logo.setPreserveRatio(true);
         logo.getStyleClass().add("logo-lateral");
-        VBox marca = new VBox(2, logo, etiqueta("AlphaSport", "marca-nombre"), etiqueta("GESTOR DE CAMPEONATOS", "marca-sub"));
+        logo.setFitWidth(128);
+        VBox marca = new VBox(2, logo, etiqueta("AlphaSport", "marca-nombre"), etiqueta("Gestor de campeonatos", "marca-sub"));
         marca.setAlignment(Pos.CENTER);
         marca.getStyleClass().add("marca-lateral");
 
@@ -279,45 +403,57 @@ public class Aplicacion extends Application {
             navegacion.put(clave, b);
             nav.getChildren().add(b);
         }
-        Button historial = boton("🏆  Historial", "fantasma");
+        Button historial = boton("Historial", "fantasma");
+        historial.setGraphic(icono(ICONO_TROFEO));
         historial.setMaxWidth(Double.MAX_VALUE);
         historial.setOnAction(e -> dialogos.historial());
-        Button tema = botonTema("🌓  Modo claro / oscuro");
+        Button tema = botonTema("Modo claro / oscuro");
         tema.setMaxWidth(Double.MAX_VALUE);
-        Label modo = etiqueta("🖥  Escritorio Java", "chip", "chip-modo");
+        Label modo = etiqueta("Escritorio Java", "chip", "chip-modo");
         modo.setMaxWidth(Double.MAX_VALUE);
         modo.setAlignment(Pos.CENTER);
         VBox lateral = new VBox(22, marca, nav, espacio(), new VBox(8, historial, tema, modo));
-        lateral.getStyleClass().add("barra-lateral");
-        lateral.setPrefWidth(250);
+        lateral.getStyleClass().addAll("vidrio", "barra-lateral");
+        lateral.setPrefWidth(248);
+        lateral.setMinWidth(248);
+        BorderPane.setMargin(lateral, new Insets(20, 0, 20, 20));
 
         titulo.getStyleClass().add("titulo");
         titulo.setWrapText(true);
+        chipEstado.getStyleClass().addAll("chip", "chip-estado");
         chipFormato.getStyleClass().add("chip");
         chipEquipos.getStyleClass().add("chip");
         estado.getStyleClass().add("estado-vivo");
+        javafx.scene.shape.Circle punto = new javafx.scene.shape.Circle(4.5);
+        punto.getStyleClass().add("punto-vivo");
+        estado.setGraphic(punto);
+        estado.setGraphicTextGap(9);
         estado.setWrapText(true);
-        VBox info = new VBox(6, etiqueta("CAMPEONATO EN CURSO", "sobretitulo"), titulo, new HBox(8, chipFormato, chipEquipos), estado);
+        // El estado va en un chip junto al formato: sin rótulos pequeños encima del título.
+        VBox info = new VBox(8, titulo, new HBox(8, chipEstado, chipFormato, chipEquipos), estado);
         HBox.setHgrow(info, Priority.ALWAYS);
         btnAvanzar.getStyleClass().addAll("btn", "primario", "grande");
         btnAvanzar.setOnAction(e -> avanzar());
-        Button campeon = boton("Ver campeón", "dorado");
-        campeon.setOnAction(e -> dialogos.verCampeon());
-        HBox acciones = new HBox(10, btnAvanzar, campeon, menuArchivo());
+        btnCampeon.getStyleClass().addAll("btn", "dorado");
+        btnCampeon.setMinWidth(Region.USE_PREF_SIZE);
+        btnCampeon.setOnAction(e -> dialogos.verCampeon());
+        HBox acciones = new HBox(10, btnAvanzar, btnCampeon, menuArchivo());
         acciones.setAlignment(Pos.CENTER_RIGHT);
-        HBox cabecera = new HBox(20, info, acciones);
-        cabecera.setAlignment(Pos.CENTER_LEFT);
-        cabecera.getStyleClass().addAll("vidrio", "marcador-principal");
+        cabeceraTorneo = new HBox(20, info, acciones);
+        cabeceraTorneo.setAlignment(Pos.CENTER_LEFT);
+        cabeceraTorneo.getStyleClass().addAll("vidrio", "marcador-principal");
 
         ScrollPane desplazable = new ScrollPane(contenido);
         desplazable.setFitToWidth(true);
         desplazable.getStyleClass().add("desplazable");
-        VBox centro = new VBox(22, cabecera, desplazable);
+        VBox centro = new VBox(20, cabeceraTorneo, desplazable);
         VBox.setVgrow(desplazable, Priority.ALWAYS);
-        centro.setPadding(new Insets(24, 32, 24, 32));
+        centro.setPadding(new Insets(20, 20, 20, 20));
 
         BorderPane armazon = new BorderPane(centro);
         armazon.setLeft(lateral);
+        entrada(lateral, 0);
+        entrada(cabeceraTorneo, 80);
         toast.getStyleClass().add("aviso");
         toast.setOpacity(0);
         toast.setMouseTransparent(true);
@@ -334,7 +470,8 @@ public class Aplicacion extends Application {
     }
 
     private MenuButton menuArchivo() {
-        MenuButton menu = new MenuButton("☰  Archivo");
+        MenuButton menu = new MenuButton("Archivo");
+        menu.setGraphic(icono(ICONO_MENU));
         menu.getStyleClass().addAll("btn", "fantasma", "menu-archivo");
         MenuItem nuevo = new MenuItem("Nuevo campeonato…");
         nuevo.setOnAction(e -> {
@@ -493,12 +630,25 @@ public class Aplicacion extends Application {
         stage.setTitle(s(c, "nombre") + " · AlphaSport");
         chipFormato.setText(s(c, "formatoNombre"));
         chipEquipos.setText(n(c, "equiposActivos") + " equipos");
-        estado.setText("●  " + s(c, "estado"));
-        btnAvanzar.setText(b(c, "terminado") ? "Terminar e iniciar otro" : b(c, "iniciado") ? "Avanzar ronda / fase" : "Iniciar campeonato");
+        estado.setText(s(c, "estado"));
+        boolean terminado = b(c, "terminado");
+        chipEstado.setText(terminado ? "Terminado" : b(c, "iniciado") ? "En curso" : "Por iniciar");
+        btnAvanzar.setText(terminado ? "Terminar e iniciar otro" : b(c, "iniciado") ? "Cerrar ronda y avanzar" : "Iniciar campeonato");
         btnAvanzar.getStyleClass().remove("dorado");
-        if (b(c, "terminado")) {
+        if (terminado) {
             btnAvanzar.getStyleClass().add("dorado");
         }
+        // «Ver campeón» y el dorado de la cabecera solo existen cuando hay campeón.
+        btnCampeon.setVisible(terminado);
+        btnCampeon.setManaged(terminado);
+        if (cabeceraTorneo != null) {
+            cabeceraTorneo.getStyleClass().remove("terminado");
+            if (terminado) {
+                cabeceraTorneo.getStyleClass().add("terminado");
+            }
+        }
+        estado.getStyleClass().removeAll("en-juego", "terminado");
+        estado.getStyleClass().add(terminado ? "terminado" : "en-juego");
         itemSiguiente.setDisable(!b(c, "puedeSiguiente"));
         mostrarVista(vista);
     }
@@ -522,17 +672,40 @@ public class Aplicacion extends Application {
             default -> vistaEquipos();
         };
         contenido.getChildren().setAll(nodo);
+        // La vista entra subiendo y aclarándose, solo al cambiar de sección (no en cada guardado).
+        if (!nombre.equals(vistaAnimada)) {
+            vistaAnimada = nombre;
+            entrada(nodo, 0);
+        }
     }
 
+    /** Entrada suave: sube 14 px y aparece, con la curva de la web (ease-out). */
+    static void entrada(Node nodo, int retraso) {
+        nodo.setOpacity(0);
+        nodo.setTranslateY(14);
+        FadeTransition aparecer = new FadeTransition(Duration.millis(550), nodo);
+        aparecer.setToValue(1);
+        TranslateTransition subir = new TranslateTransition(Duration.millis(550), nodo);
+        subir.setToY(0);
+        ParallelTransition t = new ParallelTransition(aparecer, subir);
+        t.setInterpolator(Interpolator.SPLINE(.22, 1, .36, 1));
+        aparecer.setInterpolator(Interpolator.SPLINE(.22, 1, .36, 1));
+        subir.setInterpolator(Interpolator.SPLINE(.22, 1, .36, 1));
+        t.setDelay(Duration.millis(retraso));
+        t.play();
+    }
+
+    /* Cada vista abre con su propio panel de vidrio: título, ayuda y filtros adentro. */
     private VBox seccion(String titulo, String ayuda, Node... derecha) {
         VBox textos = new VBox(4, etiqueta(titulo, "h2"));
         if (ayuda != null) {
             textos.getChildren().add(etiqueta(ayuda, "sutil"));
         }
         HBox.setHgrow(textos, Priority.ALWAYS);
-        HBox cabecera = new HBox(12, textos);
+        HBox cabecera = new HBox(10, textos);
         cabecera.getChildren().addAll(derecha);
-        cabecera.setAlignment(Pos.BOTTOM_LEFT);
+        cabecera.setAlignment(Pos.CENTER_LEFT);
+        cabecera.getStyleClass().addAll("vidrio", "cabecera-vista");
         VBox caja = new VBox(18, cabecera);
         caja.getStyleClass().add("vista");
         return caja;
@@ -567,13 +740,19 @@ public class Aplicacion extends Application {
         Button completo = boton("+ Con plantilla", "fantasma");
         completo.setDisable(iniciado);
         completo.setOnAction(e -> dialogos.equipo(null));
+        Button prueba = boton("Datos de prueba", "fantasma");
+        prueba.setGraphic(icono(ICONO_DADO, "icono-mini"));
+        prueba.setTooltip(new javafx.scene.control.Tooltip("Crear equipos inventados con plantilla completa a partir de una semilla"));
+        // Con el campeonato iniciado los datos de prueba solo completan plantillas vacías.
+        prueba.setDisable(iniciado && l(E, "equipos").stream().allMatch(e -> b(e, "retirado") || !l(e, "jugadores").isEmpty()));
+        prueba.setOnAction(e -> dialogos.datosPrueba());
         VBox caja = seccion("Equipos", iniciado
                 ? "El campeonato ya inició: puede editar nombre, DT y jugadores, pero no agregar equipos nuevos."
                 : "Registre los equipos (mínimo 2) y pulse «Iniciar campeonato» para generar el fixture automáticamente.",
-                nombre, agregar, completo);
+                nombre, agregar, completo, prueba);
         List<Map<String, Object>> equipos = l(E, "equipos");
         if (equipos.isEmpty()) {
-            caja.getChildren().add(vacio("⚽  Todavía no hay equipos registrados."));
+            caja.getChildren().add(vacio("Todavía no hay equipos. Escriba un nombre arriba y pulse «Agregar»."));
             return caja;
         }
         FlowPane grid = new FlowPane(16, 16);
@@ -600,10 +779,17 @@ public class Aplicacion extends Application {
 
     private Node tarjetaEquipo(Map<String, Object> e, int i, boolean iniciado) {
         Map<String, Object> dt = m(e, "dt");
-        VBox datos = new VBox(3, etiqueta("#" + (i + 1) + (b(e, "retirado") ? " · RETIRADO" : ""), "sobretitulo"),
-                etiqueta(s(e, "nombre"), "h3"),
-                etiqueta("DT: " + (dt == null ? "Sin asignar" : s(dt, "nombre")) + " · " + l(e, "jugadores").size() + " jugadores", "sutil", "pequeno"),
-                etiqueta("🏟  " + (s(e, "estadio").isEmpty() ? "Sin estadio" : s(e, "estadio")), "sutil", "pequeno"));
+        int jugadores = l(e, "jugadores").size();
+        Label dtTexto = etiqueta("DT: " + (dt == null ? "Sin asignar" : s(dt, "nombre")) + " · " + (jugadores == 1 ? "1 jugador" : jugadores + " jugadores"), "sutil", "pequeno");
+        dtTexto.setGraphic(icono(ICONO_PERSONA, "icono-mini"));
+        Label estadioTexto = etiqueta(s(e, "estadio").isEmpty() ? "Sin estadio" : s(e, "estadio"), "sutil", "pequeno");
+        estadioTexto.setGraphic(icono(ICONO_ESTADIO, "icono-mini"));
+        HBox nombreFila = new HBox(8, etiqueta(s(e, "nombre"), "h3"));
+        nombreFila.setAlignment(Pos.CENTER_LEFT);
+        if (b(e, "retirado")) {
+            nombreFila.getChildren().add(etiqueta("Retirado", "etiqueta", "etiqueta-retirado"));
+        }
+        VBox datos = new VBox(4, nombreFila, dtTexto, estadioTexto);
         HBox.setHgrow(datos, Priority.ALWAYS);
         Button editar = boton("Editar", "mini");
         editar.setOnAction(ev -> dialogos.equipo(e));
@@ -668,7 +854,7 @@ public class Aplicacion extends Application {
         equipos.forEach(e -> textosEquipo.add(s(e, "nombre")));
         String[] estados = {"todos", "pendientes", "jugados", "aplazados"};
         ComboBox<String> cFase = combo(textosFase, filtroFase + 1, i -> { filtroFase = i - 1; mostrarVista("partidos"); });
-        ComboBox<String> cEstado = combo(List.of("Todos", "Pendientes", "Jugados", "Aplazados / suspendidos"),
+        ComboBox<String> cEstado = combo(List.of("Todos los estados", "Pendientes", "Jugados", "Aplazados / suspendidos"),
                 List.of(estados).indexOf(filtroEstado), i -> { filtroEstado = estados[i]; mostrarVista("partidos"); });
         int indiceEquipo = 0;
         for (int i = 0; i < equipos.size(); i++) {
@@ -680,7 +866,7 @@ public class Aplicacion extends Application {
             filtroEquipo = i == 0 ? -1 : n(equipos.get(i - 1), "id");
             mostrarVista("partidos");
         });
-        VBox caja = seccion("Partidos", "Toque un partido para registrar el resultado, las tarjetas y la programación.", cFase, cEstado, cEquipo);
+        VBox caja = seccion("Partidos", "Abra un partido para registrar el resultado, las tarjetas y la programación.", cFase, cEstado, cEquipo);
         Map<String, List<Map<String, Object>>> bloques = new LinkedHashMap<>();
         for (Map<String, Object> p : l(E, "partidos")) {
             boolean jugado = b(p, "jugado");
@@ -696,13 +882,13 @@ public class Aplicacion extends Application {
         }
         if (bloques.isEmpty()) {
             caja.getChildren().add(vacio(b(m(E, "campeonato"), "iniciado") ? "No hay partidos con estos filtros."
-                    : "📅  El fixture se genera automáticamente al pulsar «Iniciar campeonato»."));
+                    : "El fixture se genera automáticamente al pulsar «Iniciar campeonato»."));
             return caja;
         }
         bloques.forEach((tituloBloque, partidos) -> {
             FlowPane grid = new FlowPane(14, 14);
             partidos.forEach(p -> grid.getChildren().add(tarjetaPartido(p)));
-            caja.getChildren().add(new VBox(10, etiqueta(tituloBloque.toUpperCase(), "titulo-bloque"), grid));
+            caja.getChildren().add(new VBox(10, etiqueta(tituloBloque, "titulo-bloque"), grid));
         });
         return caja;
     }
@@ -710,6 +896,7 @@ public class Aplicacion extends Application {
     static Label etiquetaEstado(String estado) {
         String texto = switch (estado) {
             case "JUGADO" -> "Jugado";
+            case "EN_JUEGO" -> "● En juego";
             case "APLAZADO" -> "Aplazado";
             case "SUSPENDIDO" -> "Suspendido";
             default -> "Pendiente";
@@ -717,8 +904,30 @@ public class Aplicacion extends Application {
         return etiqueta(texto, "etiqueta", "etiqueta-" + estado.toLowerCase());
     }
 
+    static boolean conMarcador(Map<String, Object> p) {
+        return b(p, "jugado") || s(p, "estado").equals("EN_JUEGO");
+    }
+
+    /** Resumen corto: «2 cambios · 3 amarillas · 1 roja». */
+    static String incidencias(Map<String, Object> p) {
+        long rojas = l(p, "tarjetas").stream().filter(t -> s(t, "tipo").equals("ROJA")).count();
+        long amarillas = l(p, "tarjetas").size() - rojas;
+        int cambios = l(p, "cambios").size();
+        List<String> partes = new ArrayList<>();
+        if (cambios > 0) {
+            partes.add(cambios == 1 ? "1 cambio" : cambios + " cambios");
+        }
+        if (amarillas > 0) {
+            partes.add(amarillas == 1 ? "1 amarilla" : amarillas + " amarillas");
+        }
+        if (rojas > 0) {
+            partes.add(rojas == 1 ? "1 roja" : rojas + " rojas");
+        }
+        return String.join(" · ", partes);
+    }
+
     private Node tarjetaPartido(Map<String, Object> p) {
-        boolean jugado = b(p, "jugado");
+        boolean jugado = conMarcador(p);
         Label local = etiqueta(s(p, "localNombre"), "equipo-partido");
         Label visitante = etiqueta(s(p, "visitanteNombre"), "equipo-partido");
         if (n(p, "ganador") == n(p, "local")) {
@@ -730,7 +939,7 @@ public class Aplicacion extends Application {
         local.setAlignment(Pos.CENTER_RIGHT);
         local.setPrefWidth(120);
         visitante.setPrefWidth(120);
-        VBox marcador = new VBox(etiqueta(jugado ? n(p, "gl") + " : " + n(p, "gv") : "VS", jugado ? "led" : "vs"));
+        VBox marcador = new VBox(etiqueta(jugado ? n(p, "gl") + " : " + n(p, "gv") : "VS", jugado ? "cifras" : "vs"));
         if (b(p, "penales")) {
             marcador.getChildren().add(etiqueta(n(p, "pl") + "-" + n(p, "pv") + " pen", "penales-texto"));
         }
@@ -738,15 +947,26 @@ public class Aplicacion extends Application {
         marcador.getStyleClass().add("resultado");
         HBox centro = new HBox(12, local, marcador, visitante);
         centro.setAlignment(Pos.CENTER);
-        HBox meta = new HBox(8, etiqueta(Datos.fecha(p), "sutil", "pequeno"), espacio(), etiquetaEstado(s(p, "estado")));
+        // La fecha solo se muestra si está definida: no repetir «Por definir» en cada partido.
+        String fecha = s(p, "fecha").matches("\\d{4}-\\d{2}-\\d{2}") ? Datos.fecha(p) : "";
+        HBox meta = new HBox(8, etiqueta(fecha, "sutil", "pequeno"), espacio(), etiquetaEstado(s(p, "estado")));
         VBox tarjeta = new VBox(10, meta, centro);
         String obs = String.join(" · ", List.of(s(p, "sede"), s(p, "obs")).stream().filter(x -> !x.isEmpty()).toList());
         if (!obs.isEmpty()) {
             tarjeta.getChildren().add(etiqueta(obs, "sutil", "pequeno"));
         }
+        String resumen = jugado ? incidencias(p) : "";
+        if (!resumen.isEmpty()) {
+            Label inc = etiqueta(resumen, "sutil", "pequeno", "incidencias");
+            inc.setMaxWidth(Double.MAX_VALUE);
+            tarjeta.getChildren().add(inc);
+        }
         tarjeta.getStyleClass().addAll("vidrio", "partido");
-        if (jugado) {
+        if (b(p, "jugado")) {
             tarjeta.getStyleClass().add("jugado");
+        }
+        if (s(p, "estado").equals("EN_JUEGO")) {
+            tarjeta.getStyleClass().add("en-vivo");
         }
         tarjeta.setPrefWidth(380);
         tarjeta.setOnMouseClicked(e -> dialogos.partido(p));
@@ -764,12 +984,15 @@ public class Aplicacion extends Application {
                 c.getStyleClass().add("num");
                 c.setPrefWidth(Double.parseDouble(col[2]));
             }
+            if (col[1].equals("pts") || col[1].equals("#")) {
+                c.getStyleClass().add(col[1].equals("pts") ? "puntos" : "posicion");
+            }
             t.getColumns().add(c);
         }
         t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         t.setPlaceholder(etiqueta("Sin datos.", "sutil"));
         t.setFixedCellSize(40);
-        t.prefHeightProperty().bind(t.fixedCellSizeProperty().multiply(Math.max(filas.size(), 3)).add(46));
+        t.prefHeightProperty().bind(t.fixedCellSizeProperty().multiply(Math.max(filas.size(), 3)).add(72));
         return t;
     }
 
@@ -791,9 +1014,13 @@ public class Aplicacion extends Application {
             @Override
             protected void updateItem(Map<String, Object> fila, boolean vacia) {
                 super.updateItem(fila, vacia);
-                getStyleClass().removeAll("clasifica", "repechaje");
+                getStyleClass().removeAll("clasifica", "repechaje", "lider");
                 if (!vacia && fila != null) {
                     int i = getIndex();
+                    // El líder queda bajo un foco dorado en cuanto se juega algún partido.
+                    if (i == 0 && n(fila, "pj") > 0) {
+                        getStyleClass().add("lider");
+                    }
                     if (i < directos) {
                         getStyleClass().add("clasifica");
                     } else if (i < directos + repechaje) {
@@ -802,7 +1029,8 @@ public class Aplicacion extends Application {
                 }
             }
         });
-        String leyenda = s(E, "leyenda") + (directos > 0 ? " Verde: clasifica." : "") + (repechaje > 0 ? " Ámbar: repechaje." : "");
+        String leyenda = s(E, "leyenda") + (directos > 0 ? " Verde: clasifica." : "") + (repechaje > 0 ? " Ámbar: repechaje." : "")
+                + (!l(t, "filas").isEmpty() && n(l(t, "filas").get(0), "pj") > 0 ? " Dorado: líder." : "");
         caja.getChildren().addAll(tabla, etiqueta(leyenda, "sutil", "pequeno"));
         return caja;
     }
@@ -811,8 +1039,8 @@ public class Aplicacion extends Application {
         VBox caja = seccion("Llaves", null);
         Map<String, Object> c = m(E, "campeonato");
         if (b(c, "terminado")) {
-            VBox campeon = new VBox(4, etiqueta("🏆", "trofeo"), etiqueta("CAMPEÓN", "sobretitulo", "oro"), etiqueta(s(c, "campeonNombre"), "campeon-nombre"));
-            campeon.setAlignment(Pos.CENTER);
+            HBox campeon = new HBox(18, Dialogos.trofeo(0.5), new VBox(2, etiqueta(s(c, "campeonNombre"), "campeon-nombre"), etiqueta("Campeón del torneo", "campeon-sub")));
+            campeon.setAlignment(Pos.CENTER_LEFT);
             campeon.getStyleClass().add("campeon-caja");
             caja.getChildren().add(campeon);
         }
@@ -870,6 +1098,179 @@ public class Aplicacion extends Application {
     }
 
     private Node vistaSanciones() {
+        VBox todo = new VBox(26, vistaFicha(), vistaTarjetas());
+        todo.getStyleClass().add("vista");
+        return todo;
+    }
+
+    /** Estadísticas de un partido: marcador, cifras por equipo y los cambios y tarjetas minuto a minuto. */
+    private Node vistaFicha() {
+        List<Map<String, Object>> partidos = l(E, "partidos").stream().filter(Aplicacion::conMarcador).toList();
+        if (partidos.isEmpty()) {
+            VBox caja = seccion("Estadísticas del partido", "Escoja un partido para ver sus cambios y tarjetas minuto a minuto.");
+            caja.getChildren().add(vacio("Todavía no hay partidos jugados ni en juego. Al registrar un resultado, sus cambios y tarjetas aparecen aquí."));
+            return caja;
+        }
+        if (partidos.stream().noneMatch(p -> n(p, "id") == fichaElegida)) {
+            Map<String, Object> vivo = partidos.stream().filter(p -> s(p, "estado").equals("EN_JUEGO")).findFirst().orElse(null);
+            fichaElegida = n(vivo != null ? vivo : partidos.get(partidos.size() - 1), "id");
+        }
+        int indice = 0;
+        for (int i = 0; i < partidos.size(); i++) {
+            if (n(partidos.get(i), "id") == fichaElegida) {
+                indice = i;
+            }
+        }
+        ComboBox<String> selector = combo(partidos.stream().map(p -> (s(p, "estado").equals("EN_JUEGO") ? "En juego · " : "")
+                + s(p, "localNombre") + " " + n(p, "gl") + "-" + n(p, "gv") + " " + s(p, "visitanteNombre") + " · "
+                + (s(p, "nombreRonda").isEmpty() ? contexto(p) : s(p, "nombreRonda"))).toList(), indice,
+                i -> { fichaElegida = n(partidos.get(i), "id"); mostrarVista("sanciones"); });
+        selector.setPrefWidth(420);
+        VBox caja = seccion("Estadísticas del partido", "Escoja un partido para ver sus cambios y tarjetas minuto a minuto.", selector);
+        caja.getChildren().add(ficha(partidos.get(indice)));
+        return caja;
+    }
+
+    private Node ficha(Map<String, Object> p) {
+        int local = n(p, "local"), visitante = n(p, "visitante");
+        List<Map<String, Object>> tarjetas = l(p, "tarjetas"), cambios = l(p, "cambios");
+
+        String fecha = s(p, "fecha").matches("\\d{4}-\\d{2}-\\d{2}") ? Datos.fecha(p) : "";
+        String meta = String.join(" · ", java.util.stream.Stream.of(contexto(p), fecha, s(p, "sede")).filter(x -> !x.isEmpty()).toList());
+        HBox filaMeta = new HBox(8, etiqueta(meta, "sutil", "pequeno"), espacio(), etiquetaEstado(s(p, "estado")));
+        filaMeta.setAlignment(Pos.CENTER_LEFT);
+
+        Label nLocal = etiqueta(s(p, "localNombre"), "equipo-nombre");
+        Label nVisitante = etiqueta(s(p, "visitanteNombre"), "equipo-nombre");
+        if (n(p, "ganador") == local) {
+            nLocal.getStyleClass().add("ganador");
+        }
+        if (n(p, "ganador") == visitante) {
+            nVisitante.getStyleClass().add("ganador");
+        }
+        nLocal.setMaxWidth(Double.MAX_VALUE);
+        nVisitante.setMaxWidth(Double.MAX_VALUE);
+        nLocal.setAlignment(Pos.CENTER_RIGHT);
+        HBox.setHgrow(nLocal, Priority.ALWAYS);
+        HBox.setHgrow(nVisitante, Priority.ALWAYS);
+        VBox goles = new VBox(etiqueta(n(p, "gl") + " : " + n(p, "gv"), "ficha-goles"));
+        if (b(p, "penales")) {
+            goles.getChildren().add(etiqueta(n(p, "pl") + "-" + n(p, "pv") + " pen", "penales-texto"));
+        }
+        goles.setAlignment(Pos.CENTER);
+        HBox marcador = new HBox(20, nLocal, goles, nVisitante);
+        marcador.setAlignment(Pos.CENTER);
+        marcador.getStyleClass().add("marcador-partido");
+
+        java.util.function.BiFunction<Integer, String, Long> contar = (equipo, tipo) -> tipo.equals("CAMBIO")
+                ? cambios.stream().filter(x -> n(x, "equipo") == equipo).count()
+                : tarjetas.stream().filter(t -> n(t, "equipo") == equipo && (tipo.equals("ROJA") == s(t, "tipo").equals("ROJA"))).count();
+        VBox cifras = new VBox(12);
+        cifras.setMaxWidth(620);
+        for (String[] c : new String[][]{{"Cambios", "CAMBIO"}, {"Amarillas", "AMARILLA"}, {"Rojas", "ROJA"}}) {
+            cifras.getChildren().add(cifraDuelo(c[0], contar.apply(local, c[1]), contar.apply(visitante, c[1])));
+        }
+        HBox centroCifras = new HBox(cifras);
+        centroCifras.setAlignment(Pos.CENTER);
+        HBox.setHgrow(cifras, Priority.ALWAYS);
+
+        // eventos ordenados por minuto (los que no tienen minuto van al final)
+        List<Object[]> eventos = new ArrayList<>();
+        for (Map<String, Object> x : cambios) {
+            Label entra = etiqueta("Entra #" + n(x, "entraDorsal") + " " + s(x, "entraNombre"), "entra-texto");
+            Label sale = etiqueta("Sale #" + n(x, "saleDorsal") + " " + s(x, "saleNombre"), "sale-texto");
+            eventos.add(new Object[]{n(x, "minuto"), n(x, "equipo"), iconoCambio(), new VBox(1, entra, sale)});
+        }
+        for (Map<String, Object> t : tarjetas) {
+            boolean roja = s(t, "tipo").equals("ROJA");
+            Region carton = new Region();
+            carton.getStyleClass().addAll("carton", roja ? "carton-roja" : "carton-amarilla");
+            carton.setMinSize(12, 17);
+            carton.setMaxSize(12, 17);
+            carton.setRotate(-6);
+            int fechas = n(t, "fechas");
+            eventos.add(new Object[]{n(t, "minuto"), n(t, "equipo"), carton, new VBox(1, etiqueta("#" + n(t, "dorsal") + " " + s(t, "nombre"), "jugador-texto"),
+                    etiqueta(roja ? "Roja · " + fechas + (fechas == 1 ? " fecha" : " fechas") + " fuera" : "Amarilla", "sutil", "pequeno"))});
+        }
+        eventos.sort(Comparator.comparingInt(e -> (int) e[0] > 0 ? (int) e[0] : 999));
+        // Linea de tiempo: local a la izquierda, visitante a la derecha y el minuto en el eje central.
+        javafx.scene.layout.GridPane linea = new javafx.scene.layout.GridPane();
+        linea.setHgap(10);
+        linea.setVgap(8);
+        linea.getStyleClass().add("linea-tiempo");
+        javafx.scene.layout.ColumnConstraints lado = new javafx.scene.layout.ColumnConstraints();
+        lado.setPercentWidth(44);
+        javafx.scene.layout.ColumnConstraints eje = new javafx.scene.layout.ColumnConstraints();
+        eje.setPercentWidth(12);
+        eje.setHalignment(javafx.geometry.HPos.CENTER);
+        linea.getColumnConstraints().addAll(lado, eje, lado);
+        int filaEvento = 0;
+        for (Object[] e : eventos) {
+            boolean deLocal = (int) e[1] == local;
+            VBox textos = (VBox) e[3];
+            HBox evento = deLocal ? new HBox(8, textos, (Node) e[2]) : new HBox(8, (Node) e[2], textos);
+            evento.setAlignment(deLocal ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+            textos.setAlignment(deLocal ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+            evento.getStyleClass().add("evento");
+            evento.setMaxWidth(Double.MAX_VALUE);
+            Label minuto = etiqueta((int) e[0] > 0 ? e[0] + "′" : "–", "minuto-eje");
+            minuto.setMinWidth(54);
+            minuto.setAlignment(Pos.CENTER);
+            linea.add(evento, deLocal ? 0 : 2, filaEvento);
+            linea.add(minuto, 1, filaEvento);
+            filaEvento++;
+        }
+        VBox ficha = new VBox(16, filaMeta, marcador, centroCifras, etiqueta("Minuto a minuto", "h3"));
+        ficha.getChildren().add(eventos.isEmpty()
+                ? etiqueta("No se registraron cambios ni tarjetas en este partido. Se anotan al abrir el partido en Partidos.", "sutil")
+                : linea);
+        Button editar = boton("Editar partido", "mini", "fantasma");
+        editar.setOnAction(e -> dialogos.partido(p));
+        ficha.getChildren().add(new HBox(editar));
+        ficha.getStyleClass().addAll("vidrio", "ficha");
+        if (s(p, "estado").equals("EN_JUEGO")) {
+            ficha.getStyleClass().add("en-vivo");
+        }
+        return ficha;
+    }
+
+    /** Fila «2  Cambios  0» con una barra a cada lado, como en las transmisiones. */
+    private static Node cifraDuelo(String titulo, long izquierda, long derecha) {
+        long total = izquierda + derecha;
+        Label l = etiqueta(String.valueOf(izquierda), "cifra-duelo");
+        Label r = etiqueta(String.valueOf(derecha), "cifra-duelo");
+        Label t = etiqueta(titulo, "sutil");
+        Region medio = new Region();
+        HBox.setHgrow(medio, Priority.ALWAYS);
+        Region medio2 = new Region();
+        HBox.setHgrow(medio2, Priority.ALWAYS);
+        HBox textos = new HBox(l, medio, t, medio2, r);
+        textos.setAlignment(Pos.CENTER);
+        StackPane barraIzq = barra(total == 0 ? 0 : (double) izquierda / total, true);
+        StackPane barraDer = barra(total == 0 ? 0 : (double) derecha / total, false);
+        HBox.setHgrow(barraIzq, Priority.ALWAYS);
+        HBox.setHgrow(barraDer, Priority.ALWAYS);
+        HBox barras = new HBox(4, barraIzq, barraDer);
+        return new VBox(4, textos, barras);
+    }
+
+    private static StackPane barra(double fraccion, boolean izquierda) {
+        Region fondo = new Region();
+        fondo.getStyleClass().add("barra-fondo");
+        fondo.setMaxWidth(Double.MAX_VALUE);
+        Region lleno = new Region();
+        lleno.getStyleClass().add(izquierda ? "barra-local" : "barra-visitante");
+        StackPane sp = new StackPane(fondo, lleno);
+        sp.setAlignment(izquierda ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        sp.setPrefWidth(10);
+        sp.setMinHeight(6);
+        sp.setMaxHeight(6);
+        lleno.maxWidthProperty().bind(sp.widthProperty().multiply(fraccion));
+        lleno.setMinWidth(0);
+        return sp;
+    }
+
+    private Node vistaTarjetas() {
         Map<String, Object> sanciones = m(E, "sanciones");
         String[] filtros = {"todas", "rojas", "pendientes"};
         ComboBox<String> filtro = combo(List.of("Todas las tarjetas", "Solo rojas", "Suspensiones vigentes"),
@@ -884,7 +1285,7 @@ public class Aplicacion extends Application {
             filas.add(mapa("partido", s(r, "partido") + "  (" + s(r, "ronda") + ")", "fecha", Datos.fecha(r), "equipo", s(r, "equipo"),
                     "jugador", "#" + n(r, "dorsal") + " " + s(r, "jugador"), "tarjeta", roja ? "Roja" : "Amarilla",
                     "fechas", roja ? String.valueOf(n(r, "fechas")) : "—",
-                    "estado", !roja ? "—" : n(r, "pendientes") > 0 ? "Le falta(n) " + n(r, "pendientes") : "Cumplida"));
+                    "estado", !roja ? "—" : n(r, "pendientes") == 1 ? "Falta 1 fecha" : n(r, "pendientes") > 1 ? "Faltan " + n(r, "pendientes") + " fechas" : "Cumplida"));
         }
         TableView<Map<String, Object>> tabla = tabla(filas, new String[][]{{"Partido", "partido"}, {"Fecha", "fecha"},
             {"Equipo", "equipo"}, {"Jugador", "jugador"}, {"Tarjeta", "tarjeta"}, {"Fechas", "fechas", "80"}, {"Estado", "estado"}});
@@ -895,7 +1296,7 @@ public class Aplicacion extends Application {
 
     private Node vistaReglas() {
         Map<String, Object> c = m(E, "campeonato");
-        VBox formato = new VBox(10, etiqueta("FORMATO", "sobretitulo"), etiqueta(s(c, "formatoNombre"), "h3"),
+        VBox formato = new VBox(10, etiqueta(s(c, "formatoNombre"), "h3"),
                 etiqueta(s(c, "formatoDescripcion"), "sutil"));
         for (Object regla : Datos.lista(c, "reglas")) {
             formato.getChildren().add(etiqueta("•  " + regla, "regla"));
@@ -916,7 +1317,7 @@ public class Aplicacion extends Application {
                 dialogos.mensaje("Error", s(r, "error"));
             }
         });
-        VBox criterios = new VBox(10, etiqueta("CRITERIOS DE DESEMPATE", "sobretitulo"), etiqueta("Orden de aplicación", "h3"), editor, aplicar);
+        VBox criterios = new VBox(10, etiqueta("Criterios de desempate", "h3"), etiqueta("Se aplican en este orden cuando dos equipos empatan en puntos.", "sutil"), editor, aplicar);
         criterios.getStyleClass().addAll("vidrio", "tarjeta");
         HBox.setHgrow(formato, Priority.ALWAYS);
         HBox.setHgrow(criterios, Priority.ALWAYS);

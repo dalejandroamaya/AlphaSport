@@ -1,5 +1,6 @@
 package alphasport.ui;
 
+import alphasport.model.Cambio;
 import alphasport.model.ConfiguracionTorneo;
 import alphasport.model.CriterioDesempate;
 import alphasport.model.DirectorTecnico;
@@ -12,8 +13,11 @@ import alphasport.service.AutenticacionService;
 import alphasport.service.CampeonatoService;
 import alphasport.service.ReglaNegocioException;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Atiende las acciones de la interfaz web: convierte el JSON recibido en
@@ -57,6 +61,8 @@ public class ApiControlador {
             case "avanzar" -> mensaje = servicio.avanzar();
             case "equipo/rapido" -> servicio.agregarEquipo(texto(cuerpo, "nombre"));
             case "equipo" -> guardarEquipo(cuerpo);
+            case "semilla" -> mensaje = servicio.cargarDatosPrueba(entero(cuerpo.get("semilla")),
+                    entero(cuerpo.get("cantidad")), !Boolean.FALSE.equals(cuerpo.get("completar")));
             case "equipo/quitar" -> mensaje = servicio.quitarEquipo(entero(cuerpo.get("id")));
             case "partido" -> guardarPartido(cuerpo);
             case "criterios" -> servicio.cambiarCriterios(criterios(lista(cuerpo, "criterios")));
@@ -95,13 +101,18 @@ public class ApiControlador {
         datos.copiarDatosDe(original);
         Map<String, Object> d = objeto(cuerpo, "datos");
         EstadoPartido estado = EstadoPartido.valueOf(texto(d, "estado"));
-        if (estado == EstadoPartido.JUGADO) {
+        if (estado == EstadoPartido.JUGADO || estado == EstadoPartido.EN_JUEGO) {
+            // «En juego»: el marcador, las tarjetas y los cambios se registran en vivo (sin penales).
+            boolean jugado = estado == EstadoPartido.JUGADO;
             datos.setEstado(estado);
             datos.setGolesLocal(Math.max(0, entero(d.get("gl"))));
             datos.setGolesVisitante(Math.max(0, entero(d.get("gv"))));
-            datos.setPenalesLocal(entero(d.get("pl")));
-            datos.setPenalesVisitante(entero(d.get("pv")));
+            datos.setPenalesLocal(jugado ? entero(d.get("pl")) : Partido.SIN_PENALES);
+            datos.setPenalesVisitante(jugado ? entero(d.get("pv")) : Partido.SIN_PENALES);
             datos.setTarjetas(tarjetas(lista(d, "tarjetas")), original.getIdLocal());
+            if (d.containsKey("cambios")) { // la carga rapida no envia cambios: se conservan
+                datos.setCambios(cambios(lista(d, "cambios"), original));
+            }
         } else {
             datos.reiniciarResultado();
             datos.setEstado(estado);
@@ -133,10 +144,62 @@ public class ApiControlador {
                 throw new ReglaNegocioException("Una de las tarjetas es de un jugador que ya no existe.");
             }
             boolean roja = "ROJA".equals(texto(t, "tipo"));
-            tarjetas.add(new Tarjeta(idEquipo, jugador, roja ? Tarjeta.ROJA : Tarjeta.AMARILLA,
-                    roja ? Math.max(1, entero(t.get("fechas"))) : 0));
+            Tarjeta tarjeta = new Tarjeta(idEquipo, jugador, roja ? Tarjeta.ROJA : Tarjeta.AMARILLA,
+                    roja ? Math.max(1, entero(t.get("fechas"))) : 0);
+            int minuto = t.get("minuto") == null ? 0 : entero(t.get("minuto"));
+            if (minuto < 0 || minuto > MINUTO_MAXIMO) {
+                throw new ReglaNegocioException("El minuto de la tarjeta debe estar entre 1 y " + MINUTO_MAXIMO + ".");
+            }
+            tarjeta.setMinuto(minuto);
+            tarjetas.add(tarjeta);
         }
         return tarjetas;
+    }
+
+    /** Minuto mas alto que se acepta (90 + prorroga + descuento). */
+    public static final int MINUTO_MAXIMO = 130;
+
+    /**
+     * Lee los cambios y revisa que tengan sentido en orden de minuto: un
+     * jugador que salio no puede volver a entrar y nadie entra dos veces.
+     */
+    private ArrayList<Cambio> cambios(List<Object> lista, Partido partido) {
+        ArrayList<Cambio> cambios = new ArrayList<>();
+        for (Object o : lista) {
+            Map<String, Object> c = mapa(o);
+            int idEquipo = entero(c.get("equipo"));
+            if (!partido.involucra(idEquipo)) {
+                throw new ReglaNegocioException("Uno de los cambios es de un equipo que no juega este partido.");
+            }
+            int minuto = entero(c.get("minuto"));
+            if (minuto < 1 || minuto > MINUTO_MAXIMO) {
+                throw new ReglaNegocioException("El minuto del cambio debe estar entre 1 y " + MINUTO_MAXIMO + ".");
+            }
+            Jugador sale = servicio.getCampeonato().buscarJugador(idEquipo, entero(c.get("sale")));
+            Jugador entra = servicio.getCampeonato().buscarJugador(idEquipo, entero(c.get("entra")));
+            if (sale == null || entra == null) {
+                throw new ReglaNegocioException("Uno de los cambios es de un jugador que ya no existe.");
+            }
+            if (sale.getId() == entra.getId()) {
+                throw new ReglaNegocioException("En un cambio el jugador que sale y el que entra deben ser distintos.");
+            }
+            cambios.add(new Cambio(idEquipo, minuto, sale, entra));
+        }
+        cambios.sort(Comparator.comparingInt(Cambio::getMinuto));
+        Set<Integer> salieron = new HashSet<>();
+        Set<Integer> entraron = new HashSet<>();
+        for (Cambio c : cambios) {
+            if (salieron.contains(c.getIdSale())) {
+                throw new ReglaNegocioException("#" + c.getDorsalSale() + " " + c.getNombreSale() + " ya había salido antes del minuto " + c.getMinuto() + ".");
+            }
+            if (salieron.contains(c.getIdEntra()) || entraron.contains(c.getIdEntra())) {
+                throw new ReglaNegocioException("#" + c.getDorsalEntra() + " " + c.getNombreEntra()
+                        + (salieron.contains(c.getIdEntra()) ? " ya fue sustituido y no puede volver a entrar." : " ya había entrado en otro cambio."));
+            }
+            salieron.add(c.getIdSale());
+            entraron.add(c.getIdEntra());
+        }
+        return cambios;
     }
 
     private ConfiguracionTorneo configuracion(Map<String, Object> c) {

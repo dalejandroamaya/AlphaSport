@@ -181,6 +181,61 @@ public class CampeonatoService {
         guardar();
     }
 
+    /**
+     * Carga equipos de prueba con plantilla completa generados con una semilla
+     * (la misma semilla produce siempre los mismos datos). Si se pide, tambien
+     * llena la plantilla de los equipos que todavia no tienen jugadores.
+     */
+    public String cargarDatosPrueba(int semilla, int cantidad, boolean completarExistentes) throws PersistenciaException {
+        exigirCampeonato();
+        int pedidos = Math.max(0, Math.min(DatosPrueba.MAXIMO_EQUIPOS, cantidad));
+        if (pedidos > 0) {
+            exigirNoIniciado();
+        }
+        List<Equipo> sinPlantilla = new ArrayList<>();
+        List<String> usados = new ArrayList<>();
+        for (Equipo e : campeonato.getEquipos()) {
+            usados.add(e.getNombreEquipo());
+            if (completarExistentes && !e.isRetirado() && e.getJugadores().isEmpty()) {
+                sinPlantilla.add(e);
+            }
+        }
+        if (pedidos == 0 && sinPlantilla.isEmpty()) {
+            throw new ReglaNegocioException(completarExistentes ? "Todos los equipos ya tienen plantilla. Indique cuántos equipos nuevos crear."
+                    : "Indique cuántos equipos de prueba crear.");
+        }
+        DatosPrueba.Resultado r = DatosPrueba.generar(semilla, pedidos, usados, sinPlantilla.size());
+        for (DatosPrueba.EquipoPrueba e : r.equipos()) {
+            Equipo equipo = campeonato.agregarEquipo(e.nombre());
+            equipo.setEstadio(e.estadio());
+            equipo.setDirectorTecnico(e.dt());
+            asignarIds(e.jugadores());
+            equipo.setJugadores(e.jugadores());
+        }
+        for (int i = 0; i < sinPlantilla.size(); i++) {
+            ArrayList<Jugador> jugadores = r.plantillas().get(i);
+            asignarIds(jugadores);
+            sinPlantilla.get(i).setJugadores(jugadores);
+        }
+        guardar();
+        int creados = r.equipos().size();
+        String texto = creados == 0 ? "" : creados + (creados == 1 ? " equipo de prueba creado" : " equipos de prueba creados");
+        if (!sinPlantilla.isEmpty()) {
+            texto += (texto.isEmpty() ? "Plantilla completada en " : "; plantilla completada en ") + sinPlantilla.size()
+                    + (sinPlantilla.size() == 1 ? " equipo" : " equipos");
+        }
+        if (creados < pedidos) {
+            texto += " (no hay más nombres de prueba libres)";
+        }
+        return texto + ". Semilla " + semilla + ".";
+    }
+
+    private void asignarIds(List<Jugador> jugadores) {
+        for (Jugador j : jugadores) {
+            j.setId(campeonato.nuevoIdJugador());
+        }
+    }
+
     public String quitarEquipo(int idEquipo) throws PersistenciaException {
         exigirCampeonato();
         String mensaje = motor.retirarEquipo(buscarEquipo(idEquipo));

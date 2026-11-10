@@ -1,6 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <circle cx="32" cy="32" r="30" fill="#fff" stroke="#0E7A3D" stroke-width="3"/>
-  <path fill="#142019" d="M32 21l10.5 7.6-4 12.4H25.5l-4-12.4z"/>
-  <path fill="#142019" d="M32 2.5c5 0 9.6 1.2 13.7 3.4L42 13l-10 3-10-3-3.7-7.1C22.4 3.7 27 2.5 32 2.5zM61.3 28c.5 3.6.3 7.4-.7 11L53 41.5l-4-10 5-9 7.3 5.5zM2.7 28L10 22.5l5 9-4 10-7.6-2.5c-1-3.6-1.2-7.4-.7-11zM12.5 52.6l6.5-4.6 9 4.5 1 8.5c-6.4-.8-12.1-4-16.5-8.4zM51.5 52.6c-4.4 4.4-10.1 7.6-16.5 8.4l1-8.5 9-4.5z"/>
-  <path stroke="#142019" stroke-width="1.6" fill="none" d="M32 21v-5M42.5 28.6l6.5-1.6M38.5 41l5 6M25.5 41l-5 6M21.5 28.6l-6.5-1.6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Balón de fútbol">
+  <defs>
+    <radialGradient id="cuero" cx="38%" cy="32%" r="70%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".65" stop-color="#e9eef4"/>
+      <stop offset="1" stop-color="#b8c4d2"/>
+    </radialGradient>
+    <clipPath id="esfera"><circle cx="50" cy="50" r="47"/></clipPath>
+  </defs>
+  <circle cx="50" cy="50" r="47" fill="url(#cuero)"/>
+  <g clip-path="url(#esfera)" fill="#141c26">
+    <polygon points="50,36 63.3,45.7 58.2,61.3 41.8,61.3 36.7,45.7"/>
+    <polygon points="50,24 36.7,14.3 41.8,-1.3 58.2,-1.3 63.3,14.3"/>
+    <polygon points="74.7,41.9 79.8,26.3 96.2,26.3 101.3,41.9 88,51.6"/>
+    <polygon points="65.3,71.1 81.7,71.1 86.8,86.7 73.5,96.4 60.2,86.7"/>
+    <polygon points="34.7,71.1 39.8,86.7 26.5,96.4 13.2,86.7 18.3,71.1"/>
+    <polygon points="25.3,41.9 12,51.6 -1.3,41.9 3.8,26.3 20.2,26.3"/>
+  </g>
+  <g clip-path="url(#esfera)" stroke="#141c26" stroke-width="1.6" stroke-linecap="round" fill="none">
+    <path d="M50 36V24M63.3 45.7l11.4-3.8M58.2 61.3l7.1 9.8M41.8 61.3l-7.1 9.8M36.7 45.7l-11.4-3.8"/>
+    <path d="M63.3 14.3l16.5 12M36.7 14.3l-16.5 12M88 51.6l-6.3 19.5M12 51.6l6.3 19.5M60.2 86.7H39.8"/>
+  </g>
+  <circle cx="50" cy="50" r="47" fill="none" stroke="#0b1119" stroke-opacity=".35" stroke-width="2"/>
+  <ellipse cx="36" cy="27" rx="13" ry="7" fill="#fff" opacity=".45" transform="rotate(-28 36 27)"/>
 </svg>
