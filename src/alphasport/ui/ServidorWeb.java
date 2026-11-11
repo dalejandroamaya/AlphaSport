@@ -63,6 +63,13 @@ public class ServidorWeb {
         String ruta = intercambio.getRequestURI().getPath().substring("/api/".length());
         String metodo = intercambio.getRequestMethod();
         try {
+            // Rutas que no pasan por api.ejecutar(): se validan aqui.
+            if (ruta.equals("respaldo") || ruta.equals("exportar/historial")) {
+                api.exigirSesion();
+            }
+            if (metodo.equals("POST") && (ruta.equals("respaldo") || ruta.equals("salir"))) {
+                api.exigirAdministrador();
+            }
             if (metodo.equals("GET") && ruta.equals("respaldo")) {
                 descargar(intercambio, servicio.respaldo(), "application/octet-stream",
                         nombreArchivo(servicio.getCampeonato().getNombreCampeonato()) + ".dat");

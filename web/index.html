@@ -21,6 +21,7 @@
       <label class="campo">Contraseña<input id="loginClave" type="password" autocomplete="current-password" required></label>
       <p id="loginError" class="error" role="alert" hidden>Usuario o contraseña incorrectos.</p>
       <button class="btn primario ancho" type="submit">Entrar al estadio</button>
+      <button class="btn fantasma ancho" type="button" id="btnVisitante">Entrar como visitante (solo lectura)</button>
     </form>
     <p class="credito-foto"><span class="noche">Foto: <a href="https://unsplash.com/photos/an-empty-stadium-with-a-soccer-field-at-night-pitDMdAjynU" target="_blank" rel="noopener">Josemar Duarte · Unsplash</a></span><span class="dia">Foto: <a href="https://unsplash.com/photos/green-and-brown-football-stadium-under-blue-sky-during-daytime-wbdrpnbn_DE" target="_blank" rel="noopener">Miguel Ramírez · Unsplash</a></span></p>
   </section>
@@ -37,6 +38,7 @@
         <button data-vista="reglas"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7"/></svg><span>Reglas</span></button>
       </nav>
       <div class="lateral-pie">
+        <span id="chipRol" class="chip chip-rol"></span>
         <button id="btnHistorial" class="btn fantasma ancho"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z"/></svg>Historial</button>
         <button class="btn fantasma ancho boton-tema" data-tema-alternar><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>Modo claro / oscuro</button>
         <span id="chipModo" class="chip modo"></span>
@@ -48,23 +50,23 @@
         <img class="logo-movil" src="img/logo.png" alt="AlphaSport">
         <div class="marcador-info">
           <h1 id="titulo">AlphaSport</h1>
-          <div class="chips"><span id="sobreEstado" class="chip chip-estado">En curso</span><span id="chipFormato" class="chip"></span><span id="chipEquipos" class="chip"></span></div>
+          <div class="chips"><span id="sobreEstado" class="chip chip-estado">En curso</span><span id="chipFormato" class="chip"></span><span id="chipEquipos" class="chip"></span><span id="chipLectura" class="chip chip-lectura" hidden>Visitante · solo lectura</span></div>
           <p id="estado" class="estado-vivo"></p>
         </div>
         <div class="marcador-acciones">
-          <button id="btnAvanzar" class="btn primario grande">Iniciar campeonato</button>
+          <button id="btnAvanzar" class="btn primario grande" data-solo-admin>Iniciar campeonato</button>
           <button id="btnCampeon" class="btn dorado" hidden>Ver campeón</button>
           <button class="btn fantasma icono tema-movil" data-tema-alternar aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
           <div class="menu">
             <button id="btnMenu" class="btn fantasma" aria-haspopup="menu" aria-expanded="false" aria-controls="menuArchivo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Archivo</button>
             <div id="menuArchivo" class="menu-lista vidrio" role="menu" aria-labelledby="btnMenu" hidden>
-              <button role="menuitem" tabindex="-1" data-accion="nuevo">Nuevo campeonato…</button>
-              <button role="menuitem" tabindex="-1" data-accion="siguiente" id="menuSiguiente">Siguiente torneo corto (Clausura)…</button>
-              <button role="menuitem" tabindex="-1" data-accion="cambiarFormato">Cambiar formato del campeonato…</button>
-              <button role="menuitem" tabindex="-1" data-accion="cancelar" class="opcion-peligro">Cancelar campeonato…</button>
-              <hr role="separator">
+              <button role="menuitem" tabindex="-1" data-accion="nuevo" data-solo-admin>Nuevo campeonato…</button>
+              <button role="menuitem" tabindex="-1" data-accion="siguiente" id="menuSiguiente" data-solo-admin>Siguiente torneo corto (Clausura)…</button>
+              <button role="menuitem" tabindex="-1" data-accion="cambiarFormato" data-solo-admin>Cambiar formato del campeonato…</button>
+              <button role="menuitem" tabindex="-1" data-accion="cancelar" class="opcion-peligro" data-solo-admin>Cancelar campeonato…</button>
+              <hr role="separator" data-solo-admin>
               <button role="menuitem" tabindex="-1" data-accion="exportar">Descargar respaldo</button>
-              <button role="menuitem" tabindex="-1" data-accion="importar">Abrir respaldo…</button>
+              <button role="menuitem" tabindex="-1" data-accion="importar" data-solo-admin>Abrir respaldo…</button>
               <button role="menuitem" tabindex="-1" data-accion="historialTxt">Exportar historial (.txt)</button>
               <button role="menuitem" tabindex="-1" data-accion="historial">Historial de campeonatos</button>
               <hr role="separator">
@@ -79,7 +81,7 @@
       <section id="vista-equipos" class="vista">
         <div class="cabecera-vista">
           <div><h2>Equipos</h2><p id="ayudaEquipos" class="sutil"></p></div>
-          <form id="formRapido" class="fila-form">
+          <form id="formRapido" class="fila-form" data-solo-admin>
             <input id="nombreRapido" placeholder="Nombre del equipo" maxlength="60">
             <button class="btn">Agregar</button>
             <button type="button" id="btnEquipoCompleto" class="btn fantasma">+ Con plantilla</button>
@@ -91,9 +93,9 @@
 
       <section id="vista-partidos" class="vista" hidden>
         <div class="cabecera-vista">
-          <div><h2>Partidos</h2><p class="sutil">Abra un partido para registrar el resultado, las tarjetas y la programación.</p></div>
+          <div><h2>Partidos</h2><p id="ayudaPartidos" class="sutil">Abra un partido para registrar el resultado, las tarjetas y la programación.</p></div>
           <div class="filtros">
-            <button type="button" id="btnRapido" class="btn mini fantasma" aria-pressed="false" title="Escribir los marcadores directamente en la lista"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>Carga rápida</button>
+            <button type="button" id="btnRapido" data-solo-admin class="btn mini fantasma" aria-pressed="false" title="Escribir los marcadores directamente en la lista"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>Carga rápida</button>
             <select id="filtroFase" aria-label="Fase"></select>
             <select id="filtroEstado" aria-label="Estado">
               <option value="todos">Todos los estados</option><option value="pendientes">Pendientes</option>
@@ -166,7 +168,7 @@
             <h3>Criterios de desempate</h3>
             <p class="sutil">Se aplican en este orden cuando dos equipos empatan en puntos.</p>
             <div id="criteriosReglas"></div>
-            <button id="btnAplicarCriterios" class="btn">Aplicar criterios</button>
+            <button id="btnAplicarCriterios" class="btn" data-solo-admin>Aplicar criterios</button>
           </article>
         </div>
       </section>
@@ -241,6 +243,13 @@
         <ul id="tjLista" class="lista-tarjetas"></ul>
         <p id="tjSuspendidos" class="sutil pequeno"></p>
       </fieldset>
+      <fieldset id="ptFormacion" class="grupo"><legend>Formación táctica</legend>
+        <div class="rejilla-2">
+          <label class="campo"><span id="fmLocalNombre"></span><select id="fmLocal"></select></label>
+          <label class="campo"><span id="fmVisitanteNombre"></span><select id="fmVisitante"></select></label>
+        </div>
+        <p class="sutil pequeno">Se puede elegir antes de jugar el partido. El detalle del partido ubica el XI en la cancha según esta formación.</p>
+      </fieldset>
       <fieldset id="ptXI" class="grupo"><legend>XI inicial</legend>
         <p class="sutil pequeno">Marque los 11 jugadores que inician el partido en cada equipo. Los demás quedan como suplentes y son los únicos que pueden entrar en un cambio.</p>
         <div id="xiEquipos" class="xi-equipos"></div>
@@ -264,12 +273,28 @@
       </div>
       <p id="ptError" class="error" role="alert" hidden></p>
       <div class="acciones-izq acciones-secundarias">
+        <button type="button" id="ptVerDetalle" class="btn mini fantasma">Ver detalle</button>
         <button type="button" id="ptWoLocal" class="btn mini fantasma">W.O. gana local</button>
         <button type="button" id="ptWoVisitante" class="btn mini fantasma">W.O. gana visitante</button>
         <button type="button" id="ptBorrar" class="btn mini peligro">Borrar resultado</button>
       </div>
       <div class="acciones"><button type="button" id="ptCancelar" class="btn fantasma">Cancelar</button><button id="ptGuardar" class="btn primario">Guardar</button></div>
     </form>
+  </dialog>
+
+  <dialog id="dlgDetalle" class="dialogo ancho-dlg dlg-detalle" aria-labelledby="dpContexto">
+    <div class="cabecera-dlg">
+      <h3 id="dpContexto"></h3>
+      <button type="button" id="dpX" class="btn fantasma mini" aria-label="Cerrar">✕</button>
+    </div>
+    <div id="dpCabecera"></div>
+    <div class="pestanas-mini detalle-pestanas" role="tablist" aria-label="Detalle del partido">
+      <button type="button" role="tab" data-dp="caraACara" class="activa" aria-selected="true">Cara a cara</button>
+      <button type="button" role="tab" data-dp="racha" aria-selected="false">Racha</button>
+      <button type="button" role="tab" data-dp="alineaciones" aria-selected="false">Alineaciones</button>
+    </div>
+    <div id="dpPanel" class="detalle-panel" role="tabpanel"></div>
+    <div class="acciones"><button type="button" id="dpEditar" class="btn fantasma" data-solo-admin>Editar partido</button><button type="button" id="dpCerrar" class="btn primario">Cerrar</button></div>
   </dialog>
 
   <dialog id="dlgSemilla" class="dialogo pequeno-dlg" aria-labelledby="smTitulo">
@@ -336,7 +361,7 @@
         <div id="hsPremios" class="premios"></div>
         <div class="pestanas-mini"><button data-hsd="clasificacion" class="activa">Clasificación</button><button data-hsd="resultados">Resultados</button><button data-hsd="tarjetas">Tarjetas</button></div>
         <div class="tabla-envoltura"><table class="tabla compacta"><thead id="hsCabecera"></thead><tbody id="hsCuerpo"></tbody></table></div>
-        <div class="acciones"><button id="hsEliminar" class="btn peligro mini">Eliminar del historial</button><button id="hsDescargar" class="btn mini">Descargar premios (.txt)</button></div>
+        <div class="acciones"><button id="hsEliminar" class="btn peligro mini" data-solo-admin>Eliminar del historial</button><button id="hsDescargar" class="btn mini">Descargar premios (.txt)</button></div>
       </div>
     </div>
     <div id="hs-palmares" hidden>
@@ -376,6 +401,7 @@
   <script src="js/persistence/almacen.js"></script>
   <script src="js/service/motor.js"></script>
   <script src="js/service/datosPrueba.js"></script>
+  <script src="js/service/detalle.js"></script>
   <script src="js/service/servicioLocal.js"></script>
   <script src="js/service/servicioRemoto.js"></script>
   <script src="js/ui/app.js"></script>

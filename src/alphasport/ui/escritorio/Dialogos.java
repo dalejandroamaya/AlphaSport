@@ -953,6 +953,16 @@ class Dialogos {
                 + "y son los únicos que pueden entrar en un cambio.", "sutil", "pequeno");
         ayudaXI.setWrapText(true);
         VBox grupoXI = grupo("XI inicial", ayudaXI, columnasXI);
+
+        // ---- Formacion tactica de cada entrenador (se puede elegir antes de jugar el partido)
+        List<String> formaciones = new ArrayList<>(List.of(SIN_FORMACION));
+        Datos.lista(app.catalogo, "formaciones").forEach(f -> formaciones.add(String.valueOf(f)));
+        ComboBox<String> formLocal = new ComboBox<>(FXCollections.observableArrayList(formaciones));
+        ComboBox<String> formVisitante = new ComboBox<>(FXCollections.observableArrayList(formaciones));
+        formLocal.getSelectionModel().select(s(p, "formacionLocal").isEmpty() ? SIN_FORMACION : s(p, "formacionLocal"));
+        formVisitante.getSelectionModel().select(s(p, "formacionVisitante").isEmpty() ? SIN_FORMACION : s(p, "formacionVisitante"));
+        VBox grupoFormacion = grupo("Formación táctica",
+                new HBox(14, campo(s(p, "localNombre"), formLocal), campo(s(p, "visitanteNombre"), formVisitante)));
         boolean[] llenando = {false};
         llenarCambio[0] = () -> {
             llenando[0] = true;
@@ -1130,9 +1140,15 @@ class Dialogos {
         Button cancelar = boton("Cancelar", "fantasma");
         HBox botones = new HBox(10, woLocal, woVisitante, borrar, Aplicacion.espacio(), cancelar, guardar);
         botones.setAlignment(Pos.CENTER_LEFT);
-        Stage v = ventana("Partido", cuerpo(app.contexto(p), marcador, new HBox(14, campo("Estado", estado), penales), grupoTarjetas, grupoXI, grupoCambios,
+        Button verDetalle = boton("Ver detalle", "mini", "fantasma");
+        botones.getChildren().add(0, verDetalle);
+        Stage v = ventana("Partido", cuerpo(app.contexto(p), marcador, new HBox(14, campo("Estado", estado), penales), grupoTarjetas, grupoFormacion, grupoXI, grupoCambios,
                 new HBox(12, campo("Fecha", fecha), campo("Hora", hora), campo("Sede", sede), campo("Observaciones", obs)), err, botones), 900);
         cancelar.setOnAction(e -> v.close());
+        verDetalle.setOnAction(e -> {
+            v.close();
+            detallePartido(p);
+        });
 
         java.util.function.Consumer<String> enviar = accion -> {
             boolean faltaLocal = gl.getText().isBlank(), faltaVisitante = gv.getText().isBlank();
@@ -1166,7 +1182,8 @@ class Dialogos {
                     "gl", faltaLocal ? 0 : Integer.parseInt(gl.getText()), "gv", faltaVisitante ? 0 : Integer.parseInt(gv.getText()), "pl", penal ? pl.getValue() : -1, "pv", penal ? pv.getValue() : -1,
                     "tarjetas", tarjetas, "cambios", cambios,
                     "titularesLocal", new ArrayList<>(titulares.get(idsEquipos[0])), "titularesVisitante", new ArrayList<>(titulares.get(idsEquipos[1])), "fecha", fecha.getValue() == null ? "" : fecha.getValue().toString(),
-                    "hora", hora.getText(), "sede", sede.getText(), "obs", obs.getText());
+                    "hora", hora.getText(), "sede", sede.getText(), "obs", obs.getText(),
+                    "formacionLocal", formacionElegida(formLocal), "formacionVisitante", formacionElegida(formVisitante));
             Map<String, Object> cuerpo = mapa("id", n(p, "id"), "datos", datos, "accion", accion, "confirmado", false);
             Map<String, Object> r = app.ejecutar("partido", cuerpo);
             if (!b(r, "ok") && s(r, "codigo").equals("CONFIRMAR")) {
@@ -1222,6 +1239,32 @@ class Dialogos {
     }
 
     /* ---------------------------------------------------------------- datos de prueba */
+
+    /* ---------------------------------------------------------------- detalle de partido (Flashscore) */
+
+    static final String SIN_FORMACION = "Sin definir";
+
+    private static String formacionElegida(ComboBox<String> combo) {
+        String valor = combo.getValue();
+        return valor == null || valor.equals(SIN_FORMACION) ? "" : valor;
+    }
+
+    /** Detalle de solo lectura: cara a cara, racha y alineaciones. Lo usan visitante y administrador. */
+    void detallePartido(Map<String, Object> p) {
+        Map<String, Object> detalle;
+        try {
+            detalle = app.api.consultar("partido/" + n(p, "id"));
+        } catch (RuntimeException e) {
+            mensaje("No se pudo abrir el partido", e.getMessage());
+            return;
+        }
+        Button cerrar = boton("Cerrar", "primario");
+        cerrar.setDefaultButton(true);
+        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), VistaDetallePartido.construir(detalle),
+                acciones(cerrar)), 920);
+        cerrar.setOnAction(e -> v.close());
+        v.showAndWait();
+    }
 
     void datosPrueba() {
         boolean iniciado = b(m(app.E, "campeonato"), "iniciado");
@@ -1362,6 +1405,7 @@ class Dialogos {
                 historial();
             }
         });
+        app.soloAdmin(eliminar);
         Button descargar = boton("Descargar premios (.txt)", "mini");
         descargar.setOnAction(e -> app.guardarTexto(s(h, "nombre") + "_premios", s(h, "texto")));
         detalle.getChildren().setAll(podio, premios, tablas, new HBox(10, Aplicacion.espacio(), eliminar, descargar));

@@ -6,12 +6,14 @@ import alphasport.model.CriterioDesempate;
 import alphasport.model.DirectorTecnico;
 import alphasport.model.Equipo;
 import alphasport.model.Fase;
+import alphasport.model.Formacion;
 import alphasport.model.Jugador;
 import alphasport.model.Partido;
 import alphasport.model.Tarjeta;
 import alphasport.model.TipoFase;
 import alphasport.model.TipoFormato;
 import alphasport.service.CampeonatoService;
+import alphasport.service.DetallePartido;
 import alphasport.service.FilaTabla;
 import alphasport.service.GeneradorFixture;
 import alphasport.service.MotorCampeonato;
@@ -49,7 +51,9 @@ public class Presentador {
                 "posiciones", Arrays.asList(Jugador.POSICIONES),
                 "gruposPosiciones", Arrays.stream(Jugador.GRUPOS_POSICIONES).map(g -> mapa("grupo", g[0],
                         "posiciones", Arrays.asList(g).subList(1, g.length))).collect(Collectors.toList()),
-                "semillaMaximoEquipos", alphasport.service.DatosPrueba.MAXIMO_EQUIPOS, "configuracion", configuracion(new ConfiguracionTorneo()));
+                "semillaMaximoEquipos", alphasport.service.DatosPrueba.MAXIMO_EQUIPOS, "configuracion", configuracion(new ConfiguracionTorneo()),
+                "formaciones", Arrays.stream(Formacion.values()).map(Formacion::getTexto).collect(Collectors.toList()),
+                "formacionPorDefecto", Formacion.POR_DEFECTO.getTexto());
     }
 
     public Map<String, Object> estado() {
@@ -138,6 +142,8 @@ public class Presentador {
         m.put("tarjetas", p.getTarjetas().stream().map(this::tarjeta).collect(Collectors.toList()));
         m.put("titularesLocal", new ArrayList<>(p.getTitularesLocal()));
         m.put("titularesVisitante", new ArrayList<>(p.getTitularesVisitante()));
+        m.put("formacionLocal", p.getFormacionLocal());
+        m.put("formacionVisitante", p.getFormacionVisitante());
         m.put("cambios", p.getCambios().stream().map(x -> mapa("equipo", x.getIdEquipo(), "minuto", x.getMinuto(),
                 "sale", x.getIdSale(), "saleNombre", x.getNombreSale(), "saleDorsal", x.getDorsalSale(),
                 "entra", x.getIdEntra(), "entraNombre", x.getNombreEntra(), "entraDorsal", x.getDorsalEntra()))
@@ -298,6 +304,51 @@ public class Presentador {
         }
         return mapa("resumen", suspendidos.isEmpty() ? "No hay jugadores suspendidos."
                 : "Suspendidos (fechas que faltan): " + String.join(", ", suspendidos), "registros", registros);
+    }
+
+    /* ---------------------------------------------------------------- detalle de partido (Flashscore) */
+
+    /**
+     * JSON del detalle: {partido, caraACara:{resumen, partidos}, racha:{local, visitante}, alineaciones:{local, visitante}}.
+     * La racha de cada equipo es una lista de {resultado: V|E|D, rival, marcador, ...}.
+     */
+    public Map<String, Object> detallePartido(DetallePartido d) {
+        Campeonato c = servicio.getCampeonato();
+        DetallePartido.ResumenCaraACara r = d.getResumenCaraACara();
+        return mapa("ok", true,
+                "partido", partido(c, d.getPartido(), servicio.sanciones()),
+                "caraACara", mapa("victoriasLocal", r.victoriasLocal(), "empates", r.empates(),
+                        "victoriasVisitante", r.victoriasVisitante(),
+                        "partidos", d.getCaraACara().stream().map(x -> registro(x, null)).collect(Collectors.toList())),
+                "racha", mapa("local", d.getRachaLocal().stream().map(x -> registro(x, d.getLocal())).collect(Collectors.toList()),
+                        "visitante", d.getRachaVisitante().stream().map(x -> registro(x, d.getVisitante())).collect(Collectors.toList())),
+                "alineaciones", mapa("local", alineacion(d.getAlineacionLocal()), "visitante", alineacion(d.getAlineacionVisitante())));
+    }
+
+    /** Partido previo; si se da el equipo, agrega resultado (V/E/D) y rival desde su punto de vista. */
+    private Map<String, Object> registro(DetallePartido.Registro x, String equipo) {
+        Map<String, Object> m = mapa("competicion", x.competicion(), "ronda", x.ronda(), "fecha", x.fecha(),
+                "local", x.local(), "visitante", x.visitante(), "gl", x.golesLocal(), "gv", x.golesVisitante(),
+                "ganador", x.ganador());
+        if (equipo != null) {
+            boolean esLocal = x.local().trim().equalsIgnoreCase(equipo.trim());
+            m.put("resultado", String.valueOf(x.resultadoPara(equipo)));
+            m.put("rival", esLocal ? x.visitante() : x.local());
+            m.put("condicion", esLocal ? "L" : "V");
+        }
+        return m;
+    }
+
+    private Map<String, Object> alineacion(DetallePartido.Alineacion a) {
+        List<Object> lineas = new ArrayList<>();
+        for (List<DetallePartido.Puesto> linea : a.lineas()) {
+            lineas.add(linea.stream().map(p -> p.jugador() == null ? null
+                    : (Object) mapa("id", p.jugador().getId(), "dorsal", p.jugador().getDorsal(),
+                            "nombre", p.jugador().getNombre(), "posicion", p.jugador().getPosicion()))
+                    .collect(Collectors.toList()));
+        }
+        return mapa("formacion", a.formacion(), "formacionElegida", a.formacionElegida(), "confirmada", a.confirmada(),
+                "lineas", lineas);
     }
 
     public Map<String, Object> historial(List<Campeonato> campeonatos) {

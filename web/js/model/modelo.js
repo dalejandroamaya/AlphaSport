@@ -43,6 +43,16 @@ const CRITERIOS = {
 
 const ESTADOS = { PENDIENTE: 'Pendiente', EN_JUEGO: 'En juego', JUGADO: 'Jugado', APLAZADO: 'Aplazado', SUSPENDIDO: 'Suspendido' };
 
+/* Formaciones tácticas (líneas de campo de atrás hacia adelante, sin el portero): igual que model.Formacion en Java. */
+const FORMACIONES = ['4-4-2', '4-3-3', '4-2-3-1', '4-5-1', '4-1-4-1', '3-5-2', '3-4-3', '5-3-2', '5-4-1'];
+const FORMACION_POR_DEFECTO = '4-4-2';
+
+/* Roles del sistema: cada rol sabe si puede editar (igual que model.Rol en Java). */
+const ROLES = {
+  ADMINISTRADOR: { nombre: 'Administrador', puedeEditar: true },
+  VISITANTE: { nombre: 'Visitante', puedeEditar: false }
+};
+
 const LLAVE_GANADORES = 'Ganadores';
 const LLAVE_PERDEDORES = 'Perdedores';
 const LLAVE_GRAN_FINAL = 'Gran final';
@@ -114,7 +124,8 @@ const P = {
     const tarjetas = P.tarjetas(p).map(t => Object.assign({}, t));
     const cambios = P.cambios(p).map(x => Object.assign({}, x));
     const titularesLocal = (p.titularesLocal || []).slice(), titularesVisitante = (p.titularesVisitante || []).slice();
-    return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas, cambios, titularesLocal, titularesVisitante };
+    const formacionLocal = p.formacionLocal || '', formacionVisitante = p.formacionVisitante || '';
+    return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas, cambios, titularesLocal, titularesVisitante, formacionLocal, formacionVisitante };
   }
 };
 

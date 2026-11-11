@@ -7,6 +7,7 @@ import static alphasport.ui.escritorio.Datos.mapa;
 import static alphasport.ui.escritorio.Datos.n;
 import static alphasport.ui.escritorio.Datos.s;
 
+import alphasport.model.Usuario;
 import alphasport.service.AutenticacionService;
 import alphasport.service.CampeonatoService;
 import alphasport.service.ReglaNegocioException;
@@ -75,6 +76,10 @@ import javafx.util.Duration;
 public class Aplicacion extends Application {
 
     static final String[] VISTAS = {"equipos", "partidos", "posiciones", "llaves", "sanciones", "reglas"};
+    /** Vistas que el visitante no ve (no le aportan: son de gestión). */
+    static final java.util.Set<String> VISTAS_SOLO_ADMIN = java.util.Set.of("equipos", "reglas");
+    /** Vista con la que entra el visitante. */
+    static final String VISTA_INICIAL_VISITANTE = "partidos";
     static final String[] NOMBRES_VISTAS = {"Equipos", "Partidos", "Posiciones", "Llaves", "Estadísticas", "Reglas"};
     static final String[] ICONOS_VISTAS = {
         "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z",
@@ -295,6 +300,35 @@ public class Aplicacion extends Application {
         return r;
     }
 
+    /* ---------------------------------------------------------------- permisos */
+
+    /** true si quien inicio sesion puede crear, editar o eliminar. */
+    boolean puedeEditar() {
+        Usuario u = api.getUsuarioActual();
+        return u != null && u.puedeEditar();
+    }
+
+    /** true si el usuario actual puede abrir esa vista. */
+    boolean puedeVer(String vista) {
+        return puedeEditar() || !VISTAS_SOLO_ADMIN.contains(vista);
+    }
+
+    /** Oculta (y saca del layout) los controles de edicion cuando el usuario es visitante. */
+    void soloAdmin(Node... nodos) {
+        boolean admin = puedeEditar();
+        for (Node nodo : nodos) {
+            nodo.setVisible(admin);
+            nodo.setManaged(admin);
+        }
+    }
+
+    /** Lo mismo para opciones de menu (MenuItem no es un Node). */
+    void soloAdmin(MenuItem... items) {
+        for (MenuItem item : items) {
+            item.setVisible(puedeEditar());
+        }
+    }
+
     /* ---------------------------------------------------------------- acciones */
 
     Map<String, Object> ejecutar(String ruta, Map<String, Object> cuerpo) {
@@ -353,8 +387,19 @@ public class Aplicacion extends Application {
                 error.setVisible(true);
             }
         });
+        Button visitante = boton("Entrar como visitante (solo lectura)", "fantasma", "ancho");
+        visitante.setMaxWidth(Double.MAX_VALUE);
+        visitante.setOnAction(e -> {
+            try {
+                api.ejecutar("login/visitante", mapa());
+                mostrarPrincipal();
+            } catch (Exception ex) {
+                error.setText(ex.getMessage());
+                error.setVisible(true);
+            }
+        });
         VBox tarjeta = new VBox(12, logo, etiqueta("Gestión profesional de campeonatos de fútbol", "sutil", "centro"),
-                etiqueta("Usuario", "campo-titulo"), usuario, etiqueta("Contraseña", "campo-titulo"), clave, error, entrar);
+                etiqueta("Usuario", "campo-titulo"), usuario, etiqueta("Contraseña", "campo-titulo"), clave, error, entrar, visitante);
         tarjeta.setAlignment(Pos.CENTER);
         tarjeta.getChildren().stream().filter(x -> x.getStyleClass().contains("campo-titulo"))
                 .forEach(x -> ((Label) x).setMaxWidth(Double.MAX_VALUE));
@@ -389,8 +434,15 @@ public class Aplicacion extends Application {
 
         VBox nav = new VBox(6);
         ToggleGroup grupo = new ToggleGroup();
+        navegacion.clear();
+        if (!puedeVer(vista)) {
+            vista = VISTA_INICIAL_VISITANTE;
+        }
         for (int i = 0; i < VISTAS.length; i++) {
             String clave = VISTAS[i];
+            if (!puedeVer(clave)) {
+                continue; // el visitante no ve Equipos ni Reglas
+            }
             SVGPath icono = new SVGPath();
             icono.setContent(ICONOS_VISTAS[i]);
             icono.getStyleClass().add("icono-nav");
@@ -412,7 +464,11 @@ public class Aplicacion extends Application {
         Label modo = etiqueta("Escritorio Java", "chip", "chip-modo");
         modo.setMaxWidth(Double.MAX_VALUE);
         modo.setAlignment(Pos.CENTER);
-        VBox lateral = new VBox(22, marca, nav, espacio(), new VBox(8, historial, tema, modo));
+        Usuario usuario = api.getUsuarioActual();
+        Label chipRol = etiqueta(usuario.getRol().getNombre() + (usuario.puedeEditar() ? "" : " · solo lectura"), "chip");
+        chipRol.setMaxWidth(Double.MAX_VALUE);
+        chipRol.setAlignment(Pos.CENTER);
+        VBox lateral = new VBox(22, marca, nav, espacio(), new VBox(8, chipRol, historial, tema, modo));
         lateral.getStyleClass().addAll("vidrio", "barra-lateral");
         lateral.setPrefWidth(248);
         lateral.setMinWidth(248);
@@ -437,6 +493,7 @@ public class Aplicacion extends Application {
         btnCampeon.getStyleClass().addAll("btn", "dorado");
         btnCampeon.setMinWidth(Region.USE_PREF_SIZE);
         btnCampeon.setOnAction(e -> dialogos.verCampeon());
+        soloAdmin(btnAvanzar);
         HBox acciones = new HBox(10, btnAvanzar, btnCampeon, menuArchivo());
         acciones.setAlignment(Pos.CENTER_RIGHT);
         cabeceraTorneo = new HBox(20, info, acciones);
@@ -462,10 +519,13 @@ public class Aplicacion extends Application {
         StackPane raiz = new StackPane(armazon, toast);
         raiz.getStyleClass().add("fondo-app");
         ponerRaiz(raiz);
-        if (!b(E, "hay")) {
+        if (b(E, "hay")) {
+            render();
+        } else if (puedeEditar()) {
             dialogos.nuevo(true, false);
         } else {
-            render();
+            titulo.setText("Sin campeonato activo");
+            contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
         }
     }
 
@@ -502,7 +562,15 @@ public class Aplicacion extends Application {
         MenuItem historial = new MenuItem("Historial de campeonatos");
         historial.setOnAction(e -> dialogos.historial());
         MenuItem sesion = new MenuItem("Cerrar sesión");
-        sesion.setOnAction(e -> mostrarLogin());
+        sesion.setOnAction(e -> {
+            try {
+                api.ejecutar("logout", mapa());
+            } catch (Exception ignorado) {
+                // cerrar sesion nunca falla
+            }
+            mostrarLogin();
+        });
+        soloAdmin(nuevo, itemSiguiente, cambiar, cancelar, abrir);
         MenuItem salir = new MenuItem("Salir");
         salir.setOnAction(e -> stage.close());
         menu.getItems().addAll(nuevo, itemSiguiente, cambiar, cancelar, new SeparatorMenuItem(), respaldo, abrir, exportar,
@@ -654,6 +722,9 @@ public class Aplicacion extends Application {
     }
 
     void mostrarVista(String nombre) {
+        if (!puedeVer(nombre)) {
+            nombre = VISTA_INICIAL_VISITANTE;
+        }
         vista = nombre;
         ToggleButton b = navegacion.get(nombre);
         if (b != null) {
@@ -746,7 +817,9 @@ public class Aplicacion extends Application {
         // Con el campeonato iniciado los datos de prueba solo completan plantillas vacías.
         prueba.setDisable(iniciado && l(E, "equipos").stream().allMatch(e -> b(e, "retirado") || !l(e, "jugadores").isEmpty()));
         prueba.setOnAction(e -> dialogos.datosPrueba());
-        VBox caja = seccion("Equipos", iniciado
+        soloAdmin(nombre, agregar, completo, prueba);
+        VBox caja = seccion("Equipos", !puedeEditar() ? "Equipos inscritos, con su director técnico y plantilla."
+                : iniciado
                 ? "El campeonato ya inició: puede editar nombre, DT y jugadores, pero no agregar equipos nuevos."
                 : "Registre los equipos (mínimo 2) y pulse «Iniciar campeonato» para generar el fixture automáticamente.",
                 nombre, agregar, completo, prueba);
@@ -794,6 +867,7 @@ public class Aplicacion extends Application {
         Button editar = boton("Editar", "mini");
         editar.setOnAction(ev -> dialogos.equipo(e));
         HBox botones = new HBox(8, espacio(), editar);
+        soloAdmin(botones);
         if (!b(e, "retirado")) {
             Button quitar = boton(iniciado ? "Retirar" : "Eliminar", "mini", "peligro");
             quitar.setOnAction(ev -> quitarEquipo(e, iniciado));
@@ -866,7 +940,8 @@ public class Aplicacion extends Application {
             filtroEquipo = i == 0 ? -1 : n(equipos.get(i - 1), "id");
             mostrarVista("partidos");
         });
-        VBox caja = seccion("Partidos", "Abra un partido para registrar el resultado, las tarjetas y la programación.", cFase, cEstado, cEquipo);
+        VBox caja = seccion("Partidos", puedeEditar() ? "Abra un partido para registrar el resultado, las tarjetas y la programación."
+                : "Calendario y resultados. Toque cualquier partido para ver el cara a cara, la racha y las alineaciones.", cFase, cEstado, cEquipo);
         Map<String, List<Map<String, Object>>> bloques = new LinkedHashMap<>();
         for (Map<String, Object> p : l(E, "partidos")) {
             boolean jugado = b(p, "jugado");
@@ -969,8 +1044,17 @@ public class Aplicacion extends Application {
             tarjeta.getStyleClass().add("en-vivo");
         }
         tarjeta.setPrefWidth(380);
-        tarjeta.setOnMouseClicked(e -> dialogos.partido(p));
+        tarjeta.setOnMouseClicked(e -> abrirPartido(p));
         return tarjeta;
+    }
+
+    /** Administrador: editor del partido. Visitante: detalle estilo Flashscore (cualquier estado). */
+    private void abrirPartido(Map<String, Object> p) {
+        if (puedeEditar()) {
+            dialogos.partido(p);
+        } else {
+            dialogos.detallePartido(p);
+        }
     }
 
     static TableView<Map<String, Object>> tabla(List<Map<String, Object>> filas, String[][] columnas) {
@@ -1232,6 +1316,7 @@ public class Aplicacion extends Application {
                 : linea);
         Button editar = boton("Editar partido", "mini", "fantasma");
         editar.setOnAction(e -> dialogos.partido(p));
+        soloAdmin(editar);
         ficha.getChildren().add(new HBox(editar));
         ficha.getStyleClass().addAll("vidrio", "ficha");
         if (s(p, "estado").equals("EN_JUEGO")) {
@@ -1361,6 +1446,8 @@ public class Aplicacion extends Application {
                 dialogos.mensaje("Error", s(r, "error"));
             }
         });
+        editor.setDisable(!puedeEditar());
+        soloAdmin(aplicar);
         VBox criterios = new VBox(10, etiqueta("Criterios de desempate", "h3"), etiqueta("Se aplican en este orden cuando dos equipos empatan en puntos.", "sutil"), editor, aplicar);
         criterios.getStyleClass().addAll("vidrio", "tarjeta");
         HBox.setHgrow(formato, Priority.ALWAYS);

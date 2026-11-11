@@ -24,8 +24,10 @@ function crearServicioRemoto() {
     modo: 'java',
     extensionRespaldo: '.dat',
     catalogo: () => pedir('catalogo'),
+    sesion: () => pedir('sesion'),
     estado: () => pedir('estado'),
     historial: () => pedir('historial'),
+    detalle: id => pedir('partido/' + id),
     ejecutar: (ruta, cuerpo = {}) => pedir(ruta, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
     }),

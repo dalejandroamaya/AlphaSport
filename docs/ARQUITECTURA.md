@@ -107,6 +107,36 @@ classDiagram
     Aplicacion --> ApiControlador
 ```
 
+## Roles y permisos (sin base de datos)
+
+| Rol | Puede | Vistas |
+|---|---|---|
+| **Administrador** (`admin` / `123`) | Crear, editar y eliminar todo | Todas |
+| **Visitante** (`visitante` / `visitante` o «Entrar como visitante») | Solo consultar | Partidos, Posiciones, Llaves, Estadísticas (sin Equipos ni Reglas) |
+
+- `model.Rol` dice qué puede hacer cada rol (`puedeEditar()`); `model.Usuario` es quien inició sesión.
+- `service.AutenticacionService` valida las cuentas (hoy en memoria; en la Fase 3 se cambia por un repositorio).
+- **La regla real está en `ui.ApiControlador`**: guarda `usuarioActual` y, antes de ejecutar cualquier acción, llama a `exigirAdministrador()`. Solo `login`, `login/visitante` y `logout` son públicas (lista blanca). `ServidorWeb` protege aparte el respaldo y el cierre del programa.
+- Las interfaces solo **ocultan**: escritorio con `Aplicacion.puedeEditar()`, `soloAdmin(...)` y `puedeVer(vista)`; web con el atributo `data-solo-admin` y `puedeVer()` en `app.js`.
+
+## Detalle de partido (estilo Flashscore)
+
+Al tocar un partido, el visitante ve un detalle de solo lectura con tres pestañas; el administrador abre el editor (y desde ahí, «Ver detalle»).
+
+| Pestaña | Qué muestra | Regla |
+|---|---|---|
+| Cara a cara | Victorias de cada uno, empates y los últimos 10 enfrentamientos | Partidos jugados **antes** de este, del campeonato actual y del historial. Los equipos se cruzan por nombre. |
+| Racha | Últimos 5 resultados de cada equipo: 🟩 V, 🟨 E, 🟥 D | Mismo origen; el más reciente a la izquierda |
+| Alineaciones | Cancha con el XI de cada equipo según su formación | Portero atrás; el resto por posición (defensa → medio → ataque) y lado (izquierda → derecha). Sin XI: casillas «?». Sin formación: 4-4-2 «por defecto». |
+
+| Capa | Java | Web sola |
+|---|---|---|
+| model | `Formacion` (enum), `Partido.formacionLocal/Visitante` | `FORMACIONES` en `modelo.js` |
+| service | `DetallePartido` + `CampeonatoService.detallePartido(id)` | `service/detalle.js` |
+| ui | `ApiControlador.consultar("partido/{id}")` → `Presentador.detallePartido(...)`; escritorio: `VistaDetallePartido` + `Dialogos.detallePartido(p)` | `servicio.detalle(id)` → `abrirDetalle(id)` en `app.js` (`#dlgDetalle`) |
+
+La formación la elige el administrador en el editor del partido («Formación táctica»), en cualquier estado del partido.
+
 ## Conceptos de POO aplicados
 
 | Concepto | Dónde |

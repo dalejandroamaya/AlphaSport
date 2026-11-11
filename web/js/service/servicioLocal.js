@@ -129,6 +129,7 @@ function crearServicioLocal() {
       tarjetas: P.tarjetas(p).map(t => Object.assign({ minuto: 0 }, t)),
       cambios: P.cambios(p).map(x => Object.assign({}, x)),
       titularesLocal: (p.titularesLocal || []).slice(), titularesVisitante: (p.titularesVisitante || []).slice(),
+      formacionLocal: p.formacionLocal || '', formacionVisitante: p.formacionVisitante || '',
       suspendidos: m.suspendidosEn(p).map(t => ({ jugador: t.jugador, nombre: t.nombre, equipo: t.equipo, equipoNombre: m.nombre(t.equipo) }))
     };
   }
@@ -299,6 +300,14 @@ function crearServicioLocal() {
     return cambios;
   }
 
+  /** Valida el texto de una formación ('' = sin definir). */
+  function leerFormacion(texto) {
+    const f = String(texto || '').trim();
+    if (!f) return '';
+    if (!FORMACIONES.includes(f)) throw new ErrorRegla(`La formación «${f}» no existe.`);
+    return f;
+  }
+
   /** Equipos de prueba con plantilla completa generados con una semilla (mismo algoritmo que la versión Java). */
   function cargarDatosPrueba(d) {
     exigir();
@@ -351,6 +360,11 @@ function crearServicioLocal() {
       P.reiniciar(datos);
       datos.estado = d.estado;
     }
+    // La formación se elige antes del partido: se guarda en cualquier estado.
+    if ('formacionLocal' in d) {
+      datos.formacionLocal = leerFormacion(d.formacionLocal);
+      datos.formacionVisitante = leerFormacion(d.formacionVisitante);
+    }
     datos.fecha = d.fecha || 'Por definir';
     datos.hora = d.hora || '';
     datos.sede = String(d.sede || '').trim();
@@ -375,9 +389,50 @@ function crearServicioLocal() {
     m.aplicarEdicion(p, datos, afecta);
   }
 
+  /* ---------------------------------------------------------------- sesión y permisos (igual que ApiControlador) */
+
+  /** Cuentas demostrativas, como AutenticacionService en Java (sin base de datos). */
+  const CUENTAS = { admin: { clave: '123', rol: 'ADMINISTRADOR' }, visitante: { clave: '321', rol: 'VISITANTE' } };
+  /** Acciones que no exigen ser administrador. Todo lo demás sí (lista blanca). */
+  const RUTAS_PUBLICAS = new Set(['login', 'login/visitante', 'logout']);
+
+  let usuario = Almacen.sesion.cargar();
+  if (usuario && !ROLES[usuario.rol]) usuario = null;
+
+  const sesion = () => (usuario ? {
+    usuario: usuario.usuario, rol: usuario.rol, rolNombre: ROLES[usuario.rol].nombre, puedeEditar: ROLES[usuario.rol].puedeEditar
+  } : null);
+
+  function abrirSesion(nombre, rol) {
+    usuario = { usuario: nombre, rol };
+    Almacen.sesion.guardar(usuario);
+  }
+
+  function exigirSesion() {
+    if (!usuario) throw new ErrorRegla('Inicie sesión para continuar.', 'LOGIN');
+  }
+
+  function exigirAdministrador() {
+    exigirSesion();
+    if (!ROLES[usuario.rol].puedeEditar) {
+      throw new ErrorRegla(`Su rol (${ROLES[usuario.rol].nombre}) es de solo lectura: no puede crear, editar ni eliminar.`, 'PERMISO');
+    }
+  }
+
+  /** Respuesta de error con el mismo formato que la API de Java. */
+  const fallo = e => ({ ok: false, codigo: e.codigo || 'ERROR', error: e.message });
+
   const comandos = {
     login: d => {
-      if (!(String(d.usuario || '').trim() === 'admin' && d.clave === '123')) throw new ErrorRegla('Usuario o contraseña incorrectos.', 'LOGIN');
+      const nombre = String(d.usuario || '').trim().toLowerCase();
+      const cuenta = CUENTAS[nombre];
+      if (!cuenta || cuenta.clave !== d.clave) throw new ErrorRegla('Usuario o contraseña incorrectos.', 'LOGIN');
+      abrirSesion(nombre, cuenta.rol);
+    },
+    'login/visitante': () => abrirSesion('visitante', 'VISITANTE'),
+    logout: () => {
+      usuario = null;
+      Almacen.sesion.eliminar();
     },
     nuevo: d => {
       const nombre = String(d.nombre || '').trim();
@@ -459,31 +514,57 @@ function crearServicioLocal() {
         posiciones: GRUPOS_POSICIONES.flatMap(g => g.posiciones),
         gruposPosiciones: GRUPOS_POSICIONES.map(g => ({ grupo: g.grupo, posiciones: g.posiciones.slice() })),
         semillaMaximoEquipos: DatosPrueba.MAXIMO_EQUIPOS,
-        configuracion: configuracionPorDefecto()
+        configuracion: configuracionPorDefecto(),
+        formaciones: FORMACIONES.slice(),
+        formacionPorDefecto: FORMACION_POR_DEFECTO
       };
     },
-    async estado() { return estado(); },
-    async historial() { return historial(); },
+    async sesion() { return { ok: true, sesion: sesion() }; },
+    // Consultar es solo lectura: basta con haber iniciado sesión.
+    async estado() {
+      try { exigirSesion(); return estado(); } catch (e) { return fallo(e); }
+    },
+    async historial() {
+      try { exigirSesion(); return historial(); } catch (e) { return fallo(e); }
+    },
+    /** Detalle tipo Flashscore de un partido (mismo JSON que GET /api/partido/{id}). */
+    async detalle(id) {
+      try {
+        exigirSesion();
+        exigir();
+        const p = c.partidos.find(x => x.id === id);
+        if (!p) throw new ErrorRegla('El partido no existe.');
+        const anteriores = Almacen.historial.listar().filter(x => x.datos && FORMATOS[x.datos.formato]).map(x => x.datos);
+        return Object.assign({ ok: true, partido: partido(p) }, DetallePartido.calcular(c, anteriores, p));
+      } catch (e) {
+        return fallo(e);
+      }
+    },
     async ejecutar(ruta, cuerpo = {}) {
       const comando = comandos[ruta];
       if (!comando) return { ok: false, codigo: 'ERROR', error: 'Acción desconocida: ' + ruta };
       try {
+        if (!RUTAS_PUBLICAS.has(ruta)) exigirAdministrador(); // toda acción que modifica datos pasa por aquí
         const mensaje = comando(cuerpo) || null;
-        if (c) guardar();
-        return { ok: true, mensaje, estado: estado() };
+        if (ruta === 'logout') return { ok: true };
+        if (c && !RUTAS_PUBLICAS.has(ruta)) guardar();
+        return { ok: true, mensaje, estado: estado(), sesion: sesion() };
       } catch (e) {
-        return { ok: false, codigo: e.codigo || 'ERROR', error: e.message };
+        return fallo(e);
       }
     },
     async respaldo() {
+      exigirSesion();
       exigir();
       return { nombre: nombreArchivo(c.nombre) + '.json', contenido: new Blob([JSON.stringify(c, null, 2)], { type: 'application/json' }) };
     },
     async exportarHistorial() {
+      exigirSesion();
       exigir();
       return { nombre: nombreArchivo(c.nombre) + '.txt', contenido: new Blob([textoHistorial()], { type: 'text/plain' }) };
     },
     async abrirRespaldo(archivo) {
+      try { exigirAdministrador(); } catch (e) { return fallo(e); }
       try {
         const datos = JSON.parse(await archivo.text());
         if (!datos || !FORMATOS[datos.formato] || !Array.isArray(datos.equipos) || !Array.isArray(datos.partidos) || !Array.isArray(datos.fases)) {

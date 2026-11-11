@@ -5,10 +5,12 @@ import alphasport.model.ConfiguracionTorneo;
 import alphasport.model.CriterioDesempate;
 import alphasport.model.DirectorTecnico;
 import alphasport.model.EstadoPartido;
+import alphasport.model.Formacion;
 import alphasport.model.Jugador;
 import alphasport.model.Partido;
 import alphasport.model.Tarjeta;
 import alphasport.model.TipoFormato;
+import alphasport.model.Usuario;
 import alphasport.service.AutenticacionService;
 import alphasport.service.CampeonatoService;
 import alphasport.service.ReglaNegocioException;
@@ -35,9 +37,51 @@ public class ApiControlador {
         this.presentador = new Presentador(servicio);
     }
 
+    /* ---------------------------------------------------------------- sesion y permisos */
+
+    /** Usuario con sesion abierta; null si nadie ha iniciado sesion. */
+    private Usuario usuarioActual;
+
+    /** Rutas de ejecutar() que no exigen ser administrador. Todo lo demas si (lista blanca). */
+    private static final Set<String> RUTAS_PUBLICAS = Set.of("login", "login/visitante", "logout");
+
+    public Usuario getUsuarioActual() {
+        return usuarioActual;
+    }
+
+    /** Lanza LOGIN si no hay sesion. */
+    public void exigirSesion() {
+        if (usuarioActual == null) {
+            throw new ReglaNegocioException("LOGIN", "Inicie sesión para continuar.");
+        }
+    }
+
+    /** Lanza PERMISO si el usuario no puede modificar datos. */
+    public void exigirAdministrador() {
+        exigirSesion();
+        if (!usuarioActual.puedeEditar()) {
+            throw new ReglaNegocioException("PERMISO", "Su rol (" + usuarioActual.getRol().getNombre()
+                    + ") es de solo lectura: no puede crear, editar ni eliminar.");
+        }
+    }
+
+    /** Datos de la sesion para la interfaz: {usuario, rol, puedeEditar}. */
+    public Map<String, Object> sesion() {
+        return usuarioActual == null ? null
+                : Presentador.mapa("usuario", usuarioActual.getNombre(), "rol", usuarioActual.getRol().name(),
+                        "rolNombre", usuarioActual.getRol().getNombre(), "puedeEditar", usuarioActual.puedeEditar());
+    }
+
     public Map<String, Object> consultar(String ruta) {
+        if (!ruta.equals("catalogo") && !ruta.equals("sesion")) {
+            exigirSesion(); // consultar es solo lectura: basta con haber iniciado sesion
+        }
+        if (ruta.startsWith("partido/")) { // detalle tipo Flashscore: partido/{id}
+            return presentador.detallePartido(servicio.detallePartido(entero(ruta.substring("partido/".length()))));
+        }
         return switch (ruta) {
             case "catalogo" -> presentador.catalogo();
+            case "sesion" -> Presentador.mapa("ok", true, "sesion", sesion());
             case "estado" -> presentador.estado();
             case "historial" -> presentador.historial(servicio.historial());
             default -> throw new ReglaNegocioException("Ruta desconocida: " + ruta);
@@ -45,12 +89,16 @@ public class ApiControlador {
     }
 
     public Map<String, Object> ejecutar(String ruta, Map<String, Object> cuerpo) throws Exception {
+        if (!RUTAS_PUBLICAS.contains(ruta)) {
+            exigirAdministrador(); // toda accion que modifica datos pasa por aqui
+        }
         String mensaje = null;
         switch (ruta) {
-            case "login" -> {
-                if (!autenticacion.autenticar(texto(cuerpo, "usuario"), texto(cuerpo, "clave"))) {
-                    throw new ReglaNegocioException("LOGIN", "Usuario o contraseña incorrectos.");
-                }
+            case "login" -> usuarioActual = autenticacion.iniciarSesion(texto(cuerpo, "usuario"), texto(cuerpo, "clave"));
+            case "login/visitante" -> usuarioActual = autenticacion.entrarComoVisitante();
+            case "logout" -> {
+                usuarioActual = null;
+                return Presentador.mapa("ok", true);
             }
             case "nuevo" -> servicio.crear(texto(cuerpo, "nombre"), TipoFormato.valueOf(texto(cuerpo, "formato")),
                     configuracion(objeto(cuerpo, "config")), Boolean.TRUE.equals(cuerpo.get("mismosEquipos")));
@@ -74,7 +122,7 @@ public class ApiControlador {
     }
 
     public Map<String, Object> respuesta(String mensaje) {
-        return Presentador.mapa("ok", true, "mensaje", mensaje, "estado", presentador.estado());
+        return Presentador.mapa("ok", true, "mensaje", mensaje, "estado", presentador.estado(), "sesion", sesion());
     }
 
     private void guardarEquipo(Map<String, Object> cuerpo) throws Exception {
@@ -120,6 +168,10 @@ public class ApiControlador {
         } else {
             datos.reiniciarResultado();
             datos.setEstado(estado);
+        }
+        // La formacion se elige antes del partido: se guarda en cualquier estado.
+        if (d.containsKey("formacionLocal")) {
+            datos.setFormaciones(formacion(texto(d, "formacionLocal")), formacion(texto(d, "formacionVisitante")));
         }
         String fecha = texto(d, "fecha");
         datos.setFecha(fecha.isBlank() ? "Por definir" : fecha);
@@ -258,6 +310,17 @@ public class ApiControlador {
             cancha.add(c.getIdEntra());
         }
         return cambios;
+    }
+
+    /** Valida el texto de una formacion ("" = sin definir). */
+    private static String formacion(String texto) {
+        if (texto.isBlank()) {
+            return "";
+        }
+        if (Formacion.desdeTexto(texto) == null) {
+            throw new ReglaNegocioException("La formación «" + texto + "» no existe.");
+        }
+        return texto;
     }
 
     private ConfiguracionTorneo configuracion(Map<String, Object> c) {

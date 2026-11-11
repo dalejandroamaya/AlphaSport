@@ -508,3 +508,41 @@
 .fila-alineacion { -fx-background-color: -campo; -fx-background-radius: 10; -fx-padding: 5 10; }
 .fila-alineacion.entro { -fx-border-color: transparent transparent transparent -cesped; -fx-border-width: 0 0 0 3; }
 .titulo-alineacion { -fx-font-family: "Bricolage Grotesque SemiBold"; -fx-font-size: 16px; }
+
+/* =====================================================================
+   Detalle de partido (estilo Flashscore): cara a cara, racha, alineaciones
+   ===================================================================== */
+.detalle-cabecera { -fx-padding: 20 24; }
+.detalle-equipo { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 18px; -fx-wrap-text: true; -fx-text-alignment: center; }
+.detalle-pestanas .tab { -fx-background-color: transparent; -fx-padding: 6 14; }
+.detalle-pestanas .tab .tab-label { -fx-text-fill: -sutil; -fx-font-family: "Onest SemiBold"; }
+.detalle-pestanas .tab:selected { -fx-border-color: transparent transparent -cesped transparent; -fx-border-width: 0 0 3 0; }
+.detalle-pestanas .tab:selected .tab-label { -fx-text-fill: -texto; }
+.detalle-pestanas .tab-header-background { -fx-background-color: transparent; }
+.detalle-panel { -fx-padding: 18 4 4 4; }
+.detalle-cifra { -fx-padding: 14; }
+.detalle-cifra.cifra-victoria .cifras { -fx-text-fill: -cesped; }
+.detalle-cifra.cifra-empate .cifras { -fx-text-fill: -ambar; }
+.detalle-fila { -fx-padding: 10 14; }
+.detalle-fila-equipo { -fx-font-family: "Onest SemiBold"; }
+.detalle-fila-marcador { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 16px; -fx-min-width: 54; -fx-alignment: center; }
+.detalle-rotulo { -fx-padding: 14 16; }
+
+/* Racha: la letra va siempre dentro del cuadro (no depender solo del color) */
+.forma { -fx-background-radius: 6; -fx-font-family: "Onest SemiBold"; -fx-font-size: 13px; -fx-text-fill: #05080f; }
+.forma-V { -fx-background-color: #2ee598; }
+.forma-E { -fx-background-color: #f7c75a; }
+.forma-D { -fx-background-color: #ff6b81; }
+
+/* Cancha */
+.cancha {
+    -fx-background-color: linear-gradient(from 0% 0% to 0% 12.5%, repeat, #1d7a49 50%, #1a6e42 50%);
+    -fx-background-radius: 14;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 24, 0, 0, 8);
+}
+.cancha-linea { -fx-fill: transparent; -fx-stroke: rgba(255, 255, 255, 0.55); -fx-stroke-width: 2; }
+.ficha-dorsal { -fx-background-radius: 999; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 14px; -fx-border-radius: 999; -fx-border-width: 2; }
+.ficha-local { -fx-background-color: #eef4ff; -fx-text-fill: #0b1726; -fx-border-color: #2ee598; }
+.ficha-visitante { -fx-background-color: #0b1726; -fx-text-fill: #eef4ff; -fx-border-color: #f7c75a; }
+.ficha-nombre { -fx-text-fill: white; -fx-font-size: 11px; -fx-font-family: "Onest SemiBold"; -fx-alignment: center; -fx-text-alignment: center;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 4, 0.5, 0, 1); }

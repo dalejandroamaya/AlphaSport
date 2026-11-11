@@ -341,6 +341,12 @@ public class CampeonatoService {
         return partido;
     }
 
+    /** Detalle tipo Flashscore de un partido (cara a cara, racha y alineaciones). Solo lectura. */
+    public DetallePartido detallePartido(int idPartido) {
+        exigirCampeonato();
+        return new DetallePartido(campeonato, historial(), buscarPartido(idPartido));
+    }
+
     private void validarDorsales(List<Jugador> jugadores) {
         Set<Integer> usados = new HashSet<>();
         for (Jugador j : jugadores) {

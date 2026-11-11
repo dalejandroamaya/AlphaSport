@@ -41,6 +41,9 @@ public class Partido implements Serializable {
     private ArrayList<Cambio> cambios = new ArrayList<>();
     private ArrayList<Integer> titularesLocal = new ArrayList<>();     // ids del XI inicial
     private ArrayList<Integer> titularesVisitante = new ArrayList<>();
+    // Formacion tactica elegida por cada entrenador ("4-4-2"...). null en archivos anteriores = sin definir.
+    private String formacionLocal;
+    private String formacionVisitante;
 
     private String fecha = "Por definir";
     private String hora = "";
@@ -139,6 +142,8 @@ public class Partido implements Serializable {
         }
         titularesLocal = new ArrayList<>(otro.getTitularesLocal());
         titularesVisitante = new ArrayList<>(otro.getTitularesVisitante());
+        formacionLocal = otro.formacionLocal;
+        formacionVisitante = otro.formacionVisitante;
         fecha = otro.fecha;
         hora = otro.hora;
         sede = otro.sede;
@@ -433,5 +438,36 @@ public class Partido implements Serializable {
     public String toString() {
         return "Partido{" + "id=" + id + ", local=" + idLocal + ", visitante=" + idVisitante
                 + ", marcador=" + getMarcador() + ", estado=" + estado + '}';
+    }
+
+    /** Formacion del local ("" si el entrenador no la ha elegido). */
+    public String getFormacionLocal() {
+        return formacionLocal == null ? "" : formacionLocal;
+    }
+
+    public String getFormacionVisitante() {
+        return formacionVisitante == null ? "" : formacionVisitante;
+    }
+
+    /** Formacion del equipo indicado ("" si no la ha elegido). */
+    public String getFormacionDe(int idEquipo) {
+        return idEquipo == idLocal ? getFormacionLocal() : getFormacionVisitante();
+    }
+
+    /** Guarda las formaciones; "" o null = sin definir. Se validan con {@link Formacion#desdeTexto}. */
+    public void setFormaciones(String local, String visitante) {
+        this.formacionLocal = normalizarFormacion(local);
+        this.formacionVisitante = normalizarFormacion(visitante);
+    }
+
+    private static String normalizarFormacion(String texto) {
+        if (texto == null || texto.isBlank()) {
+            return null;
+        }
+        Formacion f = Formacion.desdeTexto(texto);
+        if (f == null) {
+            throw new IllegalArgumentException("Formación desconocida: " + texto);
+        }
+        return f.getTexto();
     }
 }
