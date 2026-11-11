@@ -300,6 +300,14 @@ public class Aplicacion extends Application {
         return r;
     }
 
+    /** Muestra u oculta las etiquetas de la cabecera (formato, equipos y estado del torneo). */
+    private void mostrarDatosCabecera(boolean visibles) {
+        for (Node nodo : List.of(chipEstado, chipFormato, chipEquipos, estado)) {
+            nodo.setVisible(visibles);
+            nodo.setManaged(visibles);
+        }
+    }
+
     /* ---------------------------------------------------------------- permisos */
 
     /** true si quien inicio sesion puede crear, editar o eliminar. */
@@ -525,6 +533,10 @@ public class Aplicacion extends Application {
             dialogos.nuevo(true, false);
         } else {
             titulo.setText("Sin campeonato activo");
+            // Sin campeonato no hay formato, equipos, estado ni campeón que mostrar en la cabecera.
+            mostrarDatosCabecera(false);
+            btnCampeon.setVisible(false);
+            btnCampeon.setManaged(false);
             contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
         }
     }
@@ -694,6 +706,7 @@ public class Aplicacion extends Application {
             return;
         }
         Map<String, Object> c = m(E, "campeonato");
+        mostrarDatosCabecera(true);
         titulo.setText(s(c, "nombre"));
         stage.setTitle(s(c, "nombre") + " · AlphaSport");
         chipFormato.setText(s(c, "formatoNombre"));
@@ -731,7 +744,12 @@ public class Aplicacion extends Application {
             b.setSelected(true);
         }
         if (!b(E, "hay")) {
-            contenido.getChildren().clear();
+            // El visitante no puede crear campeonatos: en cualquier vista ve el mismo aviso (antes quedaba en blanco).
+            if (puedeEditar()) {
+                contenido.getChildren().clear();
+            } else {
+                contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
+            }
             return;
         }
         Node nodo = switch (nombre) {

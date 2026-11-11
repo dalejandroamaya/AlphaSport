@@ -23,6 +23,9 @@ Las tres tienen las mismas funciones, el mismo diseño («Estadio bajo reflector
 - Nombres y descripciones de los formatos en lenguaje sencillo.
 - **Posiciones específicas** al armar la plantilla, agrupadas por línea: Portero; Defensa central, Líbero, Laterales y Carrileros; Mediocampista defensivo, central y ofensivo, Interiores y Volantes; Mediapunta, Extremos, Segundo delantero y Delantero centro.
 - **Cambios durante el partido**: en el partido se anota el minuto, quién sale y quién entra (por ejemplo, minuto 66: sale el 11 y entra el 7). El minuto se conserva para anotar seguido varios cambios hechos a la vez. Un jugador sustituido no puede volver a entrar.
+- **Roles**: `admin` / `123` es el administrador (crea, edita y elimina). `visitante` / `321`, o el botón «Entrar como visitante», es de solo lectura: no ve Equipos ni Reglas, y al tocar un partido abre su detalle. Los permisos se validan en el servicio (Java y JavaScript), no solo en la pantalla.
+- **Formación táctica** por equipo en cada partido (4-4-2, 4-3-3, 4-2-3-1, 4-5-1, 4-1-4-1, 3-5-2, 3-4-3, 5-3-2, 5-4-1). Se puede elegir antes de jugar.
+- **Detalle del partido** (estilo Flashscore): cara a cara entre los dos equipos (incluye campeonatos del historial), racha de los últimos 5 partidos con V/E/D y las alineaciones dibujadas sobre la cancha según la formación y el XI inicial.
 - **XI inicial**: en el partido se marcan los 11 titulares de cada equipo (o toda la plantilla si tiene menos). El botón «Dorsales más bajos» los elige de un clic. En los cambios, «Sale» muestra solo a los que están en la cancha y «Entra» solo a los suplentes que no han entrado. No se pueden anotar cambios sin el XI inicial, y la ficha del partido muestra las alineaciones.
 - Estado **«En juego»**: el marcador, las tarjetas y los cambios se guardan en vivo mientras se juega. Ese partido no cuenta en la tabla hasta que pasa a «Jugado».
 - Las tarjetas ahora pueden llevar **minuto** (opcional).
