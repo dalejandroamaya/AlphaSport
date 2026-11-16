@@ -190,7 +190,11 @@ async function cerrarSesion() {
 function aplicarPermisos() {
   const admin = puedeEditar();
   document.querySelectorAll('[data-solo-admin]').forEach(el => { el.hidden = !admin; });
-  document.querySelectorAll('.navegacion button[data-vista]').forEach(b => { b.hidden = !puedeVer(b.dataset.vista); });
+  // Sin campeonato no hay nada que ver fuera de Partidos (que muestra el aviso).
+  document.querySelectorAll('.navegacion button[data-vista]').forEach(b => {
+    // (las noticias no dependen del campeonato: siguen disponibles)
+    b.hidden = !puedeVer(b.dataset.vista) || (!E.hay && !['partidos', 'noticias'].includes(b.dataset.vista));
+  });
   $('chipRol').textContent = S ? S.rolNombre + (admin ? '' : ' · solo lectura') : '';
   $('chipRol').hidden = !S;
   $('chipLectura').hidden = !S || admin;
@@ -222,11 +226,13 @@ function renderSinCampeonato() {
   ['sobreEstado', 'chipFormato', 'chipEquipos'].forEach(id => { $(id).hidden = true; });
   $('estado').textContent = '';
   $('btnCampeon').hidden = true;
-  document.querySelectorAll('.vista').forEach(v => { v.hidden = v.id !== 'vista-partidos'; });
   document.querySelector('#vista-partidos .filtros').hidden = true;
+  $('ayudaPartidos').textContent = 'Calendario y resultados del campeonato en curso.';
   $('pestanasPartidos').hidden = true;
   $('ayudaPestanaPartidos').hidden = true;
   $('listaPartidos').innerHTML = vacioHtml('Todavía no hay un campeonato en curso. Vuelva más tarde.');
+  aplicarPermisos();
+  mostrarVista('partidos');
 }
 
 /* ---------------------------------------------------------------- dibujo general */
@@ -275,6 +281,7 @@ function render() {
 function mostrarVista(nombre) {
   if (!$('vista-' + nombre)) nombre = 'equipos';
   if (!puedeVer(nombre)) nombre = VISTA_INICIAL_VISITANTE; // el visitante no ve Equipos ni Reglas
+  if (!E.hay && nombre !== 'noticias') nombre = 'partidos'; // sin campeonato las demás vistas tendrían datos viejos
   document.querySelectorAll('.vista').forEach(v => { v.hidden = v.id !== 'vista-' + nombre; });
   document.querySelectorAll('.navegacion button').forEach(b => {
     b.classList.toggle('activa', b.dataset.vista === nombre);

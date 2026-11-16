@@ -303,6 +303,14 @@ public class Aplicacion extends Application {
         return r;
     }
 
+    /** Muestra u oculta las etiquetas de la cabecera (formato, equipos y estado del torneo). */
+    private void mostrarDatosCabecera(boolean visibles) {
+        for (Node nodo : List.of(chipEstado, chipFormato, chipEquipos, estado)) {
+            nodo.setVisible(visibles);
+            nodo.setManaged(visibles);
+        }
+    }
+
     /* ---------------------------------------------------------------- permisos */
 
     /** true si quien inicio sesion puede crear, editar o eliminar. */
@@ -458,7 +466,7 @@ public class Aplicacion extends Application {
         }
         for (int i = 0; i < VISTAS.length; i++) {
             String clave = VISTAS[i];
-            if (!puedeVer(clave)) {
+            if (!puedeEditar() && VISTAS_SOLO_ADMIN.contains(clave)) {
                 continue; // el visitante no ve Equipos ni Reglas
             }
             SVGPath icono = new SVGPath();
@@ -474,6 +482,9 @@ public class Aplicacion extends Application {
             b.setOnAction(e -> mostrarVista(clave));
             navegacion.put(clave, b);
             nav.getChildren().add(b);
+            // «Llaves» siempre se crea y solo se oculta: así aparece en cuanto el formato las tiene.
+            b.setVisible(puedeVer(clave));
+            b.setManaged(puedeVer(clave));
         }
         Button historial = boton("Historial", "fantasma");
         historial.setGraphic(icono(ICONO_TROFEO));
@@ -545,6 +556,10 @@ public class Aplicacion extends Application {
             dialogos.nuevo(true, false);
         } else {
             titulo.setText("Sin campeonato activo");
+            // Sin campeonato no hay formato, equipos, estado ni campeón que mostrar en la cabecera.
+            mostrarDatosCabecera(false);
+            btnCampeon.setVisible(false);
+            btnCampeon.setManaged(false);
             contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
         }
     }
@@ -734,6 +749,7 @@ public class Aplicacion extends Application {
             return;
         }
         Map<String, Object> c = m(E, "campeonato");
+        mostrarDatosCabecera(true);
         titulo.setText(s(c, "nombre"));
         stage.setTitle(s(c, "nombre") + " · AlphaSport");
         chipFormato.setText(s(c, "formatoNombre"));
@@ -771,7 +787,8 @@ public class Aplicacion extends Application {
     /** true si el formato del campeonato puede tener llaves (todos menos Liga). */
     boolean usaLlaves() {
         Map<String, Object> c = m(E, "campeonato");
-        return c == null || !Boolean.FALSE.equals(c.get("usaLlaves"));
+        // sin campeonato no hay llaves que mostrar
+        return c != null && !Boolean.FALSE.equals(c.get("usaLlaves"));
     }
 
     void mostrarVista(String nombre) {
@@ -786,8 +803,14 @@ public class Aplicacion extends Application {
         if (b != null) {
             b.setSelected(true);
         }
-        if (!b(E, "hay")) {
-            contenido.getChildren().clear();
+        // Las noticias no dependen del campeonato: se ven aunque no haya uno en curso.
+        if (!b(E, "hay") && !nombre.equals("noticias")) {
+            // El visitante no puede crear campeonatos: en cualquier vista ve el mismo aviso (antes quedaba en blanco).
+            if (puedeEditar()) {
+                contenido.getChildren().clear();
+            } else {
+                contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
+            }
             return;
         }
         Node nodo = switch (nombre) {
