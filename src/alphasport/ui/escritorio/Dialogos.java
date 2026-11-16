@@ -114,7 +114,13 @@ class Dialogos {
         raiz.setOnMouseDragged(e -> { v.setX(e.getScreenX() - origen[0]); v.setY(e.getScreenY() - origen[1]); });
         v.setScene(escena);
         v.getIcons().add(Aplicacion.imagen("logo.png"));
-        v.setMaxHeight(app.stage.getHeight() - 20);
+        // Nunca más alto que la pantalla: si el contenido no cabe (por ejemplo la cancha del detalle del partido),
+        // se desplaza dentro de la ventana. Antes la ventana medía más que la pantalla, «Cerrar» quedaba fuera
+        // y, como la ventana es modal, el programa parecía congelado.
+        double altoPantalla = javafx.stage.Screen.getPrimary().getVisualBounds().getHeight();
+        double maximoVisor = Math.max(240, altoPantalla - 48 - 2 * 24 - 40);
+        desplazable.setPrefViewportHeight(Math.min(desplazable.getPrefViewportHeight(), maximoVisor));
+        v.setMaxHeight(Math.min(app.stage.getHeight() - 20, altoPantalla));
         v.setOnShown(e -> {
             v.setX(app.stage.getX() + (app.stage.getWidth() - v.getWidth()) / 2);
             v.setY(app.stage.getY() + Math.max(10, (app.stage.getHeight() - v.getHeight()) / 2));
@@ -213,6 +219,33 @@ class Dialogos {
         return respuesta[0];
     }
 
+    /**
+     * Advertencia con dos caminos. Devuelve {@code "si"} (botón principal), {@code "no"} (botón
+     * secundario) o {@code null} si se cerró sin elegir (Esc o la X).
+     */
+    String elegir(String titulo, String texto, String textoNo, String textoSi) {
+        String[] respuesta = {null};
+        Button no = boton(textoNo, "fantasma");
+        Button si = boton(textoSi, "primario");
+        si.setDefaultButton(true);
+        Label mensajeTexto = etiqueta(texto, "msg-texto");
+        mensajeTexto.setWrapText(true);
+        Label icono = etiqueta("!", "icono-advertencia");
+        HBox fila = new HBox(14, icono, mensajeTexto);
+        fila.setAlignment(Pos.TOP_LEFT);
+        Stage v = ventana(titulo, cuerpo(titulo, fila, acciones(no, si)), 520);
+        no.setOnAction(e -> {
+            respuesta[0] = "no";
+            v.close();
+        });
+        si.setOnAction(e -> {
+            respuesta[0] = "si";
+            v.close();
+        });
+        v.showAndWait();
+        return respuesta[0];
+    }
+
     String pedirTexto(String titulo, String texto, String inicial) {
         String[] respuesta = {null};
         TextField entrada = new TextField(inicial);
@@ -257,7 +290,30 @@ class Dialogos {
         cerrar.setDefaultButton(true);
         HBox botones = new HBox(10, tabla, cerrar);
         botones.setAlignment(Pos.CENTER);
+        // Liga con divisiones: el campeón de cada división por separado (Liga A, Liga B, Liga C...).
+        List<Map<String, Object>> porDivision = l(app.E, "campeonesDivision");
+        VBox divisiones = new VBox(6);
+        if (porDivision.size() > 1) {
+            torneo.setText("Campeón de la " + s(porDivision.get(0), "division") + " · " + s(m(app.E, "campeonato"), "nombre"));
+            divisiones.getChildren().add(etiqueta("Campeones por división", "campeon-cifra-texto"));
+            for (Map<String, Object> c : porDivision) {
+                Label division = etiqueta(s(c, "division"), "campeon-cifra-texto");
+                division.setMinWidth(70);
+                VBox datosCampeon = new VBox(0, etiqueta(s(c, "nombre"), "campeon-division-nombre"),
+                        etiqueta("DT: " + s(c, "dt"), "campeon-cifra-texto"));
+                Label resumen = etiqueta(n(c, "pts") + " pts · " + n(c, "pj") + " PJ · " + n(c, "g") + "G " + n(c, "e") + "E " + n(c, "p") + "P",
+                        "campeon-cifra-texto");
+                HBox fila = new HBox(12, division, datosCampeon, Aplicacion.espacio(), resumen);
+                fila.setAlignment(Pos.CENTER_LEFT);
+                fila.getStyleClass().add("campeon-tablero");
+                fila.setPadding(new Insets(8, 14, 8, 14));
+                divisiones.getChildren().add(fila);
+            }
+        }
         VBox cuerpo = new VBox(6, escena, nombre, torneo, dt, new Region(), cifras, new Region(), botones);
+        if (!divisiones.getChildren().isEmpty()) {
+            cuerpo.getChildren().add(7, divisiones); // antes de los botones
+        }
         cuerpo.setAlignment(Pos.CENTER);
         cuerpo.setPadding(new Insets(28, 26, 24, 26));
         VBox.setVgrow(cuerpo.getChildren().get(4), Priority.NEVER);
@@ -458,6 +514,10 @@ class Dialogos {
         Spinner<Integer> rondas = numero(1, 20, n(cfg, "rondasSuizo"));
         Spinner<Integer> directos = numero(0, 32, n(cfg, "directosSuizo"));
         Spinner<Integer> repechaje = numero(0, 32, n(cfg, "repechajeSuizo"));
+        // Liga con divisiones (Liga A, B...). Al cambiar el formato de una liga se conservan sus divisiones.
+        boolean eraLiga = cambiar && b(actual, "esLiga");
+        Spinner<Integer> divisiones = numero(1, 6, eraLiga ? Math.max(1, l(actual, "divisiones").size()) : Math.max(1, n(cfg, "divisiones")));
+        Spinner<Integer> ascensos = numero(0, 10, eraLiga ? n(actual, "ascensos") : n(cfg, "ascensos"));
         CheckBox idaVuelta = new CheckBox("Liga / grupos a ida y vuelta");
         idaVuelta.setSelected(b(cfg, "idaYVuelta"));
         CheckBox elimIdaVuelta = new CheckBox("Eliminatorias a ida y vuelta");
@@ -486,7 +546,8 @@ class Dialogos {
         Object[][] definicion = {{"Puntos por victoria", victoria, tabla}, {"Puntos por empate", empate, tabla},
             {"Equipos por grupo", tamGrupo, "GRUPOS_Y_ELIMINATORIA"}, {"Clasificados por grupo", clasGrupo, "GRUPOS_Y_ELIMINATORIA"},
             {"Clasificados a la liguilla", clasPlayoff, "TORNEO_CORTO"}, {"Tipo de liguilla", tipoPlayoff, "TORNEO_CORTO"},
-            {"Rondas del suizo", rondas, "SUIZO"}, {"Clasificados directos", directos, "SUIZO"}, {"Equipos al repechaje", repechaje, "SUIZO"}};
+            {"Rondas del suizo", rondas, "SUIZO"}, {"Clasificados directos", directos, "SUIZO"}, {"Equipos al repechaje", repechaje, "SUIZO"},
+            {"Divisiones (Liga A, B…)", divisiones, "LIGA"}, {"Ascensos y descensos por temporada", ascensos, "LIGA"}};
         for (Object[] d : definicion) {
             VBox c = campo((String) d[0], (Node) d[1]);
             c.setPrefWidth(200);
@@ -557,6 +618,7 @@ class Dialogos {
                     "tipoPlayoff", tipoPlayoff.getSelectionModel().getSelectedIndex() == 1 ? "CUADRANGULARES" : "LLAVE",
                     "ventajaDeportiva", ventaja.isSelected(), "rondasSuizo", rondas.getValue(), "directosSuizo", directos.getValue(),
                     "repechajeSuizo", repechaje.getValue(), "granFinalConReinicio", reinicio.isSelected(),
+                    "divisiones", formato[0].equals("LIGA") ? divisiones.getValue() : 1, "ascensos", ascensos.getValue(),
                     "criterios", criterios.obtener());
             Map<String, Object> r = cambiar
                     ? app.ejecutar("cambiarFormato", mapa("nombre", nombre.getText(), "formato", formato[0], "config", config))
@@ -730,17 +792,37 @@ class Dialogos {
 
     /* ---------------------------------------------------------------- partido */
 
-    void partido(Map<String, Object> p) {
+    /**
+     * Editor del partido en dos modos, uno por pestaña de «Gestionar partidos»:
+     * <ul>
+     * <li>{@code previa = true} — «Previa del partido»: fecha, hora, sede, formación y XI titular
+     * (todo lo que se decide ANTES del pitazo).</li>
+     * <li>{@code previa = false} — «Registrar resultados»: marcador o W.O., goles con asistencia,
+     * tarjetas y cambios. El XI guardado en la previa ya viene cargado para los cambios.</li>
+     * </ul>
+     * Los dos modos envían el partido completo con la misma acción {@code partido}: lo que no se
+     * muestra se reenvía tal como estaba, así ninguno borra lo que guardó el otro.
+     */
+    void partido(Map<String, Object> p, boolean previa) {
         // Un partido sin jugar abre con el marcador vacío: así nunca se guarda un 0:0 que no ocurrió.
         boolean yaJugado = b(p, "jugado");
         // Un partido «En juego» conserva el marcador que lleva.
         boolean conMarcador = Aplicacion.conMarcador(p);
         TextField gl = gol(conMarcador ? String.valueOf(n(p, "gl")) : "", "Goles " + s(p, "localNombre"));
         TextField gv = gol(conMarcador ? String.valueOf(n(p, "gv")) : "", "Goles " + s(p, "visitanteNombre"));
-        ComboBox<String> estado = new ComboBox<>(FXCollections.observableArrayList("Jugado", "En juego", "Pendiente", "Aplazado", "Suspendido"));
-        String[] claves = {"JUGADO", "EN_JUEGO", "PENDIENTE", "APLAZADO", "SUSPENDIDO"};
-        final int JUGADO = 0, EN_JUEGO = 1, PENDIENTE = 2;
+        // Cada modo ofrece solo los estados que le corresponden.
+        boolean enJuegoAhora = s(p, "estado").equals("EN_JUEGO");
+        String[] claves = !previa ? new String[] {"JUGADO", "EN_JUEGO"}
+                : enJuegoAhora ? new String[] {"EN_JUEGO"} : new String[] {"PENDIENTE", "APLAZADO", "SUSPENDIDO"};
+        ComboBox<String> estado = new ComboBox<>(FXCollections.observableArrayList(java.util.Arrays.stream(claves).map(c -> switch (c) {
+            case "JUGADO" -> "Jugado (resultado final)";
+            case "EN_JUEGO" -> "En juego (en vivo)";
+            case "APLAZADO" -> "Aplazado";
+            case "SUSPENDIDO" -> "Suspendido";
+            default -> "Pendiente";
+        }).toList()));
         estado.getSelectionModel().select(Math.max(0, List.of(claves).indexOf(s(p, "estado"))));
+        java.util.function.Supplier<String> claveEstado = () -> claves[Math.max(0, estado.getSelectionModel().getSelectedIndex())];
         CheckBox hayPenales = new CheckBox("Se definió por penales");
         hayPenales.setSelected(b(p, "penales"));
         Spinner<Integer> pl = numero(0, 99, Math.max(0, n(p, "pl")));
@@ -756,16 +838,29 @@ class Dialogos {
             tarjetas.add(new LinkedHashMap<>(t));
         }
         int[] idsEquipos = {n(p, "local"), n(p, "visitante")};
+        // ---- XI inicial (se elige en la «Previa del partido»): id del equipo -> ids de los titulares
+        Map<Integer, java.util.Set<Integer>> titulares = new LinkedHashMap<>();
+        titulares.put(idsEquipos[0], new java.util.LinkedHashSet<>());
+        titulares.put(idsEquipos[1], new java.util.LinkedHashSet<>());
+        Datos.lista(p, "titularesLocal").forEach(o -> titulares.get(idsEquipos[0]).add(((Number) o).intValue()));
+        Datos.lista(p, "titularesVisitante").forEach(o -> titulares.get(idsEquipos[1]).add(((Number) o).intValue()));
+        java.util.function.Function<Integer, List<Map<String, Object>>> plantillaDe = idEq -> l(app.equipoPorId(idEq), "jugadores").stream()
+                .filter(j -> n(j, "id") > 0).sorted(Comparator.comparingInt(j -> n(j, "dorsal"))).toList();
+        // Para goles y tarjetas: primero los titulares de la previa (marcados), después los suplentes.
+        java.util.function.Function<Integer, List<Map<String, Object>>> convocadosDe = idEq -> plantillaDe.apply(idEq).stream()
+                .sorted(Comparator.comparingInt(j -> titulares.get(idEq).contains(n(j, "id")) ? 0 : 1)).toList();
+        java.util.function.BiFunction<Integer, Map<String, Object>, String> textoConvocado = (idEq, j) ->
+                textoJugador(j) + (titulares.get(idEq).contains(n(j, "id")) ? "  · titular" : "");
         ComboBox<String> tjEquipo = new ComboBox<>(FXCollections.observableArrayList(s(p, "localNombre"), s(p, "visitanteNombre")));
         tjEquipo.getSelectionModel().selectFirst();
         ComboBox<String> tjJugador = new ComboBox<>();
         List<Map<String, Object>> opciones = new ArrayList<>();
         Runnable llenarJugadores = () -> {
-            Map<String, Object> eq = app.equipoPorId(idsEquipos[Math.max(0, tjEquipo.getSelectionModel().getSelectedIndex())]);
+            int idEq = idsEquipos[Math.max(0, tjEquipo.getSelectionModel().getSelectedIndex())];
             opciones.clear();
-            l(eq, "jugadores").stream().filter(j -> n(j, "id") > 0).sorted(Comparator.comparingInt(j -> n(j, "dorsal"))).forEach(opciones::add);
+            opciones.addAll(convocadosDe.apply(idEq));
             tjJugador.setItems(FXCollections.observableArrayList(opciones.isEmpty() ? List.of("(sin jugadores registrados)")
-                    : opciones.stream().map(j -> "#" + n(j, "dorsal") + " " + s(j, "nombre")).toList()));
+                    : opciones.stream().map(j -> textoConvocado.apply(idEq, j)).toList()));
             tjJugador.getSelectionModel().selectFirst();
         };
         tjEquipo.setOnAction(e -> llenarJugadores.run());
@@ -794,6 +889,7 @@ class Dialogos {
                 quitar.setOnAction(e -> {
                     tarjetas.remove(t);
                     dibujarTarjetas[0].run();
+                    listaTarjetas.requestFocus(); // el botón se borró: el foco se queda aquí y no salta al marcador
                 });
                 HBox fila = new HBox(10, texto, quitar);
                 fila.setAlignment(Pos.CENTER_LEFT);
@@ -866,89 +962,95 @@ class Dialogos {
         List<Map<String, Object>> puedenEntrar = new ArrayList<>();
         Runnable[] llenarCambio = new Runnable[1];
 
-        // ---- XI inicial: id del equipo -> ids de los titulares
-        Map<Integer, java.util.Set<Integer>> titulares = new LinkedHashMap<>();
-        titulares.put(idsEquipos[0], new java.util.LinkedHashSet<>());
-        titulares.put(idsEquipos[1], new java.util.LinkedHashSet<>());
-        Datos.lista(p, "titularesLocal").forEach(o -> titulares.get(idsEquipos[0]).add(((Number) o).intValue()));
-        Datos.lista(p, "titularesVisitante").forEach(o -> titulares.get(idsEquipos[1]).add(((Number) o).intValue()));
-        java.util.function.Function<Integer, List<Map<String, Object>>> plantillaDe = idEq -> l(app.equipoPorId(idEq), "jugadores").stream()
-                .filter(j -> n(j, "id") > 0).sorted(Comparator.comparingInt(j -> n(j, "dorsal"))).toList();
         // 11 titulares, o toda la plantilla si tiene menos de 11.
         java.util.function.IntUnaryOperator necesarios = idEq -> Math.min(TITULARES, plantillaDe.apply(idEq).size());
         java.util.function.IntPredicate xiListo = idEq -> titulares.get(idEq).size() == necesarios.applyAsInt(idEq) && !titulares.get(idEq).isEmpty();
+        // El XI se construye UNA sola vez. Al marcar un jugador solo se actualizan los controles que ya
+        // existen (antes se borraba y se volvía a crear toda la lista: la casilla con el foco desaparecía,
+        // JavaFX pasaba el foco al primer campo de la ventana —el marcador— y la ventana saltaba hasta él).
         HBox columnasXI = new HBox(14);
         Runnable[] dibujarXI = new Runnable[1];
-        dibujarXI[0] = () -> {
-            columnasXI.getChildren().clear();
-            for (int k = 0; k < 2; k++) {
-                int idEq = idsEquipos[k];
-                java.util.Set<Integer> elegidos = titulares.get(idEq);
-                int faltan = necesarios.applyAsInt(idEq);
+        List<Runnable> actualizacionesXI = new ArrayList<>();
+        dibujarXI[0] = () -> actualizacionesXI.forEach(Runnable::run);
+        for (int k = 0; k < 2; k++) {
+            int idEq = idsEquipos[k];
+            java.util.Set<Integer> elegidos = titulares.get(idEq);
+            int faltan = necesarios.applyAsInt(idEq);
+            List<Map<String, Object>> jugadores = plantillaDe.apply(idEq);
+            Label cuenta = etiqueta("", "etiqueta");
+            cuenta.setMinWidth(Region.USE_PREF_SIZE);
+            Button rapido = boton("Dorsales más bajos", "mini", "fantasma");
+            Button limpiar = boton("Limpiar", "mini", "fantasma");
+            Label nombreEq = etiqueta(s(p, k == 0 ? "localNombre" : "visitanteNombre"), "h3");
+            HBox filaNombre = new HBox(8, nombreEq, cuenta);
+            filaNombre.setAlignment(Pos.CENTER_LEFT);
+            VBox cabecera = new VBox(6, filaNombre, new HBox(6, rapido, limpiar));
+            VBox lista = new VBox(4);
+            if (jugadores.isEmpty()) {
+                lista.getChildren().add(etiqueta("Este equipo no tiene jugadores registrados. Agréguelos en Equipos.", "sutil"));
+            }
+            Map<Integer, CheckBox> cajas = new LinkedHashMap<>();
+            for (Map<String, Object> j : jugadores) {
+                int id = n(j, "id");
+                boolean suspendido = l(p, "suspendidos").stream().anyMatch(x -> n(x, "jugador") == id);
+                CheckBox caja = new CheckBox("#" + n(j, "dorsal") + "  " + s(j, "nombre") + "  ·  " + s(j, "posicion") + (suspendido ? "  ·  suspendido" : ""));
+                caja.getStyleClass().add("xi-jugador");
+                caja.setMaxWidth(Double.MAX_VALUE);
+                caja.setOnAction(e -> {
+                    if (caja.isSelected()) {
+                        elegidos.add(id);
+                    } else {
+                        elegidos.remove(id);
+                    }
+                    dibujarXI[0].run();
+                    llenarCambio[0].run();
+                });
+                cajas.put(id, caja);
+                lista.getChildren().add(caja);
+            }
+            // Pone cada control en su estado actual sin crear ni quitar nodos (el foco y el desplazamiento se conservan).
+            actualizacionesXI.add(() -> {
                 boolean completo = elegidos.size() == faltan;
                 java.util.Set<Integer> usados = new java.util.HashSet<>();
                 cambios.stream().filter(x -> n(x, "equipo") == idEq).forEach(x -> usados.add(n(x, "sale")));
-                Label cuenta = etiqueta(elegidos.size() + "/" + faltan, "etiqueta", completo ? "etiqueta-jugado" : "etiqueta-pendiente");
-                Button rapido = boton("Dorsales más bajos", "mini", "fantasma");
-                Button limpiar = boton("Limpiar", "mini", "fantasma");
+                cuenta.setText(elegidos.size() + "/" + faltan);
+                cuenta.getStyleClass().removeAll("etiqueta-jugado", "etiqueta-pendiente");
+                cuenta.getStyleClass().add(completo ? "etiqueta-jugado" : "etiqueta-pendiente");
                 limpiar.setDisable(elegidos.isEmpty() || !usados.isEmpty());
-                Label nombreEq = etiqueta(s(p, k == 0 ? "localNombre" : "visitanteNombre"), "h3");
-                cuenta.setMinWidth(Region.USE_PREF_SIZE);
-                HBox filaNombre = new HBox(8, nombreEq, cuenta);
-                filaNombre.setAlignment(Pos.CENTER_LEFT);
-                HBox filaBotones = new HBox(6, rapido, limpiar);
-                VBox cabecera = new VBox(6, filaNombre, filaBotones);
-                VBox lista = new VBox(4);
-                List<Map<String, Object>> jugadores = plantillaDe.apply(idEq);
-                if (jugadores.isEmpty()) {
-                    lista.getChildren().add(etiqueta("Este equipo no tiene jugadores registrados. Agréguelos en Equipos.", "sutil"));
-                }
                 rapido.setDisable(jugadores.isEmpty() || !usados.isEmpty());
-                for (Map<String, Object> j : jugadores) {
-                    int id = n(j, "id");
+                cajas.forEach((id, caja) -> {
+                    boolean marcado = elegidos.contains(id);
                     boolean suspendido = l(p, "suspendidos").stream().anyMatch(x -> n(x, "jugador") == id);
-                    CheckBox caja = new CheckBox("#" + n(j, "dorsal") + "  " + s(j, "nombre") + "  ·  " + s(j, "posicion") + (suspendido ? "  ·  suspendido" : ""));
-                    caja.setSelected(elegidos.contains(id));
+                    caja.setSelected(marcado); // por código: no dispara setOnAction
                     // No se desmarca a un titular que ya salió en un cambio, ni se marcan más de los necesarios.
-                    caja.setDisable(caja.isSelected() ? usados.contains(id) : completo || suspendido);
-                    caja.getStyleClass().add("xi-jugador");
-                    if (caja.isSelected()) {
+                    caja.setDisable(marcado ? usados.contains(id) : completo || suspendido);
+                    caja.getStyleClass().remove("titular");
+                    if (marcado) {
                         caja.getStyleClass().add("titular");
                     }
-                    caja.setMaxWidth(Double.MAX_VALUE);
-                    caja.setOnAction(e -> {
-                        if (caja.isSelected()) {
-                            elegidos.add(id);
-                        } else {
-                            elegidos.remove(id);
-                        }
-                        dibujarXI[0].run();
-                        llenarCambio[0].run();
-                    });
-                    lista.getChildren().add(caja);
-                }
-                rapido.setOnAction(e -> {
-                    elegidos.clear();
-                    jugadores.stream().filter(j -> l(p, "suspendidos").stream().noneMatch(x -> n(x, "jugador") == n(j, "id")))
-                            .limit(faltan).forEach(j -> elegidos.add(n(j, "id")));
-                    dibujarXI[0].run();
-                    llenarCambio[0].run();
                 });
-                limpiar.setOnAction(e -> {
-                    elegidos.clear();
-                    dibujarXI[0].run();
-                    llenarCambio[0].run();
-                });
-                ScrollPane desplazable = new ScrollPane(lista);
-                desplazable.setFitToWidth(true);
-                desplazable.setPrefViewportHeight(300);
-                desplazable.getStyleClass().add("desplazable");
-                VBox columna = new VBox(8, cabecera, desplazable);
-                columna.setPrefWidth(1);
-                HBox.setHgrow(columna, Priority.ALWAYS);
-                columnasXI.getChildren().add(columna);
-            }
-        };
+            });
+            rapido.setOnAction(e -> {
+                elegidos.clear();
+                jugadores.stream().filter(j -> l(p, "suspendidos").stream().noneMatch(x -> n(x, "jugador") == n(j, "id")))
+                        .limit(faltan).forEach(j -> elegidos.add(n(j, "id")));
+                dibujarXI[0].run();
+                llenarCambio[0].run();
+            });
+            limpiar.setOnAction(e -> {
+                elegidos.clear();
+                dibujarXI[0].run();
+                llenarCambio[0].run();
+            });
+            ScrollPane desplazable = new ScrollPane(lista);
+            desplazable.setFitToWidth(true);
+            desplazable.setPrefViewportHeight(300);
+            desplazable.getStyleClass().add("desplazable");
+            VBox columna = new VBox(8, cabecera, desplazable);
+            columna.setPrefWidth(1);
+            HBox.setHgrow(columna, Priority.ALWAYS);
+            columnasXI.getChildren().add(columna);
+        }
         Label ayudaXI = etiqueta("Marque los 11 jugadores que inician el partido en cada equipo. Los demás quedan como suplentes "
                 + "y son los únicos que pueden entrar en un cambio.", "sutil", "pequeno");
         ayudaXI.setWrapText(true);
@@ -963,6 +1065,119 @@ class Dialogos {
         formVisitante.getSelectionModel().select(s(p, "formacionVisitante").isEmpty() ? SIN_FORMACION : s(p, "formacionVisitante"));
         VBox grupoFormacion = grupo("Formación táctica",
                 new HBox(14, campo(s(p, "localNombre"), formLocal), campo(s(p, "visitanteNombre"), formVisitante)));
+
+        // ---- Goles por jugador: autor, minuto y asistencia (opcional). Alimentan goleadores y asistencias.
+        List<Map<String, Object>> goles = new ArrayList<>();
+        for (Map<String, Object> g : l(p, "goles")) {
+            goles.add(new LinkedHashMap<>(g));
+        }
+        ComboBox<String> glEquipo = new ComboBox<>(FXCollections.observableArrayList(s(p, "localNombre"), s(p, "visitanteNombre")));
+        glEquipo.getSelectionModel().selectFirst();
+        CheckBox glEnContra = new CheckBox("En contra (autogol)");
+        TextField glMinuto = minuto("–");
+        ComboBox<String> glAutor = new ComboBox<>();
+        ComboBox<String> glAsistente = new ComboBox<>();
+        glAutor.setPrefWidth(260);
+        glAsistente.setPrefWidth(260);
+        List<Map<String, Object>> autores = new ArrayList<>(), asistentes = new ArrayList<>();
+        Runnable llenarGol = () -> {
+            int iEq = Math.max(0, glEquipo.getSelectionModel().getSelectedIndex());
+            boolean contra = glEnContra.isSelected();
+            int idAutor = idsEquipos[contra ? 1 - iEq : iEq]; // un autogol lo marca un jugador del rival
+            autores.clear();
+            autores.addAll(convocadosDe.apply(idAutor));
+            asistentes.clear();
+            if (!contra) {
+                asistentes.addAll(convocadosDe.apply(idsEquipos[iEq]));
+            }
+            glAutor.setItems(FXCollections.observableArrayList(autores.isEmpty() ? List.of("(sin jugadores registrados)")
+                    : autores.stream().map(j -> textoConvocado.apply(idAutor, j)).toList()));
+            glAutor.getSelectionModel().selectFirst();
+            List<String> textos = new ArrayList<>(List.of("(sin asistencia)"));
+            asistentes.stream().map(j -> textoConvocado.apply(idsEquipos[iEq], j)).forEach(textos::add);
+            glAsistente.setItems(FXCollections.observableArrayList(textos));
+            glAsistente.getSelectionModel().selectFirst();
+            glAsistente.setDisable(contra);
+        };
+        glEquipo.setOnAction(e -> llenarGol.run());
+        glEnContra.setOnAction(e -> llenarGol.run());
+        llenarGol.run();
+        VBox listaGoles = new VBox(6);
+        Runnable[] dibujarGoles = new Runnable[1];
+        dibujarGoles[0] = () -> {
+            goles.sort(Comparator.comparingInt(g -> n(g, "minuto") > 0 ? n(g, "minuto") : 999));
+            listaGoles.getChildren().clear();
+            if (goles.isEmpty()) {
+                listaGoles.getChildren().add(etiqueta("Sin goles registrados por jugador.", "sutil"));
+            }
+            for (Map<String, Object> g : goles) {
+                Label texto = etiqueta((n(g, "minuto") > 0 ? n(g, "minuto") + "′   " : "") + "#" + n(g, "autorDorsal") + " " + s(g, "autorNombre")
+                        + (b(g, "enContra") ? " (en contra)" : "")
+                        + (n(g, "asistente") != 0 ? " · asistencia de #" + n(g, "asistenteDorsal") + " " + s(g, "asistenteNombre") : "")
+                        + " · " + s(app.equipoPorId(n(g, "equipo")), "nombre"), "jugador-texto");
+                HBox.setHgrow(texto, Priority.ALWAYS);
+                texto.setMaxWidth(Double.MAX_VALUE);
+                Button quitar = boton("Quitar", "mini", "peligro");
+                quitar.setOnAction(e -> {
+                    goles.remove(g);
+                    dibujarGoles[0].run();
+                    listaGoles.requestFocus(); // el botón se borró: el foco se queda aquí y no salta al marcador
+                });
+                HBox fila = new HBox(10, Aplicacion.icono(Aplicacion.ICONO_DADO, "icono-mini", "icono-gol"), texto, quitar);
+                fila.setAlignment(Pos.CENTER_LEFT);
+                fila.getStyleClass().add("fila-lista");
+                listaGoles.getChildren().add(fila);
+            }
+        };
+        dibujarGoles[0].run();
+        Button agregarGol = boton("Agregar gol");
+        agregarGol.setOnAction(e -> {
+            int iEq = glEquipo.getSelectionModel().getSelectedIndex(), iAutor = glAutor.getSelectionModel().getSelectedIndex();
+            if (autores.isEmpty() || iAutor < 0) {
+                mostrarError(err, "Ese equipo no tiene jugadores registrados. Agréguelos en la sección Equipos.");
+                return;
+            }
+            Integer min = leerMinuto(glMinuto, true);
+            if (min == null) {
+                mostrarError(err, "El minuto del gol debe estar entre 1 y 130 (o vacío si no se sabe).");
+                glMinuto.requestFocus();
+                return;
+            }
+            // No puede haber más goles registrados que los del marcador escrito arriba.
+            TextField marcadorEquipo = iEq == 0 ? gl : gv;
+            int enMarcador = marcadorEquipo.getText().isBlank() ? 0 : Integer.parseInt(marcadorEquipo.getText());
+            long registrados = goles.stream().filter(g -> n(g, "equipo") == idsEquipos[iEq]).count();
+            if (registrados >= enMarcador) {
+                mostrarError(err, glEquipo.getValue() + " tiene " + enMarcador + (enMarcador == 1 ? " gol" : " goles")
+                        + " en el marcador y ya " + (registrados == 1 ? "hay 1 registrado" : "hay " + registrados + " registrados")
+                        + ". Suba primero el marcador.");
+                marcadorEquipo.requestFocus();
+                return;
+            }
+            mostrarError(err, null);
+            Map<String, Object> autor = autores.get(iAutor);
+            int iAsist = glAsistente.getSelectionModel().getSelectedIndex();
+            Map<String, Object> asist = iAsist > 0 ? asistentes.get(iAsist - 1) : null;
+            if (asist != null && n(asist, "id") == n(autor, "id")) {
+                mostrarError(err, s(autor, "nombre") + " no puede darse la asistencia a sí mismo.");
+                return;
+            }
+            goles.add(mapa("equipo", idsEquipos[iEq], "minuto", min, "enContra", glEnContra.isSelected(),
+                    "autor", n(autor, "id"), "autorNombre", s(autor, "nombre"), "autorDorsal", n(autor, "dorsal"),
+                    "asistente", asist == null ? 0 : n(asist, "id"), "asistenteNombre", asist == null ? "" : s(asist, "nombre"),
+                    "asistenteDorsal", asist == null ? 0 : n(asist, "dorsal")));
+            dibujarGoles[0].run();
+            glMinuto.requestFocus();
+        });
+        VBox campoEquipoGol = campo("Equipo", glEquipo);
+        HBox.setHgrow(campoEquipoGol, Priority.ALWAYS);
+        HBox filaGol1 = new HBox(10, campoEquipoGol, campo("Minuto", glMinuto), glEnContra);
+        HBox filaGol2 = new HBox(10, campo("Autor", glAutor), campo("Asistencia", glAsistente), agregarGol);
+        filaGol1.setAlignment(Pos.BOTTOM_LEFT);
+        filaGol2.setAlignment(Pos.BOTTOM_LEFT);
+        VBox grupoGoles = grupo("Goles", filaGol1, filaGol2, listaGoles,
+                etiqueta("Registrar quién marcó alimenta las tablas de goleadores y asistencias. No puede haber más goles registrados que en el marcador.",
+                        "sutil", "pequeno"));
         boolean[] llenando = {false};
         llenarCambio[0] = () -> {
             llenando[0] = true;
@@ -1029,6 +1244,7 @@ class Dialogos {
                     dibujarCambios[0].run();
                     dibujarXI[0].run();
                     llenarCambio[0].run();
+                    listaCambios.requestFocus(); // el botón se borró: el foco se queda aquí y no salta al marcador
                 });
                 HBox fila = new HBox(10, textos, quitar);
                 fila.setAlignment(Pos.CENTER_LEFT);
@@ -1088,17 +1304,15 @@ class Dialogos {
 
         Button guardar = boton("Guardar", "primario");
         Runnable actualizar = () -> {
-            int iEstado = estado.getSelectionModel().getSelectedIndex();
-            boolean jugado = iEstado == JUGADO, enJuego = iEstado == EN_JUEGO;
-            // En un partido pendiente se puede escribir el marcador directamente; al hacerlo pasa a «Jugado».
-            gl.setDisable(!(jugado || enJuego || iEstado == PENDIENTE));
-            gv.setDisable(!(jugado || enJuego || iEstado == PENDIENTE));
-            guardar.setText(enJuego ? "Guardar en vivo" : !jugado ? "Guardar" : yaJugado ? "Guardar resultado" : "Registrar resultado");
+            boolean jugado = claveEstado.get().equals("JUGADO"), enJuego = claveEstado.get().equals("EN_JUEGO");
+            gl.setDisable(!(jugado || enJuego));
+            gv.setDisable(!(jugado || enJuego));
+            guardar.setText(previa ? "Guardar previa" : enJuego ? "Guardar en vivo" : yaJugado ? "Guardar resultado" : "Registrar resultado");
             hayPenales.setDisable(!jugado);
             // Tarjetas y cambios se anotan mientras se juega («En juego») o después, con el resultado final.
             grupoTarjetas.setDisable(!(jugado || enJuego));
+            grupoGoles.setDisable(!(jugado || enJuego));
             grupoCambios.setDisable(!(jugado || enJuego));
-            grupoXI.setDisable(!(jugado || enJuego));
             pl.setDisable(!jugado || !hayPenales.isSelected());
             pv.setDisable(!jugado || !hayPenales.isSelected());
             boolean roja = tjTipo.getSelectionModel().getSelectedIndex() == 1;
@@ -1110,10 +1324,6 @@ class Dialogos {
         tjTipo.setOnAction(e -> actualizar.run());
         for (TextField campoGol : List.of(gl, gv)) {
             campoGol.textProperty().addListener((propiedad, antes, ahora) -> {
-                if (!ahora.isEmpty() && estado.getSelectionModel().getSelectedIndex() == PENDIENTE) {
-                    estado.getSelectionModel().select(JUGADO);
-                    actualizar.run();
-                }
                 if (!ahora.isEmpty()) {
                     campoGol.getStyleClass().remove("campo-invalido");
                 }
@@ -1138,21 +1348,86 @@ class Dialogos {
         borrar.setVisible(conMarcador);
         borrar.setManaged(conMarcador);
         Button cancelar = boton("Cancelar", "fantasma");
-        HBox botones = new HBox(10, woLocal, woVisitante, borrar, Aplicacion.espacio(), cancelar, guardar);
-        botones.setAlignment(Pos.CENTER_LEFT);
         Button verDetalle = boton("Ver detalle", "mini", "fantasma");
-        botones.getChildren().add(0, verDetalle);
-        Stage v = ventana("Partido", cuerpo(app.contexto(p), marcador, new HBox(14, campo("Estado", estado), penales), grupoTarjetas, grupoFormacion, grupoXI, grupoCambios,
-                new HBox(12, campo("Fecha", fecha), campo("Hora", hora), campo("Sede", sede), campo("Observaciones", obs)), err, botones), 900);
+        HBox botones = previa ? new HBox(10, verDetalle, Aplicacion.espacio(), cancelar, guardar)
+                : new HBox(10, verDetalle, woLocal, woVisitante, borrar, Aplicacion.espacio(), cancelar, guardar);
+        botones.setAlignment(Pos.CENTER_LEFT);
+
+        // Resumen de la alineación guardada en la previa: formación y cuántos titulares tiene cada equipo.
+        Label resumenPrevia = etiqueta("", "sutil");
+        resumenPrevia.setWrapText(true);
+        Runnable actualizarResumen = () -> {
+            List<String> partes = new ArrayList<>();
+            for (int k = 0; k < 2; k++) {
+                int idEq = idsEquipos[k];
+                String f = formacionElegida(k == 0 ? formLocal : formVisitante);
+                int faltan = necesarios.applyAsInt(idEq);
+                partes.add(s(p, k == 0 ? "localNombre" : "visitanteNombre") + ": " + (f.isEmpty() ? "sin formación" : f)
+                        + " · XI " + (faltan == 0 ? "sin plantilla" : titulares.get(idEq).size() + "/" + faltan));
+            }
+            resumenPrevia.setText(String.join("\n", partes)); // un equipo por línea
+        };
+        actualizacionesXI.add(actualizarResumen);
+        formLocal.setOnAction(e -> actualizarResumen.run());
+        formVisitante.setOnAction(e -> actualizarResumen.run());
+        actualizarResumen.run();
+
+        Node contenido;
+        HBox programacion = new HBox(12, campo("Fecha", fecha), campo("Hora", hora), campo("Sede / estadio", sede), campo("Observaciones", obs));
+        if (previa) {
+            // ---- Previa: solo lo que se define antes del pitazo inicial.
+            Label vs = etiqueta("VS", "vs");
+            HBox duelo = new HBox(14, local, vs, visitante);
+            duelo.setAlignment(Pos.CENTER);
+            duelo.getStyleClass().add("marcador-partido");
+            VBox grupoProgramacion = grupo("Fecha, hora y sede", programacion);
+            if (!enJuegoAhora) {
+                grupoProgramacion.getChildren().add(new HBox(14, campo("Estado", estado)));
+            }
+            Label ayudaPrevia = etiqueta("Lo que guarde aquí lo ve el visitante en la previa del partido y queda listo en «Registrar resultados» "
+                    + "para anotar goles, tarjetas y cambios.", "sutil", "pequeno");
+            ayudaPrevia.setWrapText(true);
+            contenido = cuerpo("Previa del partido · " + app.contexto(p), duelo, ayudaPrevia, grupoProgramacion, grupoFormacion, grupoXI, err, botones);
+        } else {
+            // ---- Resultados: marcador y eventos del juego. La alineación de la previa queda plegada
+            // (se puede corregir aquí si cambió a última hora, pero no estorba).
+            boolean xiCompleto = xiListo.test(idsEquipos[0]) && xiListo.test(idsEquipos[1]);
+            VBox alineacion = new VBox(12, grupoFormacion, grupoXI);
+            alineacion.setVisible(!xiCompleto);
+            alineacion.setManaged(!xiCompleto);
+            Button plegar = boton(xiCompleto ? "Corregir alineación" : "Ocultar", "mini", "fantasma");
+            plegar.setOnAction(e -> {
+                boolean mostrar = !alineacion.isVisible();
+                alineacion.setVisible(mostrar);
+                alineacion.setManaged(mostrar);
+                plegar.setText(mostrar ? "Ocultar" : "Corregir alineación");
+            });
+            Label tituloPrevia = etiqueta("Alineación de la previa", "h3");
+            VBox textosPrevia = new VBox(2, tituloPrevia, resumenPrevia);
+            HBox.setHgrow(textosPrevia, Priority.ALWAYS);
+            HBox cabeceraPrevia = new HBox(10, textosPrevia, plegar);
+            cabeceraPrevia.setAlignment(Pos.CENTER_LEFT);
+            cabeceraPrevia.getStyleClass().add("resumen-previa");
+            if (!xiCompleto) {
+                Label sinXI = etiqueta("Para registrar cambios hace falta el XI inicial de los dos equipos. Defínalo en la «Previa del partido» o aquí mismo.",
+                        "advertencia", "pequeno");
+                sinXI.setWrapText(true);
+                textosPrevia.getChildren().add(sinXI);
+            }
+            contenido = cuerpo("Registrar resultado · " + app.contexto(p), marcador, new HBox(14, campo("Estado", estado), penales), cabeceraPrevia, alineacion,
+                    grupoGoles, grupoTarjetas, grupoCambios, err, botones);
+        }
+        Stage v = ventana(previa ? "Previa del partido" : "Registrar resultado", contenido, 900);
         cancelar.setOnAction(e -> v.close());
+        boolean[] abrirDetalle = {false}; // el detalle se abre cuando este editor ya terminó (ver el final del método)
         verDetalle.setOnAction(e -> {
+            abrirDetalle[0] = true;
             v.close();
-            detallePartido(p);
         });
 
         java.util.function.Consumer<String> enviar = accion -> {
             boolean faltaLocal = gl.getText().isBlank(), faltaVisitante = gv.getText().isBlank();
-            if (accion.equals("guardar") && estado.getSelectionModel().getSelectedIndex() == JUGADO && (faltaLocal || faltaVisitante)) {
+            if (accion.equals("guardar") && claveEstado.get().equals("JUGADO") && (faltaLocal || faltaVisitante)) {
                 if (faltaLocal) {
                     gl.getStyleClass().add("campo-invalido");
                 }
@@ -1160,14 +1435,13 @@ class Dialogos {
                     gv.getStyleClass().add("campo-invalido");
                 }
                 mostrarError(err, faltaLocal && faltaVisitante
-                        ? "Escriba los goles de los dos equipos para registrar el resultado, o cambie el estado a «Pendiente»."
+                        ? "Escriba los goles de los dos equipos para registrar el resultado (o use «En juego» si todavía se está jugando)."
                         : "Falta el marcador de " + s(p, faltaLocal ? "localNombre" : "visitanteNombre") + ". Escriba 0 si no marcó goles.");
                 (faltaLocal ? gl : gv).requestFocus();
                 return;
             }
-            int iEst = estado.getSelectionModel().getSelectedIndex();
-            if (accion.equals("guardar") && (iEst == JUGADO || iEst == EN_JUEGO)) {
-                // Un XI empezado tiene que quedar completo (o vacío) antes de guardar.
+            if (accion.equals("guardar")) {
+                // Un XI empezado tiene que quedar completo (o vacío) antes de guardar, en la previa o con el resultado.
                 for (int k = 0; k < 2; k++) {
                     int idEq = idsEquipos[k], elegidos = titulares.get(idEq).size(), faltan = necesarios.applyAsInt(idEq);
                     if (elegidos > 0 && elegidos != faltan) {
@@ -1178,9 +1452,9 @@ class Dialogos {
                 }
             }
             boolean penal = conPenales && hayPenales.isSelected();
-            Map<String, Object> datos = mapa("estado", claves[estado.getSelectionModel().getSelectedIndex()],
+            Map<String, Object> datos = mapa("estado", claveEstado.get(),
                     "gl", faltaLocal ? 0 : Integer.parseInt(gl.getText()), "gv", faltaVisitante ? 0 : Integer.parseInt(gv.getText()), "pl", penal ? pl.getValue() : -1, "pv", penal ? pv.getValue() : -1,
-                    "tarjetas", tarjetas, "cambios", cambios,
+                    "tarjetas", tarjetas, "cambios", cambios, "goles", goles,
                     "titularesLocal", new ArrayList<>(titulares.get(idsEquipos[0])), "titularesVisitante", new ArrayList<>(titulares.get(idsEquipos[1])), "fecha", fecha.getValue() == null ? "" : fecha.getValue().toString(),
                     "hora", hora.getText(), "sede", sede.getText(), "obs", obs.getText(),
                     "formacionLocal", formacionElegida(formLocal), "formacionVisitante", formacionElegida(formVisitante));
@@ -1202,13 +1476,18 @@ class Dialogos {
                 return;
             }
             v.close();
-            app.aviso("Partido guardado.");
+            app.aviso(previa ? "Previa guardada: el visitante ya la ve en el detalle del partido." : "Partido guardado.");
         };
         guardar.setOnAction(e -> enviar.accept("guardar"));
         woLocal.setOnAction(e -> enviar.accept("woLocal"));
         woVisitante.setOnAction(e -> enviar.accept("woVisitante"));
         borrar.setOnAction(e -> enviar.accept("borrar"));
         v.showAndWait();
+        // «Ver detalle»: se abre DESPUÉS de cerrar el editor, no desde su botón mientras se cierra
+        // (así abierta, la ventana modal podía quedar invisible y bloquear todo el programa).
+        if (abrirDetalle[0]) {
+            detallePartido(p);
+        }
     }
 
     /** Jugadores que inician el partido. */
@@ -1249,19 +1528,176 @@ class Dialogos {
         return valor == null || valor.equals(SIN_FORMACION) ? "" : valor;
     }
 
-    /** Detalle de solo lectura: cara a cara, racha y alineaciones. Lo usan visitante y administrador. */
-    void detallePartido(Map<String, Object> p) {
-        Map<String, Object> detalle;
+    /**
+     * Abre el selector de archivos de Windows de forma segura desde una de nuestras ventanas.
+     *
+     * Las ventanas de los diálogos son StageStyle.TRANSPARENT (sin marco, con sombra): en Windows son
+     * ventanas «en capas». Si una de ellas es la dueña del selector nativo, el selector puede abrirse
+     * DETRÁS o sin foco, mientras la dueña queda bloqueada esperándolo: cada clic suena con el aviso
+     * de Windows y el programa parece congelado. Por eso el selector se abre desde una ventanita
+     * normal (sin transparencia, 1×1 px) puesta encima del diálogo, y al terminar —se elija, se cancele
+     * o falle— se cierra y el foco vuelve al diálogo.
+     *
+     * @return el archivo elegido, o null si se canceló
+     */
+    private static java.io.File elegirArchivo(javafx.stage.FileChooser selector, Stage dialogo) {
+        Stage anfitrion = new Stage(StageStyle.UNDECORATED);
+        anfitrion.initOwner(dialogo);                 // hija del diálogo: queda encima y no está bloqueada
+        anfitrion.setScene(new Scene(new Pane(), 1, 1));
+        anfitrion.setX(dialogo.getX() + dialogo.getWidth() / 2);
+        anfitrion.setY(dialogo.getY() + dialogo.getHeight() / 3);
         try {
-            detalle = app.api.consultar("partido/" + n(p, "id"));
+            anfitrion.show();
+            anfitrion.toFront();
+            return selector.showOpenDialog(anfitrion);
+        } finally {
+            anfitrion.hide();
+            dialogo.toFront();
+            dialogo.requestFocus();
+        }
+    }
+
+    /* ---------------------------------------------------------------- noticias */
+
+    /**
+     * Crear o editar una noticia (administrador, sale publicada) o proponerla (visitante, queda
+     * pendiente). {@code existente} null = nueva. La foto se elige del disco y se envia como
+     * «data URL», igual que en la web; el servicio la copia a datos/imagenes/.
+     */
+    void noticia(Map<String, Object> existente, boolean propuesta) {
+        TextField titulo = new TextField(s(existente, "titulo"));
+        titulo.setPromptText("Ej.: Los Pumas ganan el clásico en el último minuto");
+        javafx.scene.control.TextArea cuerpo = new javafx.scene.control.TextArea(s(existente, "cuerpo"));
+        cuerpo.setWrapText(true);
+        cuerpo.setPrefRowCount(8);
+        cuerpo.setPromptText("Texto de la noticia");
+        TextField autor = new TextField();
+        autor.setPromptText("Su nombre (opcional)");
+
+        String[] imagen = {""};            // data URL de la foto nueva ("" = no se cambia)
+        boolean[] quitar = {false};
+        javafx.scene.image.ImageView vista = new javafx.scene.image.ImageView();
+        vista.setFitWidth(220);
+        vista.setPreserveRatio(true);
+        Label sinFoto = etiqueta("Sin foto", "sutil");
+        javafx.scene.image.Image actual = existente == null ? null : app.fotoNoticia(s(existente, "imagen"));
+        vista.setImage(actual);
+        sinFoto.setVisible(actual == null);
+        sinFoto.setManaged(actual == null);
+        Label err = error();
+        Button elegir = boton("Elegir foto…", "fantasma");
+        Button quitarFoto = boton("Quitar foto", "fantasma", "mini");
+        quitarFoto.setDisable(actual == null);
+        elegir.setOnAction(e -> {
+            javafx.stage.FileChooser selector = new javafx.stage.FileChooser();
+            selector.setTitle("Foto de la noticia");
+            selector.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("Imágenes (JPG, PNG, GIF)", "*.jpg", "*.jpeg", "*.png", "*.gif"));
+            java.io.File archivo;
+            elegir.setDisable(true); // evita abrir dos selectores a la vez
+            try {
+                archivo = elegirArchivo(selector, (Stage) elegir.getScene().getWindow());
+            } catch (RuntimeException ex) {
+                mostrarError(err, "No se pudo abrir el selector de archivos: " + ex.getMessage());
+                return;
+            } finally {
+                elegir.setDisable(false);
+            }
+            if (archivo == null) {
+                return; // canceló: la ventana sigue tal cual
+            }
+            try {
+                byte[] bytes = java.nio.file.Files.readAllBytes(archivo.toPath());
+                if (bytes.length > alphasport.service.NoticiasService.MAXIMO_IMAGEN) {
+                    mostrarError(err, "La foto es muy pesada (máximo 5 MB).");
+                    return;
+                }
+                javafx.scene.image.Image previa = new javafx.scene.image.Image(new java.io.ByteArrayInputStream(bytes));
+                if (previa.isError()) {
+                    mostrarError(err, "No se pudo leer esa imagen. Escoja un archivo JPG, PNG o GIF.");
+                    return;
+                }
+                String nombre = archivo.getName().toLowerCase();
+                String tipo = nombre.endsWith(".png") ? "png" : nombre.endsWith(".gif") ? "gif" : "jpeg";
+                imagen[0] = "data:image/" + tipo + ";base64," + java.util.Base64.getEncoder().encodeToString(bytes);
+                quitar[0] = false;
+                vista.setImage(previa);
+                sinFoto.setVisible(false);
+                sinFoto.setManaged(false);
+                quitarFoto.setDisable(false);
+                mostrarError(err, null);
+            } catch (java.io.IOException | RuntimeException ex) {
+                mostrarError(err, "No se pudo abrir el archivo: " + ex.getMessage());
+            }
+        });
+        quitarFoto.setOnAction(e -> {
+            imagen[0] = "";
+            quitar[0] = true;
+            vista.setImage(null);
+            sinFoto.setVisible(true);
+            sinFoto.setManaged(true);
+            quitarFoto.setDisable(true);
+        });
+        VBox foto = new VBox(8, vista, sinFoto, new HBox(8, elegir, quitarFoto));
+
+        String tituloVentana = propuesta ? "Proponer una noticia" : existente == null ? "Nueva noticia" : "Editar noticia";
+        Button cancelar = boton("Cancelar", "fantasma");
+        Button guardar = boton(propuesta ? "Enviar para aprobación" : existente == null ? "Publicar" : "Guardar y publicar", "primario");
+        VBox contenido = new VBox(14, campo("Título", titulo), campo("Texto", cuerpo));
+        if (propuesta) {
+            contenido.getChildren().add(campo("Su nombre", autor));
+            Label aviso = etiqueta("Su noticia no se publica de inmediato: el administrador la revisa y la aprueba o la rechaza.", "sutil", "pequeno");
+            aviso.setWrapText(true);
+            contenido.getChildren().add(aviso);
+        }
+        contenido.getChildren().add(grupo("Foto (opcional)", foto));
+        Stage v = ventana(tituloVentana, cuerpo(tituloVentana, contenido, err, acciones(cancelar, guardar)), 720);
+        cancelar.setOnAction(e -> v.close());
+        String[] enviada = {null}; // mensaje de confirmación de la propuesta (se muestra al cerrar este diálogo)
+        guardar.setOnAction(e -> {
+            Map<String, Object> datos = mapa("titulo", titulo.getText(), "cuerpo", cuerpo.getText(), "autor", autor.getText(),
+                    "imagen", imagen[0], "quitarImagen", quitar[0]);
+            if (existente != null) {
+                datos.put("id", n(existente, "id"));
+            }
+            Map<String, Object> r = app.ejecutar(propuesta ? "noticia/proponer" : "noticia/guardar", datos);
+            if (!b(r, "ok")) {
+                mostrarError(err, s(r, "error"));
+                return;
+            }
+            if (propuesta) {
+                enviada[0] = s(r, "mensaje");
+            } else {
+                app.aviso(s(r, "mensaje"));
+            }
+            v.close();
+        });
+        v.showAndWait();
+        // La confirmación se abre DESPUÉS de que este diálogo terminó, nunca desde su botón mientras se cierra:
+        // abierta ahí, la ventana modal quedaba invisible (Windows no la pintaba) pero bloqueando todo el programa,
+        // con el sonido de alerta en cada clic y Alt+F4 como única salida.
+        if (enviada[0] != null) {
+            mensaje("Noticia enviada", enviada[0]);
+        }
+    }
+
+    /** Detalle de solo lectura: resumen del partido, cara a cara, racha y alineaciones. Lo usan visitante y administrador. */
+    void detallePartido(Map<String, Object> p) {
+        Node vista;
+        try {
+            Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id"));
+            if (detalle == null || m(detalle, "partido") == null) {
+                mensaje("Detalle del partido", "Todavía no hay información de este partido.");
+                return;
+            }
+            vista = VistaDetallePartido.construir(detalle);
         } catch (RuntimeException e) {
-            mensaje("No se pudo abrir el partido", e.getMessage());
+            // Nunca se deja una ventana a medio armar: se avisa y la aplicación sigue respondiendo.
+            mensaje("No se pudo abrir el partido", e.getMessage() == null ? "Todavía no hay información de este partido." : e.getMessage());
             return;
         }
         Button cerrar = boton("Cerrar", "primario");
         cerrar.setDefaultButton(true);
-        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), VistaDetallePartido.construir(detalle),
-                acciones(cerrar)), 920);
+        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), vista, acciones(cerrar)), 920);
         cerrar.setOnAction(e -> v.close());
         v.showAndWait();
     }

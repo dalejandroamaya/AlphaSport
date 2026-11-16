@@ -28,6 +28,9 @@ function crearServicioRemoto() {
     estado: () => pedir('estado'),
     historial: () => pedir('historial'),
     detalle: id => pedir('partido/' + id),
+    noticias: () => pedir('noticias'),
+    /** Con el programa Java la foto es un archivo de datos/imagenes/ que se sirve en /api/imagen/{nombre}. */
+    urlImagen: imagen => (imagen ? '/api/imagen/' + encodeURIComponent(imagen) : ''),
     ejecutar: (ruta, cuerpo = {}) => pedir(ruta, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
     }),

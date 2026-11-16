@@ -6,6 +6,7 @@ const Almacen = (() => {
   const CLAVE_ACTUAL = 'alphasport.actual';
   const CLAVE_HISTORIAL = 'alphasport.historial';
   const CLAVE_SESION = 'alphasport.usuario';
+  const CLAVE_NOTICIAS = 'alphasport.noticias';
 
   const leer = (clave, defecto) => {
     try {
@@ -29,6 +30,11 @@ const Almacen = (() => {
       cargar: () => leer(CLAVE_ACTUAL, null),
       guardar: c => escribir(CLAVE_ACTUAL, c),
       eliminar: () => { try { localStorage.removeItem(CLAVE_ACTUAL); } catch (e) { /* sin almacenamiento */ } }
+    },
+    // Noticias con sus comentarios (la foto va dentro como «data URL»). Lanza error si el navegador no tiene espacio.
+    noticias: {
+      cargar: () => leer(CLAVE_NOTICIAS, []),
+      guardar: lista => escribir(CLAVE_NOTICIAS, lista)
     },
     // Usuario con sesión abierta ({usuario, rol}); se recuerda al recargar la página.
     sesion: {

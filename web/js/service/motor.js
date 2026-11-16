@@ -187,10 +187,24 @@ function comparar(a, b) {
 /*  Formatos: deciden QUE fases tiene el torneo                        */
 /* ------------------------------------------------------------------ */
 const Formatos = {
+  // Con divisiones (Liga A, B, C...) cada división es una liga aparte: se reutiliza la fase de
+  // grupos (un grupo por división) y el campeón es el primero de la Liga A. Una liga nunca tiene llaves.
   LIGA: {
-    validar: () => null,
-    primera: (c, m) => m.faseLiga(c.config.idaYVuelta ? 'Liga (ida y vuelta)' : 'Liga (una vuelta)',
-      m.sembrar(m.activos()), c.config.idaYVuelta),
+    usaLlaves: false,
+    validar(c) {
+      if (!tieneDivisiones(c)) return null;
+      for (let d = 0; d < numeroDivisiones(c); d++) {
+        const n = equiposDeDivision(c, d).length;
+        if (n < 2) return `La ${nombreDivision(d)} tiene ${n === 1 ? '1 equipo' : '0 equipos'}: cada división necesita al menos 2. Mueva equipos o quite divisiones en la sección Equipos.`;
+      }
+      return null;
+    },
+    primera(c, m) {
+      const nombre = c.config.idaYVuelta ? 'Liga (ida y vuelta)' : 'Liga (una vuelta)';
+      if (!tieneDivisiones(c)) return m.faseLiga(nombre, m.sembrar(m.activos()), c.config.idaYVuelta);
+      const grupos = Array.from({ length: numeroDivisiones(c) }, (_, d) => m.sembrar(equiposDeDivision(c, d)));
+      return Object.assign(m.faseGrupos(nombre, grupos, c.config.idaYVuelta), { divisiones: true });
+    },
     siguiente: () => null
   },
   ELIMINACION_DIRECTA: {
@@ -400,7 +414,7 @@ class Motor {
       const g = this.ganadorDeFase(i);
       if (g === -1) throw new Error('No se pudo determinar el campeón.');
       this.c.campeon = g;
-      return '¡El campeonato terminó! Campeón: ' + this.nombre(g);
+      return '¡El campeonato terminó! ' + this.textoCampeones();
     }
     this.agregarFase(siguiente);
     return `Comienza la fase: ${siguiente.nombre}.`;
@@ -408,7 +422,7 @@ class Motor {
 
   describirEstado() {
     if (!this.iniciado()) return 'Sin iniciar: registre los equipos y pulse «Iniciar campeonato».';
-    if (this.terminado()) return 'Terminado. Campeón: ' + this.nombre(this.c.campeon);
+    if (this.terminado()) return 'Terminado. ' + this.textoCampeones();
     const i = this.c.fases.length - 1, fase = this.c.fases[i], pend = this.contarPendientes(i);
     let texto = 'Fase actual: ' + fase.nombre;
     if (fase.tipo !== 'LIGA' && fase.tipo !== 'GRUPOS') texto += ' · ronda ' + this.ultimaRonda(i);
@@ -556,6 +570,20 @@ class Motor {
   }
 
   tablaGeneral() { return this.tabla.calcular(this.c.partidos, this.c.equipos.map(e => e.id)); }
+
+  /** Campeón de cada división (posición 0 = Liga A). Vacío si no terminó o no hay divisiones. Igual que en Java. */
+  campeonesPorDivision() {
+    const f = this.c.fases[0];
+    if (!this.terminado() || !f || !f.divisiones) return [];
+    return f.grupos.map((_, g) => { const t = this.tablaDeGrupo(0, g); return t.length ? t[0].id : -1; });
+  }
+
+  /** «Campeón: X» o, con divisiones, «Campeones: Liga A: X · Liga B: Y · ...». */
+  textoCampeones() {
+    const porDivision = this.campeonesPorDivision();
+    if (!porDivision.length) return 'Campeón: ' + this.nombre(this.c.campeon);
+    return 'Campeones: ' + porDivision.map((id, d) => `${nombreGrupo(this.c.fases[0], d)}: ${this.nombre(id)}`).join(' · ');
+  }
 
   ganadorDeFase(i) {
     const fase = this.c.fases[i];
@@ -827,6 +855,23 @@ class Motor {
 }
 
 function letraGrupo(i) { return String.fromCharCode(65 + i); }
+
+/* ---- liga con divisiones (igual que Campeonato / ConfiguracionTorneo en Java) ---- */
+const MAXIMO_DIVISIONES = 6;
+const numeroDivisiones = c => Math.max(1, Math.min(MAXIMO_DIVISIONES, (c.config && c.config.divisiones) || 1));
+const tieneDivisiones = c => c.formato === 'LIGA' && numeroDivisiones(c) > 1;
+const nombreDivision = d => 'Liga ' + letraGrupo(d);
+/** División del equipo (si se quitaron divisiones, los que quedaron fuera cuentan en la última). */
+const divisionDe = (c, e) => Math.min(e.division || 0, numeroDivisiones(c) - 1);
+const equiposDeDivision = (c, d) => c.equipos.filter(e => !e.retirado && divisionDe(c, e) === d);
+function divisionConMenosEquipos(c) {
+  let mejor = 0;
+  for (let d = 1; d < numeroDivisiones(c); d++) if (equiposDeDivision(c, d).length < equiposDeDivision(c, mejor).length) mejor = d;
+  return mejor;
+}
+/** «Liga B» en una liga con divisiones, «Grupo B» en los demás formatos. */
+const nombreGrupo = (fase, g) => (fase && fase.divisiones ? 'Liga ' : 'Grupo ') + letraGrupo(g);
+const usaLlaves = c => Formatos[c.formato].usaLlaves !== false;
 function claveCruce(a, b) { return Math.min(a, b) + '-' + Math.max(a, b); }
 
 function resumenReglas(c) {
@@ -838,7 +883,15 @@ function resumenReglas(c) {
     l.push(t);
     l.push(cfg.sorteoAleatorio ? 'Cruces por sorteo' : 'Cruces según orden de registro');
   };
-  if (f === 'LIGA') l.push(cfg.idaYVuelta ? 'A ida y vuelta (doble round-robin)' : 'A una sola vuelta');
+  if (f === 'LIGA') {
+    l.push(cfg.idaYVuelta ? 'A ida y vuelta (doble round-robin)' : 'A una sola vuelta');
+    const n = numeroDivisiones(c);
+    if (n > 1) {
+      l.push(`${n} divisiones (${nombreDivision(0)} a ${nombreDivision(n - 1)}): cada una es una liga aparte; el campeón es el primero de la ${nombreDivision(0)}`);
+      const k = cfg.ascensos == null ? 2 : cfg.ascensos;
+      l.push(k === 0 ? 'Sin ascensos ni descensos' : `En la siguiente temporada ascienden los ${k} primeros y descienden los ${k} últimos de cada división`);
+    }
+  }
   if (f === 'ELIMINACION_DIRECTA') elim();
   if (f === 'GRUPOS_Y_ELIMINATORIA') {
     l.push(`Grupos de ${cfg.tamanoGrupo} equipos, clasifican ${cfg.clasificadosPorGrupo} por grupo`);
@@ -882,9 +935,10 @@ function resumenCampeonato(c) {
     if (fase.tipo === 'ELIMINATORIA' || fase.tipo === 'DOBLE_ELIMINACION') {
       avance = m.partidosDeFase(ultima).filter(p => P.involucra(p, id)).reduce((x, p) => Math.max(x, p.ronda), 0);
     } else if (fase.tipo === 'GRUPOS') {
+      // En una liga con divisiones todos los de la Liga A van antes que los de la Liga B, etc.
       avance = -Math.min(...fase.grupos.map((_, g) => {
         const pos = m.tablaDeGrupo(ultima, g).map(f => f.id).indexOf(id);
-        return pos === -1 ? 99 : pos;
+        return pos === -1 ? 99999 : (fase.divisiones ? g * 1000 + pos : pos);
       }));
     } else {
       avance = -m.tablaDeFase(ultima).map(f => f.id).indexOf(id);
@@ -962,6 +1016,7 @@ function importarEquipos(destino, origen) {
     const e = m.agregarEquipo(viejo.nombre);
     if (!e) continue;
     e.estadio = viejo.estadio || '';
+    e.division = viejo.division || 0;
     e.dt = viejo.dt ? Object.assign({}, viejo.dt) : null;
     e.jugadores = viejo.jugadores.map(j => Object.assign({}, j, { id: 0 }));
     for (const j of e.jugadores) j.id = m.nuevoIdJugador();

@@ -42,6 +42,11 @@ public class ConfiguracionTorneo implements Serializable {
     // Doble eliminacion
     private boolean granFinalConReinicio = true;
 
+    // Liga con divisiones (Liga A, Liga B...). En archivos anteriores vale 0 = una sola division.
+    public static final int MAXIMO_DIVISIONES = 6;
+    private int divisiones = 1;
+    private int ascensos = 2;      // equipos que suben y bajan entre divisiones en cada temporada
+
     private ArrayList<CriterioDesempate> criterios = new ArrayList<>();
 
     public ConfiguracionTorneo() {
@@ -57,6 +62,13 @@ public class ConfiguracionTorneo implements Serializable {
         switch (formato) {
             case LIGA:
                 texto += idaYVuelta ? "A ida y vuelta (doble round-robin)\n" : "A una sola vuelta\n";
+                if (getDivisiones() > 1) {
+                    texto += getDivisiones() + " divisiones (" + nombreDivision(0) + " a " + nombreDivision(getDivisiones() - 1)
+                            + "): cada una es una liga aparte; el campeón es el primero de la " + nombreDivision(0) + "\n";
+                    texto += getAscensos() == 0 ? "Sin ascensos ni descensos\n"
+                            : "En la siguiente temporada ascienden los " + getAscensos() + " primeros y descienden los "
+                            + getAscensos() + " últimos de cada división\n";
+                }
                 break;
             case ELIMINACION_DIRECTA:
                 texto += textoEliminatoria();
@@ -223,6 +235,29 @@ public class ConfiguracionTorneo implements Serializable {
 
     public void setGranFinalConReinicio(boolean granFinalConReinicio) {
         this.granFinalConReinicio = granFinalConReinicio;
+    }
+
+    /** Cantidad de divisiones de la liga (1 = liga normal). */
+    public int getDivisiones() {
+        return Math.max(1, Math.min(MAXIMO_DIVISIONES, divisiones));
+    }
+
+    public void setDivisiones(int divisiones) {
+        this.divisiones = Math.max(1, Math.min(MAXIMO_DIVISIONES, divisiones));
+    }
+
+    /** Equipos que ascienden (y descienden) entre dos divisiones al pasar a la siguiente temporada. */
+    public int getAscensos() {
+        return Math.max(0, ascensos);
+    }
+
+    public void setAscensos(int ascensos) {
+        this.ascensos = Math.max(0, ascensos);
+    }
+
+    /** «Liga A», «Liga B»... */
+    public static String nombreDivision(int indice) {
+        return "Liga " + Fase.letraGrupo(indice);
     }
 
     public ArrayList<CriterioDesempate> getCriterios() {

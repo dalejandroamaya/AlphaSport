@@ -2,7 +2,9 @@ package alphasport.ui;
 
 import alphasport.persistence.ArchivoRepositorioCampeonato;
 import alphasport.persistence.ArchivoRepositorioHistorial;
+import alphasport.persistence.ArchivoRepositorioNoticias;
 import alphasport.service.CampeonatoService;
+import alphasport.service.NoticiasService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -15,6 +17,15 @@ public final class Arranque {
     public static final Path CARPETA_DATOS = Path.of("datos");
 
     private Arranque() {
+    }
+
+    /**
+     * Noticias: el servicio las maneja en listas en memoria y este repositorio las conserva en
+     * datos/noticias.dat (y las fotos en datos/imagenes/). Para dejarlas SOLO en memoria (se
+     * pierden al cerrar) basta con cambiar esta linea por: new RepositorioNoticiasEnMemoria().
+     */
+    public static NoticiasService noticias() {
+        return new NoticiasService(new ArchivoRepositorioNoticias(CARPETA_DATOS));
     }
 
     public static CampeonatoService servicio() {

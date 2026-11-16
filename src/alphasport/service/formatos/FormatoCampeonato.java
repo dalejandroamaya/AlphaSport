@@ -26,6 +26,14 @@ public abstract class FormatoCampeonato {
      */
     public abstract Fase crearSiguienteFase(Campeonato campeonato, MotorCampeonato motor, int indiceFaseTerminada);
 
+    /**
+     * true si el formato puede llegar a una fase de llaves (eliminacion directa o doble).
+     * Si no, la interfaz no muestra la seccion «Llaves». Por defecto todos la usan.
+     */
+    public boolean usaLlaves() {
+        return true;
+    }
+
     public static FormatoCampeonato crear(TipoFormato tipo) {
         switch (tipo) {
             case LIGA:

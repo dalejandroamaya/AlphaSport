@@ -337,6 +337,7 @@
 .table-column.posicion { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 15px; }
 .table-row-cell.clasifica .table-column.posicion { -fx-text-fill: -cesped; }
 .table-row-cell.repechaje .table-column.posicion { -fx-text-fill: -ambar; }
+.table-row-cell.desciende .table-column.posicion { -fx-text-fill: -rojo; }
 /* El líder queda bajo un foco dorado. */
 .table-row-cell.lider { -fx-background-color: linear-gradient(to right, rgba(247, 199, 90, 0.3), rgba(247, 199, 90, 0.05) 70%); -fx-background-insets: 2 0; }
 .raiz.claro .table-row-cell.lider { -fx-background-color: linear-gradient(to right, rgba(224, 166, 42, 0.32), rgba(224, 166, 42, 0.05) 70%); }
@@ -459,6 +460,7 @@
 .campeon-tablero { -fx-background-color: rgba(255, 255, 255, 0.09); -fx-background-radius: 16; -fx-border-color: rgba(255, 255, 255, 0.15); -fx-border-radius: 16; -fx-padding: 9 4; }
 .campeon-cifra { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 28px; -fx-text-fill: white; }
 .campeon-cifra-texto { -fx-font-size: 12px; -fx-text-fill: #c3cfe2; }
+.campeon-division-nombre { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 16px; -fx-text-fill: white; }
 
 /* ------------------------------------------------------------------ detalles */
 .punto-vivo { -fx-fill: -cesped; }
@@ -482,7 +484,15 @@
 .icono-entra { -fx-stroke: -cesped; -fx-stroke-width: 2.4; }
 .icono-sale { -fx-stroke: -rojo; -fx-stroke-width: 2.4; }
 .campo-minuto { -fx-alignment: center; }
-.grupo-lista { -fx-text-fill: -cesped; -fx-font-family: "Onest SemiBold"; -fx-font-size: 12px; -fx-opacity: 1; -fx-background-color: transparent; }
+/* Advertencia «previa sin registrar»: círculo ámbar con «!» */
+.icono-advertencia {
+    -fx-min-width: 34; -fx-min-height: 34; -fx-max-width: 34; -fx-max-height: 34; -fx-alignment: center;
+    -fx-background-color: rgba(255, 184, 77, 0.16); -fx-background-radius: 17; -fx-border-color: -ambar; -fx-border-radius: 17;
+    -fx-text-fill: -ambar; -fx-font-family: "Onest SemiBold"; -fx-font-size: 17px;
+}
+/* «Registrar resultados»: alineación que viene de la previa (plegada cuando el XI está completo) */
+.resumen-previa { -fx-border-color: -borde; -fx-border-radius: 18; -fx-background-color: rgba(46, 229, 152, 0.06); -fx-background-radius: 18; -fx-padding: 12 16; }
+.grupo-lista {-fx-text-fill: -cesped; -fx-font-family: "Onest SemiBold"; -fx-font-size: 12px; -fx-opacity: 1; -fx-background-color: transparent; }
 
 /* ------------------------------------------------------------------ ficha del partido */
 .ficha { -fx-padding: 20 22; }
@@ -546,3 +556,25 @@
 .ficha-visitante { -fx-background-color: #0b1726; -fx-text-fill: #eef4ff; -fx-border-color: #f7c75a; }
 .ficha-nombre { -fx-text-fill: white; -fx-font-size: 11px; -fx-font-family: "Onest SemiBold"; -fx-alignment: center; -fx-text-alignment: center;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 4, 0.5, 0, 1); }
+/* Cambio sobre la cancha: minuto en que salió el jugador */
+.ficha-sale { -fx-text-fill: #ffb3c0; -fx-font-size: 10px; -fx-font-family: "Onest SemiBold";
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 4, 0.5, 0, 1); }
+
+/* Goles: el balón en la línea de tiempo y en el editor */
+.icono-gol { -fx-stroke: -texto; -fx-stroke-width: 2.2; }
+
+/* Estadísticas del campeonato: las filas de los registros abren su partido */
+.fila-clicable { -fx-cursor: hand; }
+
+/* Liga con divisiones: barra para agregar o quitar divisiones */
+.barra-divisiones { -fx-padding: 14 18; }
+
+/* Noticias */
+.tarjeta-noticia { -fx-padding: 18 20; }
+.noticias-pendientes { -fx-padding: 18 20; -fx-border-color: rgba(247, 199, 90, 0.45); -fx-border-radius: 22; }
+.noticia-cuerpo { -fx-text-fill: -texto; -fx-font-size: 15px; -fx-line-spacing: 2; }
+
+/* Noticias del administrador: pestañas «Pendientes» y «Publicadas» */
+.pestanas-noticias .tab-header-area { -fx-padding: 0 0 4 0; }
+.pestanas-noticias .tab.pestana-con-pendientes .tab-label { -fx-text-fill: -ambar; -fx-font-family: "Onest SemiBold"; }
+.pestanas-noticias .tab.pestana-con-pendientes:selected .tab-label { -fx-text-fill: -texto; }

@@ -60,6 +60,11 @@ public class CampeonatoService {
         return new Sanciones(campeonato);
     }
 
+    /** Estadisticas globales: goleadores, asistidores, valla menos vencida y juego limpio. */
+    public EstadisticasCampeonato estadisticas() {
+        return new EstadisticasCampeonato(campeonato);
+    }
+
     public void crear(String nombre, TipoFormato formato, ConfiguracionTorneo configuracion, boolean mismosEquipos)
             throws PersistenciaException {
         if (nombre == null || nombre.isBlank()) {
@@ -104,7 +109,72 @@ public class CampeonatoService {
         guardar();
     }
 
-    public void siguienteTorneoCorto(String nombre) throws PersistenciaException {
+    /**
+     * Siguiente torneo con los mismos equipos, plantillas y reglas: el Clausura de un torneo
+     * corto o la siguiente temporada de una liga. En una liga con divisiones, al terminar la
+     * temporada ascienden los primeros y descienden los ultimos de cada division.
+     */
+    public String siguienteTemporada(String nombre) throws PersistenciaException {
+        exigirCampeonato();
+        if (nombre == null || nombre.isBlank()) {
+            throw new ReglaNegocioException("Escriba el nombre del nuevo torneo.");
+        }
+        if (campeonato.getFormato() != TipoFormato.TORNEO_CORTO && campeonato.getFormato() != TipoFormato.LIGA) {
+            throw new ReglaNegocioException("La siguiente temporada solo existe en los formatos Liga y Apertura/Clausura.");
+        }
+        java.util.Map<Integer, Integer> nuevaDivision = new java.util.HashMap<>();
+        String movimientos = "";
+        boolean conAscensos = campeonato.tieneDivisiones() && campeonato.getConfiguracion().getAscensos() > 0;
+        if (conAscensos) {
+            if (!campeonato.isTerminado()) {
+                throw new ReglaNegocioException("Termine la temporada (hasta tener campeón) para saber quién asciende y quién desciende.");
+            }
+            movimientos = ascensosYDescensos(nuevaDivision);
+        }
+        siguienteTorneoCorto(nombre);
+        for (Equipo e : campeonato.getEquipos()) { // la copia conserva los ids de los equipos
+            if (nuevaDivision.containsKey(e.getId())) {
+                e.setDivision(nuevaDivision.get(e.getId()));
+            }
+        }
+        guardar();
+        return movimientos;
+    }
+
+    /**
+     * Calcula a que division va cada equipo: los «ascensos» ultimos de cada division bajan
+     * y los primeros de la division de abajo suben. Devuelve el resumen para mostrar.
+     */
+    private String ascensosYDescensos(java.util.Map<Integer, Integer> nuevaDivision) {
+        int indiceFase = 0;
+        int divisiones = campeonato.getFases().get(indiceFase).getGrupos().size();
+        StringBuilder texto = new StringBuilder();
+        for (int d = 0; d + 1 < divisiones; d++) {
+            List<Integer> arriba = MotorCampeonato.ids(motor.tablaDeGrupo(indiceFase, d));
+            List<Integer> abajo = MotorCampeonato.ids(motor.tablaDeGrupo(indiceFase, d + 1));
+            // Nunca se mueve a todos: cada division conserva al menos un equipo.
+            int k = Math.min(campeonato.getConfiguracion().getAscensos(), Math.min(arriba.size(), abajo.size()) - 1);
+            if (k <= 0) {
+                continue;
+            }
+            List<Integer> bajan = arriba.subList(arriba.size() - k, arriba.size());
+            List<Integer> suben = abajo.subList(0, k);
+            for (int id : bajan) {
+                nuevaDivision.put(id, d + 1);
+            }
+            for (int id : suben) {
+                nuevaDivision.put(id, d);
+            }
+            texto.append(texto.length() == 0 ? "" : " ")
+                    .append("Suben a la ").append(alphasport.model.ConfiguracionTorneo.nombreDivision(d)).append(": ")
+                    .append(String.join(", ", suben.stream().map(campeonato::nombreDe).toList()))
+                    .append(". Bajan a la ").append(alphasport.model.ConfiguracionTorneo.nombreDivision(d + 1)).append(": ")
+                    .append(String.join(", ", bajan.stream().map(campeonato::nombreDe).toList())).append(".");
+        }
+        return texto.toString();
+    }
+
+    private void siguienteTorneoCorto(String nombre) throws PersistenciaException {
         exigirCampeonato();
         if (nombre == null || nombre.isBlank()) {
             throw new ReglaNegocioException("Escriba el nombre del nuevo torneo.");
@@ -145,10 +215,66 @@ public class CampeonatoService {
         if (nombre == null || nombre.isBlank()) {
             throw new ReglaNegocioException("Escriba el nombre del equipo.");
         }
-        if (campeonato.agregarEquipo(nombre.trim()) == null) {
+        int division = campeonato.divisionConMenosEquipos();
+        Equipo nuevo = campeonato.agregarEquipo(nombre.trim());
+        if (nuevo == null) {
             throw new ReglaNegocioException("El equipo «" + nombre.trim() + "» ya existe.");
         }
+        nuevo.setDivision(division);
         guardar();
+    }
+
+    /* ---------------------------------------------------------------- liga con divisiones */
+
+    private void exigirLigaSinIniciar() {
+        exigirCampeonato();
+        if (campeonato.getFormato() != TipoFormato.LIGA) {
+            throw new ReglaNegocioException("Las divisiones solo existen en el formato Liga.");
+        }
+        if (campeonato.isIniciado()) {
+            throw new ReglaNegocioException("El campeonato ya inició: las divisiones se cambian antes de iniciar o en la siguiente temporada.");
+        }
+    }
+
+    /** Pasa un equipo a otra division (Liga A = 0). */
+    public void cambiarDivision(int idEquipo, int division) throws PersistenciaException {
+        exigirLigaSinIniciar();
+        Equipo equipo = buscarEquipo(idEquipo);
+        if (division < 0 || division >= campeonato.getConfiguracion().getDivisiones()) {
+            throw new ReglaNegocioException("Esa división no existe.");
+        }
+        equipo.setDivision(division);
+        guardar();
+    }
+
+    /** Agrega una division al final (Liga B, Liga C...). */
+    public String agregarDivision() throws PersistenciaException {
+        exigirLigaSinIniciar();
+        ConfiguracionTorneo cfg = campeonato.getConfiguracion();
+        if (cfg.getDivisiones() >= ConfiguracionTorneo.MAXIMO_DIVISIONES) {
+            throw new ReglaNegocioException("Se permiten como máximo " + ConfiguracionTorneo.MAXIMO_DIVISIONES + " divisiones.");
+        }
+        cfg.setDivisiones(cfg.getDivisiones() + 1);
+        guardar();
+        return "Se creó la " + ConfiguracionTorneo.nombreDivision(cfg.getDivisiones() - 1) + ". Asígnele equipos.";
+    }
+
+    /** Quita la ultima division; sus equipos pasan a la division anterior. */
+    public String quitarDivision() throws PersistenciaException {
+        exigirLigaSinIniciar();
+        ConfiguracionTorneo cfg = campeonato.getConfiguracion();
+        if (cfg.getDivisiones() <= 1) {
+            throw new ReglaNegocioException("La liga ya tiene una sola división.");
+        }
+        int ultima = cfg.getDivisiones() - 1;
+        List<Equipo> movidos = campeonato.equiposDeDivision(ultima);
+        for (Equipo e : movidos) {
+            e.setDivision(ultima - 1);
+        }
+        cfg.setDivisiones(ultima);
+        guardar();
+        return "Se quitó la " + ConfiguracionTorneo.nombreDivision(ultima) + "."
+                + (movidos.isEmpty() ? "" : " Sus " + movidos.size() + " equipos pasaron a la " + ConfiguracionTorneo.nombreDivision(ultima - 1) + ".");
     }
 
     public void guardarEquipo(Integer idEquipo, String nombre, String estadio, DirectorTecnico dt, List<Jugador> jugadores)
@@ -206,7 +332,9 @@ public class CampeonatoService {
         }
         DatosPrueba.Resultado r = DatosPrueba.generar(semilla, pedidos, usados, sinPlantilla.size());
         for (DatosPrueba.EquipoPrueba e : r.equipos()) {
+            int division = campeonato.divisionConMenosEquipos(); // reparte los equipos entre las divisiones
             Equipo equipo = campeonato.agregarEquipo(e.nombre());
+            equipo.setDivision(division);
             equipo.setEstadio(e.estadio());
             equipo.setDirectorTecnico(e.dt());
             asignarIds(e.jugadores());
@@ -274,7 +402,11 @@ public class CampeonatoService {
 
     public void darWalkover(int idPartido, Partido datos, int idGanador, boolean confirmado) throws PersistenciaException {
         exigirCampeonato();
-        MotorCampeonato.darWalkover(datos, idGanador, "W.O. a favor de " + campeonato.nombreDe(idGanador));
+        Partido original = buscarPartido(idPartido); // «datos» es una copia sin ids: el local se toma del partido real
+        if (!original.involucra(idGanador)) {
+            throw new ReglaNegocioException("El ganador del W.O. debe ser uno de los dos equipos del partido.");
+        }
+        MotorCampeonato.darWalkover(datos, original.getIdLocal(), idGanador, "W.O. a favor de " + campeonato.nombreDe(idGanador));
         guardarPartido(idPartido, datos, confirmado);
     }
 

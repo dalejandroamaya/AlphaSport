@@ -29,6 +29,8 @@ public class Fase implements Serializable {
     private ArrayList<ArrayList<Integer>> grupos = new ArrayList<>();
     // Eliminatorias: orden de la llave en la primera ronda (LIBRE = sin rival)
     private ArrayList<Integer> cuadro = new ArrayList<>();
+    // true si los grupos son divisiones de una liga (Liga A, Liga B...) y no grupos de un sorteo
+    private boolean divisiones;
 
     public Fase() {
     }
@@ -136,6 +138,19 @@ public class Fase implements Serializable {
 
     public void setCuadro(ArrayList<Integer> cuadro) {
         this.cuadro = cuadro;
+    }
+
+    public boolean isDivisiones() {
+        return divisiones;
+    }
+
+    public void setDivisiones(boolean divisiones) {
+        this.divisiones = divisiones;
+    }
+
+    /** Nombre del grupo para mostrar: «Liga B» en una liga con divisiones, «Grupo B» en los demas formatos. */
+    public String nombreGrupo(int indice) {
+        return (divisiones ? "Liga " : "Grupo ") + letraGrupo(indice);
     }
 
     @Override

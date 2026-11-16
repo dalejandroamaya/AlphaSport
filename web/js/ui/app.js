@@ -16,7 +16,9 @@ let S = null;
 
 /* La regla real está en el servicio (Java o JavaScript): aquí solo se ocultan los controles. */
 const puedeEditar = () => !!(S && S.puedeEditar);
-const puedeVer = vista => puedeEditar() || !VISTAS_SOLO_ADMIN.includes(vista);
+/** Si el formato no tiene llaves (Liga), la sección «Llaves» no se muestra a nadie. */
+const sinLlaves = () => E.hay && E.campeonato.usaLlaves === false;
+const puedeVer = vista => (vista !== 'llaves' || !sinLlaves()) && (puedeEditar() || !VISTAS_SOLO_ADMIN.includes(vista));
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch =>
@@ -27,6 +29,7 @@ const ICONO = {
   arriba: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>',
   abajo: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
   quitar: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  gol: '<svg class="ico ico-gol" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m12 7 3.5 2.6-1.3 4.1H9.8L8.5 9.6Z"/></svg>',
   cambio: '<svg class="ico ico-cambio" viewBox="0 0 24 24" aria-hidden="true"><path class="entra" d="M7 20V6M3 10l4-4 4 4"/><path class="sale" d="M17 4v14M13 14l4 4 4-4"/></svg>'
 };
 /** Tarjeta de árbitro dibujada (rectángulo amarillo o rojo) con su nombre en texto. */
@@ -69,6 +72,10 @@ function mensaje(titulo, contenido, opciones = {}) {
     }
     $('msgNo').hidden = !opciones.confirmar && opciones.entrada === undefined;
     $('msgSi').textContent = opciones.textoSi || 'Aceptar';
+    $('msgNo').textContent = opciones.textoNo || 'Cancelar';
+    dlg.classList.toggle('advertencia-dlg', !!opciones.advertencia);
+    // Con dos caminos (textoNo), cerrar sin elegir (Esc) devuelve null en lugar de false.
+    const alCerrar = opciones.textoNo ? null : false;
     let respondido = false;
     const responder = si => {
       if (respondido) return;
@@ -78,8 +85,8 @@ function mensaje(titulo, contenido, opciones = {}) {
     };
     $('msgSi').onclick = e => { e.preventDefault(); responder(true); };
     $('msgNo').onclick = e => { e.preventDefault(); responder(false); };
-    dlg.oncancel = () => responder(false);
-    dlg.onclose = () => responder(false);
+    dlg.oncancel = () => responder(alCerrar);
+    dlg.onclose = () => responder(alCerrar);
     if (entrada) entrada.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); responder(true); } };
     dlg.showModal();
     if (entrada) entrada.select();
@@ -174,6 +181,8 @@ function volverAlLogin(motivo) {
 
 async function cerrarSesion() {
   await servicio.ejecutar('logout');
+  pestanaNoticias = null; // el próximo administrador entra a lo que necesite atención
+  pestanaPartidos = 'previa';
   volverAlLogin();
 }
 
@@ -181,10 +190,7 @@ async function cerrarSesion() {
 function aplicarPermisos() {
   const admin = puedeEditar();
   document.querySelectorAll('[data-solo-admin]').forEach(el => { el.hidden = !admin; });
-  // Sin campeonato no hay nada que ver fuera de Partidos (que muestra el aviso).
-  document.querySelectorAll('.navegacion button[data-vista]').forEach(b => {
-    b.hidden = !puedeVer(b.dataset.vista) || (!E.hay && b.dataset.vista !== 'partidos');
-  });
+  document.querySelectorAll('.navegacion button[data-vista]').forEach(b => { b.hidden = !puedeVer(b.dataset.vista); });
   $('chipRol').textContent = S ? S.rolNombre + (admin ? '' : ' · solo lectura') : '';
   $('chipRol').hidden = !S;
   $('chipLectura').hidden = !S || admin;
@@ -216,11 +222,11 @@ function renderSinCampeonato() {
   ['sobreEstado', 'chipFormato', 'chipEquipos'].forEach(id => { $(id).hidden = true; });
   $('estado').textContent = '';
   $('btnCampeon').hidden = true;
+  document.querySelectorAll('.vista').forEach(v => { v.hidden = v.id !== 'vista-partidos'; });
   document.querySelector('#vista-partidos .filtros').hidden = true;
-  $('ayudaPartidos').textContent = 'Calendario y resultados del campeonato en curso.';
+  $('pestanasPartidos').hidden = true;
+  $('ayudaPestanaPartidos').hidden = true;
   $('listaPartidos').innerHTML = vacioHtml('Todavía no hay un campeonato en curso. Vuelva más tarde.');
-  aplicarPermisos();
-  mostrarVista('partidos');
 }
 
 /* ---------------------------------------------------------------- dibujo general */
@@ -231,8 +237,12 @@ function render() {
   aplicarPermisos();
   ['sobreEstado', 'chipFormato', 'chipEquipos'].forEach(id => { $(id).hidden = false; });
   document.querySelector('#vista-partidos .filtros').hidden = false;
-  $('ayudaPartidos').textContent = puedeEditar() ? 'Abra un partido para registrar el resultado, las tarjetas y la programación.'
-    : 'Calendario y resultados. Toque cualquier partido para ver el cara a cara, la racha y las alineaciones.';
+  // El administrador gestiona los partidos (previa y resultados); el visitante solo los consulta.
+  const admin = puedeEditar();
+  $('navPartidos').textContent = admin ? 'Gestionar partidos' : 'Partidos';
+  $('tituloPartidos').textContent = admin ? 'Gestionar partidos' : 'Partidos';
+  $('ayudaPartidos').textContent = admin ? 'Prepare cada partido en la «Previa» y, cuando se juegue, cargue lo ocurrido en «Registrar resultados».'
+    : 'Calendario y resultados. Toque cualquier partido para ver la previa, el cara a cara, la racha y las alineaciones.';
   $('titulo').textContent = c.nombre;
   document.title = c.nombre + ' · AlphaSport';
   $('chipFormato').textContent = c.formatoNombre;
@@ -249,25 +259,29 @@ function render() {
   $('btnAvanzar').textContent = c.terminado ? 'Terminar e iniciar otro' : c.iniciado ? 'Cerrar ronda y avanzar' : 'Iniciar campeonato';
   $('btnAvanzar').classList.toggle('dorado', c.terminado);
   $('menuSiguiente').disabled = !c.puedeSiguiente;
+  $('menuSiguiente').textContent = c.textoSiguiente || 'Siguiente torneo corto (Clausura)…';
+  // Sin llaves no hay sección «Llaves»: si estaba abierta se pasa a Posiciones.
+  const llavesAbierta = !$('vista-llaves').hidden;
+  if (llavesAbierta && !puedeVer('llaves')) mostrarVista('posiciones');
   renderEquipos();
   renderPartidos();
   renderPosiciones();
   renderLlaves();
-  renderSanciones();
-  renderFicha();
+  renderEstadisticas();
   renderReglas();
+  if (!$('vista-noticias').hidden) renderNoticias();
 }
 
 function mostrarVista(nombre) {
   if (!$('vista-' + nombre)) nombre = 'equipos';
   if (!puedeVer(nombre)) nombre = VISTA_INICIAL_VISITANTE; // el visitante no ve Equipos ni Reglas
-  if (!E.hay) nombre = 'partidos'; // sin campeonato las demás vistas tendrían datos viejos
   document.querySelectorAll('.vista').forEach(v => { v.hidden = v.id !== 'vista-' + nombre; });
   document.querySelectorAll('.navegacion button').forEach(b => {
     b.classList.toggle('activa', b.dataset.vista === nombre);
     b.setAttribute('aria-current', b.dataset.vista === nombre ? 'page' : 'false');
   });
   guardarPreferencia(CLAVE_PESTANA, nombre);
+  if (nombre === 'noticias') renderNoticias(); // las noticias se piden al servicio al abrir la sección
 }
 
 /* ---------------------------------------------------------------- equipos */
@@ -282,7 +296,13 @@ function renderEquipos() {
   $('ayudaEquipos').textContent = iniciado
     ? 'El campeonato ya inició: puede editar nombre, DT y jugadores, pero no agregar equipos nuevos.'
     : 'Registre los equipos (mínimo 2) y pulse «Iniciar campeonato» para generar el fixture automáticamente.';
-  $('gridEquipos').innerHTML = E.equipos.length ? E.equipos.map((e, i) => `
+  renderBarraDivisiones();
+  const divisiones = E.campeonato.divisiones || [];
+  const conDivisiones = divisiones.length > 1;
+  // Antes de iniciar, el administrador mueve cada equipo a su división con un selector en la tarjeta.
+  const moverDivision = e => conDivisiones && !iniciado && !e.retirado ? `<label class="campo campo-division">División
+      <select data-division-equipo="${e.id}">${divisiones.map(d => `<option value="${d.indice}" ${d.indice === e.division ? 'selected' : ''}>${esc(d.nombre)}</option>`).join('')}</select></label>` : '';
+  const tarjeta = e => `
     <article class="tarjeta-equipo vidrio ${e.retirado ? 'retirado' : ''}">
       <div class="escudo" style="--tono:${(e.id * 47) % 360}">${esc(e.nombre.slice(0, 2).toUpperCase())}</div>
       <div class="equipo-datos">
@@ -291,11 +311,48 @@ function renderEquipos() {
         <p class="sutil pequeno">${ICONO.estadio}${esc(e.estadio) || 'Sin estadio'}</p>
       </div>
       <div class="equipo-acciones">
+        ${moverDivision(e)}
         <button class="btn mini" data-editar-equipo="${e.id}">Editar</button>
         ${e.retirado ? '' : `<button class="btn mini peligro" data-quitar-equipo="${e.id}">${iniciado ? 'Retirar' : 'Eliminar'}</button>`}
       </div>
-    </article>`).join('')
-    : vacioHtml('Todavía no hay equipos. Escriba un nombre arriba y pulse «Agregar».');
+    </article>`;
+  if (!E.equipos.length) {
+    $('gridEquipos').innerHTML = vacioHtml('Todavía no hay equipos. Escriba un nombre arriba y pulse «Agregar».');
+    return;
+  }
+  // Liga con divisiones: un bloque por división (Liga A, Liga B...).
+  $('gridEquipos').classList.toggle('por-divisiones', conDivisiones);
+  $('gridEquipos').innerHTML = conDivisiones
+    ? divisiones.map(d => {
+      const equipos = E.equipos.filter(e => e.division === d.indice);
+      return `<section class="bloque-division"><h3>${esc(d.nombre)} <span class="sutil pequeno">${plural(equipos.length, '1 equipo', equipos.length + ' equipos')}</span></h3>
+        <div class="grid-equipos">${equipos.map(tarjeta).join('') || '<p class="sutil">Sin equipos en esta división.</p>'}</div></section>`;
+    }).join('')
+    : E.equipos.map(tarjeta).join('');
+}
+
+/** Barra de divisiones (solo administrador, formato Liga): ver, agregar y quitar divisiones antes de iniciar. */
+function renderBarraDivisiones() {
+  const c = E.campeonato, barra = $('barraDivisiones');
+  barra.hidden = !(puedeEditar() && c.esLiga);
+  if (barra.hidden) return;
+  const divisiones = c.divisiones || [];
+  const bloqueada = c.iniciado;
+  barra.innerHTML = `<div><b>Divisiones</b>
+      <p class="sutil pequeno">${divisiones.length > 1
+        ? `Cada división es una liga aparte; el campeón sale de la ${esc(divisiones[0].nombre)}.${c.ascensos ? ` En la siguiente temporada suben y bajan ${c.ascensos} por división.` : ''}`
+        : 'Liga de una sola división. Agregue divisiones para tener Liga A, Liga B, Liga C…'}${bloqueada ? ' Ya inició: los cambios de división se hacen en la siguiente temporada.' : ''}</p></div>
+    <div class="chips">${divisiones.map(d => `<span class="chip">${esc(d.nombre)} · ${d.equipos}</span>`).join('')}</div>
+    <div class="acciones-divisiones">
+      <button type="button" class="btn mini" data-division-accion="agregar" ${bloqueada || divisiones.length >= c.maximoDivisiones ? 'disabled' : ''}>+ Agregar división</button>
+      <button type="button" class="btn mini fantasma" data-division-accion="quitar" ${bloqueada || divisiones.length <= 1 ? 'disabled' : ''}>Quitar la última</button>
+    </div>`;
+}
+
+async function accionDivision(ruta, cuerpo) {
+  const r = await accion(ruta, cuerpo, { silencioso: true });
+  if (!r.ok) { mensaje('Divisiones', r.error); return; }
+  aviso(r.mensaje || 'Equipo movido de división.');
 }
 
 let equipoEditando = null;
@@ -394,23 +451,48 @@ function renderPartidos() {
   selFase.value = [...selFase.options].some(o => o.value === fase) ? fase : 'todas';
   selEquipo.innerHTML = '<option value="todos">Todos los equipos</option>' + E.equipos.map(e => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
   selEquipo.value = [...selEquipo.options].some(o => o.value === equipo) ? equipo : 'todos';
+  mostrarPestanaPartidos(pestanaPartidos); // marca la pestaña activa y dibuja la lista
+}
+
+/** Pestaña de «Gestionar partidos» (administrador): «previa» o «resultados». Se conserva al redibujar. */
+let pestanaPartidos = 'previa';
+
+function mostrarPestanaPartidos(nombre) {
+  pestanaPartidos = nombre;
+  document.querySelectorAll('[data-pp]').forEach(b => {
+    const activa = b.dataset.pp === nombre;
+    b.classList.toggle('activa', activa);
+    b.setAttribute('aria-selected', String(activa));
+    b.tabIndex = activa ? 0 : -1;
+  });
   dibujarListaPartidos();
 }
 
 function dibujarListaPartidos() {
   const fase = $('filtroFase').value, estado = $('filtroEstado').value, equipo = $('filtroEquipo').value;
-  const lista = E.partidos.filter(p =>
-    (fase === 'todas' || p.fase === Number(fase)) &&
-    (equipo === 'todos' || p.local === Number(equipo) || p.visitante === Number(equipo)) &&
-    (estado === 'todos' || (estado === 'pendientes' && !p.jugado) || (estado === 'jugados' && p.jugado) ||
+  const admin = puedeEditar(), previa = admin && pestanaPartidos === 'previa';
+  // Previa: solo los partidos que todavía no se juegan (el filtro de estado no aplica).
+  $('pestanasPartidos').hidden = !admin;
+  $('filtroEstado').hidden = previa;
+  $('btnRapido').hidden = !admin || previa;
+  $('ayudaPestanaPartidos').hidden = !admin;
+  $('ayudaPestanaPartidos').textContent = previa
+    ? 'Partidos del fixture que todavía no se juegan. Defina fecha, hora, sede, formación y XI titular de cada equipo.'
+    : 'Elija el partido que se jugó (o se está jugando) para cargar el marcador o el W.O., los goles, las tarjetas y los cambios.';
+  const faseYEquipo = p => (fase === 'todas' || p.fase === Number(fase)) &&
+    (equipo === 'todos' || p.local === Number(equipo) || p.visitante === Number(equipo));
+  $('cuentaPrevia').textContent = E.partidos.filter(p => !p.jugado && faseYEquipo(p)).length;
+  const lista = E.partidos.filter(p => faseYEquipo(p) && (previa ? !p.jugado
+    : estado === 'todos' || (estado === 'pendientes' && !p.jugado) || (estado === 'jugados' && p.jugado) ||
       (estado === 'aplazados' && (p.estado === 'APLAZADO' || p.estado === 'SUSPENDIDO'))));
   const cont = $('listaPartidos');
   if (!lista.length) {
-    cont.innerHTML = vacioHtml(E.campeonato.iniciado ? 'No hay partidos con estos filtros.'
-      : 'El fixture se genera automáticamente al pulsar «Iniciar campeonato».');
+    cont.innerHTML = vacioHtml(!E.campeonato.iniciado ? 'El fixture se genera automáticamente al pulsar «Iniciar campeonato».'
+      : previa && !E.partidos.some(p => !p.jugado) ? 'Todos los partidos ya se jugaron.'
+      : previa ? 'No hay partidos por jugar con estos filtros.' : 'No hay partidos con estos filtros.');
     return;
   }
-  const dibujar = cargaRapida ? htmlPartidoRapido : htmlPartido;
+  const dibujar = cargaRapida && !previa ? htmlPartidoRapido : p => htmlPartido(p, previa);
   const bloques = new Map();
   for (const p of lista) {
     const titulo = contextoPartido(p);
@@ -481,7 +563,7 @@ async function guardarRapido(id) {
   if (!r.ok) {
     if (r.codigo === 'PENALES') {
       // Un empate en eliminatoria necesita los penales: se completan en el detalle.
-      abrirPartido(id);
+      abrirPartido(id, false);
       $('ptGL').value = datos.gl; $('ptGV').value = datos.gv;
       $('ptEstado').value = 'JUGADO';
       $('ptHayPenales').checked = true;
@@ -506,7 +588,7 @@ function alternarCargaRapida() {
   dibujarListaPartidos();
 }
 
-const contextoPartido = p => [E.fases[p.fase].nombre, p.grupo ? 'Grupo ' + p.grupo : '', p.nombreRonda].filter(Boolean).join(' · ');
+const contextoPartido = p => [E.fases[p.fase].nombre, p.grupoNombre || (p.grupo ? 'Grupo ' + p.grupo : ''), p.nombreRonda].filter(Boolean).join(' · ');
 
 /** Resumen corto de lo que pasó en el partido: «2 cambios · 3 amarillas · 1 roja». */
 function incidenciasTexto(p) {
@@ -517,11 +599,24 @@ function incidenciasTexto(p) {
 
 const conMarcador = p => p.jugado || p.estado === 'EN_JUEGO';
 
-function htmlPartido(p) {
+/** Fichas de la previa: formación y XI de cada equipo («4-4-2 · XI 11/11» o «Sin formación · XI 3/11»). */
+function fichasPreviaHtml(p) {
+  let todoListo = true;
+  const fichas = [[p.local, p.titularesLocal, p.formacionLocal], [p.visitante, p.titularesVisitante, p.formacionVisitante]].map(([idEq, xi, formacion]) => {
+    const necesarios = necesariosXI(idEq), elegidos = (xi || []).length;
+    const listo = necesarios > 0 && elegidos === necesarios;
+    todoListo = todoListo && listo && !!formacion;
+    return `<span class="etiqueta ${listo ? 'jugado' : 'pendiente'}">${esc(formacion || 'Sin formación')} · XI ${elegidos}/${necesarios}</span>`;
+  }).join('');
+  return `<span class="fichas-previa">${fichas}<small class="sutil">${todoListo ? 'Previa lista' : 'Previa incompleta'}</small></span>`;
+}
+
+function htmlPartido(p, previa = false) {
   const marcador = conMarcador(p)
     ? `<b>${p.gl}</b><i>:</i><b>${p.gv}</b>${p.penales ? `<small>${p.pl}-${p.pv} pen</small>` : ''}` : '<span class="vs">VS</span>';
-  const incidencias = conMarcador(p) ? incidenciasTexto(p) : '';
-  const titulo = puedeEditar() ? 'Registrar o editar el partido' : 'Ver cara a cara, racha y alineaciones';
+  const incidencias = conMarcador(p) && !previa ? incidenciasTexto(p) : '';
+  const titulo = !puedeEditar() ? 'Ver la previa, el cara a cara, la racha y las alineaciones'
+    : previa ? 'Preparar la previa: fecha, sede, formación y XI' : 'Registrar o editar el resultado';
   return `<button class="partido vidrio ${p.jugado ? 'jugado' : ''} ${p.estado === 'EN_JUEGO' ? 'en-vivo' : ''}" data-partido="${p.id}" title="${titulo}">
       ${metaPartido(p)}
       <span class="local ${p.ganador === p.local ? 'ganador' : ''}">${esc(p.localNombre)}</span>
@@ -529,6 +624,7 @@ function htmlPartido(p) {
       <span class="visitante ${p.ganador === p.visitante ? 'ganador' : ''}">${esc(p.visitanteNombre)}</span>
       ${p.sede || p.obs ? `<span class="obs">${esc([p.sede, p.obs].filter(Boolean).join(' · '))}</span>` : ''}
       ${incidencias ? `<span class="incidencias">${esc(incidencias)}</span>` : ''}
+      ${previa ? fichasPreviaHtml(p) : ''}
     </button>`;
 }
 
@@ -539,26 +635,90 @@ let cambiosTemp = [];
 let titularesTemp = new Map();
 const TITULARES = 11;
 
-/** Administrador: editor del partido. Visitante: detalle estilo Flashscore (cualquier estado). */
+/** Administrador: editor de la previa o del resultado (según la pestaña). Visitante: detalle estilo Flashscore. */
 function abrirSegunRol(id) {
-  if (puedeEditar()) abrirPartido(id);
-  else abrirDetalle(id);
+  if (!puedeEditar()) abrirDetalle(id);
+  else if (pestanaPartidos === 'previa') abrirPartido(id, true);
+  else abrirResultado(id);
 }
 
-function abrirPartido(id) {
+/** Lo que le falta a la previa: XI completo y formación de cada equipo, fecha y hora, y sede. [] = completa. */
+function faltantesPrevia(p) {
+  const lados = [[p.local, p.localNombre, p.titularesLocal, p.formacionLocal], [p.visitante, p.visitanteNombre, p.titularesVisitante, p.formacionVisitante]];
+  const falta = [];
+  for (const [idEq, nombre, xi] of lados) {
+    const necesarios = necesariosXI(idEq);
+    if (necesarios > 0 && (xi || []).length !== necesarios) falta.push('el XI titular de ' + nombre);
+  }
+  for (const [, nombre, , formacion] of lados) if (!formacion) falta.push('la formación de ' + nombre);
+  if (!fechaDefinida(p) || !p.hora) falta.push('la fecha y la hora');
+  if (!String(p.sede || '').trim()) falta.push('la sede');
+  return falta;
+}
+
+/** Nada de la previa: ni XI, ni formación, ni fecha. */
+const previaVacia = p => !(p.titularesLocal || []).length && !(p.titularesVisitante || []).length
+  && !p.formacionLocal && !p.formacionVisitante && !fechaDefinida(p);
+
+/** «a, b y c» */
+const enumerar = partes => partes.length <= 1 ? partes.join('') : partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1];
+
+/**
+ * «Registrar resultados» de un partido sin marcador cuya previa no está completa: se advierte antes de
+ * abrir el editor. «Ir a registrar previa» lleva a la pestaña Previa con ese partido abierto; «Continuar de
+ * todas formas» abre el resultado (goles y tarjetas usan la plantilla completa). Cerrar con Esc no abre nada.
+ */
+async function abrirResultado(id) {
+  const p = E.partidos.find(x => x.id === id);
+  if (!p) return;
+  const falta = conMarcador(p) ? [] : faltantesPrevia(p);
+  if (falta.length) {
+    const texto = previaVacia(p)
+      ? 'Aún no ha registrado la previa de este partido (alineaciones, formación y datos logísticos). ¿Está seguro de que desea registrar el resultado directamente?'
+      : `La previa de este partido está incompleta: falta ${enumerar(falta)}. ¿Está seguro de que desea registrar el resultado directamente?`;
+    const eleccion = await mensaje('⚠ Atención: previa sin registrar', texto,
+      { confirmar: true, textoSi: 'Ir a registrar previa', textoNo: 'Continuar de todas formas', advertencia: true });
+    if (eleccion === null) return;
+    if (eleccion) {
+      mostrarPestanaPartidos('previa');
+      abrirPartido(id, true);
+      return;
+    }
+  }
+  abrirPartido(id, false);
+}
+
+/** Paso del editor abierto: true = «Previa del partido», false = «Registrar resultados». */
+let editandoPrevia = false;
+
+const TEXTO_ESTADO_EDITOR = { JUGADO: 'Jugado (resultado final)', EN_JUEGO: 'En juego (en vivo)', PENDIENTE: 'Pendiente', APLAZADO: 'Aplazado', SUSPENDIDO: 'Suspendido' };
+
+/**
+ * Editor del partido en dos pasos:
+ *  - previa = true: fecha, hora, sede, formación y XI titular (lo que se decide antes del pitazo).
+ *  - previa = false: marcador o W.O., goles con asistencia, tarjetas y cambios. El XI de la previa ya viene cargado.
+ * Los dos envían el partido completo con la misma acción «partido»: lo que no se muestra se reenvía tal
+ * como estaba, así ninguno borra lo que guardó el otro. Sin indicar el paso: un partido sin jugar abre su previa.
+ */
+function abrirPartido(id, previa) {
   const p = E.partidos.find(x => x.id === id);
   if (!p || !puedeEditar()) return;
   partidoEditando = p;
+  editandoPrevia = previa == null ? !conMarcador(p) : previa;
+  // XI de la previa: se carga primero porque las listas de goles, tarjetas y cambios lo usan.
+  titularesTemp = new Map([[p.local, new Set(p.titularesLocal || [])], [p.visitante, new Set(p.titularesVisitante || [])]]);
+  const claves = !editandoPrevia ? ['JUGADO', 'EN_JUEGO'] : p.estado === 'EN_JUEGO' ? ['EN_JUEGO'] : ['PENDIENTE', 'APLAZADO', 'SUSPENDIDO'];
+  $('ptEstado').innerHTML = claves.map(k => `<option value="${k}">${TEXTO_ESTADO_EDITOR[k]}</option>`).join('');
   // Formación táctica de cada entrenador: se puede elegir en cualquier estado del partido.
   $('fmLocalNombre').textContent = p.localNombre;
   $('fmVisitanteNombre').textContent = p.visitanteNombre;
   $('fmLocal').value = p.formacionLocal || '';
   $('fmVisitante').value = p.formacionVisitante || '';
-  $('ptContexto').textContent = contextoPartido(p);
+  $('ptContexto').textContent = (editandoPrevia ? 'Previa del partido · ' : 'Registrar resultado · ') + contextoPartido(p);
   $('ptLocal').textContent = p.localNombre;
   $('ptVisitante').textContent = p.visitanteNombre;
   // Un partido sin jugar abre con el marcador vacío: así nunca se guarda un 0:0 que no ocurrió.
-  $('ptEstado').value = p.estado;
+  $('ptEstado').value = claves.includes(p.estado) ? p.estado : claves[0];
   // Un partido «En juego» conserva el marcador que lleva.
   $('ptGL').value = conMarcador(p) ? p.gl : '';
   $('ptGV').value = conMarcador(p) ? p.gv : '';
@@ -575,9 +735,14 @@ function abrirPartido(id) {
   $('tjMinuto').value = '';
   llenarJugadoresTarjeta();
   renderTarjetasTemp();
+  golesTemp = (p.goles || []).map(g => Object.assign({}, g));
+  $('glEquipo').innerHTML = $('tjEquipo').innerHTML;
+  $('glEnContra').checked = false;
+  $('glMinuto').value = '';
+  llenarJugadoresGol();
+  renderGolesTemp();
   cambiosTemp = (p.cambios || []).map(x => Object.assign({}, x));
-  titularesTemp = new Map([[p.local, new Set(p.titularesLocal || [])], [p.visitante, new Set(p.titularesVisitante || [])]]);
-  renderXI();
+  renderXI(true); // al abrir el partido se construye la lista; luego solo se actualiza
   $('cbEquipo').innerHTML = $('tjEquipo').innerHTML;
   $('cbMinuto').value = '';
   llenarJugadoresCambio();
@@ -590,24 +755,64 @@ function abrirPartido(id) {
   $('ptHora').value = p.hora;
   $('ptSede').value = p.sede;
   $('ptObs').value = p.obs;
-  $('ptPenales').hidden = !(p.eliminatorio && p.pierna !== 1);
+  $('ptPenales').hidden = editandoPrevia || !(p.eliminatorio && p.pierna !== 1);
   $('ptError').hidden = true;
+  // Cada paso muestra solo lo suyo.
+  $('ptLed').hidden = editandoPrevia;
+  $('ptVs').hidden = !editandoPrevia;
+  $('ptAyudaPrevia').hidden = !editandoPrevia;
+  $('ptFilaEstado').hidden = editandoPrevia && p.estado === 'EN_JUEGO';
+  $('ptProgramacion').hidden = !editandoPrevia;
+  ['ptGoles', 'ptTarjetas', 'ptCambios', 'ptResumenPrevia'].forEach(x => { $(x).hidden = editandoPrevia; });
+  ['ptWoLocal', 'ptWoVisitante'].forEach(x => { $(x).hidden = editandoPrevia; });
+  if (editandoPrevia) $('ptBorrar').hidden = true;
+  // En «Registrar resultados» la alineación de la previa queda plegada si ya está completa.
+  const xiCompleto = [p.local, p.visitante].every(xiListo);
+  plegarAlineacion(!editandoPrevia && xiCompleto);
+  $('ptSinXI').hidden = editandoPrevia || xiCompleto;
+  actualizarResumenPrevia();
   actualizarFormPartido();
   $('dlgPartido').showModal();
 }
 
+/** El XI de un equipo está completo (11, o toda la plantilla si tiene menos). */
+const xiListo = idEq => necesariosXI(idEq) > 0 && titularesTemp.get(idEq).size === necesariosXI(idEq);
+
+function plegarAlineacion(plegada) {
+  $('ptAlineacion').hidden = plegada;
+  $('ptPlegar').textContent = plegada ? 'Corregir alineación' : 'Ocultar';
+  $('ptPlegar').setAttribute('aria-expanded', String(!plegada));
+}
+
+/** «Local: 4-4-2 · XI 11/11» y «Visitante: sin formación · XI 0/11», uno por línea. */
+function actualizarResumenPrevia() {
+  const p = partidoEditando;
+  if (!p) return;
+  $('ptResumenTexto').textContent = [[p.local, p.localNombre, 'fmLocal'], [p.visitante, p.visitanteNombre, 'fmVisitante']]
+    .map(([idEq, nombre, sel]) => {
+      const necesarios = necesariosXI(idEq);
+      return `${nombre}: ${$(sel).value || 'sin formación'} · XI ${necesarios ? titularesTemp.get(idEq).size + '/' + necesarios : 'sin plantilla'}`;
+    }).join('\n'); // un equipo por línea (.resumen-previa p usa white-space: pre-line)
+}
+
+/** Para goles y tarjetas: primero los titulares de la previa (marcados), después los suplentes. */
+function convocadosDe(idEq) {
+  const xi = titularesTemp.get(idEq) || new Set();
+  return plantillaDe(idEq).slice().sort((a, b) => (xi.has(a.id) ? 0 : 1) - (xi.has(b.id) ? 0 : 1));
+}
+const textoConvocado = (idEq, j) => `#${j.dorsal} ${esc(j.nombre)}${j.posicion ? ' · ' + esc(j.posicion) : ''}${(titularesTemp.get(idEq) || new Set()).has(j.id) ? ' · titular' : ''}`;
+
 function actualizarFormPartido() {
   const estado = $('ptEstado').value;
   const jugado = estado === 'JUGADO', enJuego = estado === 'EN_JUEGO';
-  // En un partido pendiente se puede escribir el marcador directamente; al hacerlo pasa a «Jugado».
-  ['ptGL', 'ptGV'].forEach(id => { $(id).disabled = !(jugado || enJuego || estado === 'PENDIENTE'); });
+  ['ptGL', 'ptGV'].forEach(id => { $(id).disabled = !(jugado || enJuego); });
   $('ptHayPenales').disabled = !jugado;
-  $('ptGuardar').textContent = enJuego ? 'Guardar en vivo' : !jugado ? 'Guardar'
+  $('ptGuardar').textContent = editandoPrevia ? 'Guardar previa' : enJuego ? 'Guardar en vivo'
     : partidoEditando && partidoEditando.jugado ? 'Guardar resultado' : 'Registrar resultado';
   // Tarjetas y cambios se anotan mientras se juega («En juego») o después, con el resultado final.
   $('ptTarjetas').disabled = !(jugado || enJuego);
+  $('ptGoles').disabled = !(jugado || enJuego);
   $('ptCambios').disabled = !(jugado || enJuego);
-  $('ptXI').disabled = !(jugado || enJuego);
   $('tjFilaFechas').hidden = $('tjTipo').value !== 'ROJA';
   const conPenales = jugado && $('ptHayPenales').checked;
   $('ptPL').disabled = !conPenales;
@@ -615,10 +820,9 @@ function actualizarFormPartido() {
 }
 
 function llenarJugadoresTarjeta() {
-  const equipo = equipoPorId(Number($('tjEquipo').value));
-  const jugadores = equipo ? equipo.jugadores.filter(j => j.id).sort((a, b) => a.dorsal - b.dorsal) : [];
+  const idEq = Number($('tjEquipo').value), jugadores = convocadosDe(idEq);
   $('tjJugador').innerHTML = jugadores.length
-    ? jugadores.map(j => `<option value="${j.id}">#${j.dorsal} ${esc(j.nombre)}</option>`).join('')
+    ? jugadores.map(j => `<option value="${j.id}">${textoConvocado(idEq, j)}</option>`).join('')
     : '<option value="">(sin jugadores registrados)</option>';
 }
 
@@ -665,6 +869,59 @@ async function agregarTarjeta() {
   $('tjAgregar').focus();
 }
 
+/* ---- goles por jugador (alimentan goleadores y asistencias) ---- */
+
+let golesTemp = [];
+
+function llenarJugadoresGol() {
+  const p = partidoEditando, idEq = Number($('glEquipo').value), contra = $('glEnContra').checked;
+  // Un autogol lo marca un jugador del rival; sin asistencia.
+  const idAutor = contra ? (idEq === p.local ? p.visitante : p.local) : idEq;
+  const autores = convocadosDe(idAutor);
+  const opcion = idEquipo => j => `<option value="${j.id}">${textoConvocado(idEquipo, j)}</option>`;
+  $('glAutor').innerHTML = autores.length ? autores.map(opcion(idAutor)).join('') : '<option value="">(sin jugadores registrados)</option>';
+  $('glAsistente').innerHTML = '<option value="0">(sin asistencia)</option>' + (contra ? '' : convocadosDe(idEq).map(opcion(idEq)).join(''));
+  $('glAsistente').disabled = contra;
+}
+
+function renderGolesTemp() {
+  golesTemp.sort(porMinuto);
+  $('glLista').innerHTML = golesTemp.map((g, i) => {
+    const equipo = equipoPorId(g.equipo);
+    return `<li><span>${g.minuto ? `<b class="minuto">${minutoTexto(g.minuto)}</b>` : ''}${ICONO.gol}#${g.autorDorsal} ${esc(g.autorNombre)}${g.enContra ? ' (en contra)' : ''}
+      ${g.asistente ? ` · asistencia de #${g.asistenteDorsal} ${esc(g.asistenteNombre)}` : ''} · ${esc(equipo ? equipo.nombre : '')}</span>
+      <button type="button" class="btn mini peligro" data-quitar-gol="${i}">Quitar</button></li>`;
+  }).join('') || '<li class="sutil"><span>Sin goles registrados por jugador.</span></li>';
+}
+
+function agregarGol() {
+  const p = partidoEditando, idEq = Number($('glEquipo').value), contra = $('glEnContra').checked;
+  const equipoAutor = equipoPorId(contra ? (idEq === p.local ? p.visitante : p.local) : idEq);
+  const autor = equipoAutor && equipoAutor.jugadores.find(j => j.id === Number($('glAutor').value));
+  if (!autor) { errorPartido('Ese equipo no tiene jugadores registrados. Agréguelos en la sección Equipos.'); return; }
+  const minuto = $('glMinuto').value.trim() === '' ? 0 : parseInt($('glMinuto').value, 10);
+  if (!(minuto >= 0 && minuto <= 130)) { errorPartido('El minuto del gol debe estar entre 1 y 130 (o vacío si no se sabe).'); $('glMinuto').focus(); return; }
+  // No puede haber más goles registrados que los del marcador escrito arriba.
+  const campo = idEq === p.local ? 'ptGL' : 'ptGV';
+  const enMarcador = parseInt($(campo).value, 10) || 0, registrados = golesTemp.filter(g => g.equipo === idEq).length;
+  if (registrados >= enMarcador) {
+    const nombre = idEq === p.local ? p.localNombre : p.visitanteNombre;
+    errorPartido(`${nombre} tiene ${plural(enMarcador, '1 gol', enMarcador + ' goles')} en el marcador y ya ${plural(registrados, 'hay 1 registrado', `hay ${registrados} registrados`)}. Suba primero el marcador.`);
+    $(campo).focus();
+    return;
+  }
+  const asistente = contra ? null : (equipoPorId(idEq).jugadores.find(j => j.id === Number($('glAsistente').value)) || null);
+  if (asistente && asistente.id === autor.id) { errorPartido(`${autor.nombre} no puede darse la asistencia a sí mismo.`); return; }
+  errorPartido('');
+  golesTemp.push({
+    equipo: idEq, minuto, enContra: contra, autor: autor.id, autorNombre: autor.nombre, autorDorsal: autor.dorsal,
+    asistente: asistente ? asistente.id : 0, asistenteNombre: asistente ? asistente.nombre : '', asistenteDorsal: asistente ? asistente.dorsal : 0
+  });
+  renderGolesTemp();
+  $('glMinuto').value = '';
+  $('glMinuto').focus();
+}
+
 /* ---- cambios del partido ---- */
 
 /** Quién ya salió y quién ya entró en los cambios anotados de un equipo. */
@@ -680,9 +937,17 @@ const plantillaDe = idEquipo => {
 /** Cuántos titulares necesita un equipo: 11, o toda la plantilla si tiene menos. */
 const necesariosXI = idEquipo => Math.min(TITULARES, plantillaDe(idEquipo).length);
 
-function renderXI() {
+/**
+ * XI inicial. La lista se construye UNA vez al abrir el partido (construir = true); después solo
+ * se actualizan las casillas que ya existen. Antes se volvía a escribir todo con innerHTML en cada
+ * clic: la casilla con el foco desaparecía y la lista (que tiene su propio scroll) volvía arriba.
+ */
+function renderXI(construir = false) {
   const p = partidoEditando;
-  $('xiEquipos').innerHTML = [[p.local, p.localNombre], [p.visitante, p.visitanteNombre]].map(([idEq, nombre]) => {
+  const cont = $('xiEquipos');
+  if (!construir && cont.dataset.partido === String(p.id)) { actualizarXI(); return; }
+  cont.dataset.partido = String(p.id);
+  cont.innerHTML = [[p.local, p.localNombre], [p.visitante, p.visitanteNombre]].map(([idEq, nombre]) => {
     const elegidos = titularesTemp.get(idEq), jugadores = plantillaDe(idEq), necesarios = necesariosXI(idEq);
     const usados = new Set(cambiosTemp.filter(x => x.equipo === idEq).map(x => x.sale));
     const completo = elegidos.size === necesarios;
@@ -701,6 +966,30 @@ function renderXI() {
         <button type="button" class="btn mini fantasma" data-xi-limpiar="${idEq}" ${elegidos.size && !usados.size ? '' : 'disabled'}>Limpiar</button></div>
       <div class="xi-lista">${lista}</div></div>`;
   }).join('');
+}
+
+/** Pone cada casilla, el contador y los botones en su estado actual sin crear ni quitar elementos. */
+function actualizarXI() {
+  const p = partidoEditando;
+  for (const idEq of [p.local, p.visitante]) {
+    const elegidos = titularesTemp.get(idEq), necesarios = necesariosXI(idEq);
+    const usados = new Set(cambiosTemp.filter(x => x.equipo === idEq).map(x => x.sale));
+    const completo = elegidos.size === necesarios;
+    document.querySelectorAll(`#xiEquipos [data-xi-equipo="${idEq}"]`).forEach(caja => {
+      const id = Number(caja.value), marcado = elegidos.has(id);
+      const suspendido = p.suspendidos.some(t => t.jugador === id);
+      caja.checked = marcado;
+      // No se puede desmarcar a un titular que ya salió en un cambio, ni marcar más de los necesarios.
+      caja.disabled = (marcado && usados.has(id)) || (!marcado && (completo || suspendido));
+      caja.closest('.xi-jugador').classList.toggle('titular', marcado);
+    });
+    const cuenta = document.querySelector(`#xiEquipos [data-xi-rapido="${idEq}"]`).previousElementSibling;
+    cuenta.textContent = `${elegidos.size}/${necesarios}`;
+    cuenta.classList.toggle('jugado', completo);
+    cuenta.classList.toggle('pendiente', !completo);
+    document.querySelector(`#xiEquipos [data-xi-limpiar="${idEq}"]`).disabled = !(elegidos.size && !usados.size);
+  }
+  actualizarResumenPrevia();
 }
 
 function alMarcarTitular(e) {
@@ -810,7 +1099,7 @@ function golesCompletos() {
   if (!faltaLocal && !faltaVisitante) return true;
   marcarGolesInvalidos(true);
   errorPartido(faltaLocal && faltaVisitante
-    ? 'Escriba los goles de los dos equipos para registrar el resultado, o cambie el estado a «Pendiente».'
+    ? 'Escriba los goles de los dos equipos para registrar el resultado (o use «En juego» si todavía se está jugando).'
     : `Falta el marcador de ${faltaLocal ? partidoEditando.localNombre : partidoEditando.visitanteNombre}. Escriba 0 si no marcó goles.`);
   $(faltaLocal ? 'ptGL' : 'ptGV').focus();
   return false;
@@ -822,6 +1111,7 @@ function datosFormPartido() {
     estado: $('ptEstado').value, gl: entero('ptGL'), gv: entero('ptGV'),
     pl: penales ? entero('ptPL') : SIN_PENALES, pv: penales ? entero('ptPV') : SIN_PENALES,
     tarjetas: tarjetasTemp.map(t => Object.assign({}, t)),
+    goles: golesTemp.map(g => Object.assign({}, g)),
     cambios: cambiosTemp.map(x => Object.assign({}, x)),
     titularesLocal: [...titularesTemp.get(partidoEditando.local)],
     titularesVisitante: [...titularesTemp.get(partidoEditando.visitante)],
@@ -845,7 +1135,11 @@ function xiCompletos() {
 
 async function guardarPartido(accionPartido) {
   if (accionPartido === 'guardar' && !golesCompletos()) return;
-  if (accionPartido === 'guardar' && ['JUGADO', 'EN_JUEGO'].includes($('ptEstado').value) && !xiCompletos()) return;
+  // Un XI empezado tiene que quedar completo (o vacío), en la previa o con el resultado.
+  if (accionPartido === 'guardar' && !xiCompletos()) {
+    if ($('ptAlineacion').hidden) plegarAlineacion(false);
+    return;
+  }
   const cuerpo = { id: partidoEditando.id, datos: datosFormPartido(), accion: accionPartido, confirmado: false };
   let r = await accion('partido', cuerpo, { silencioso: true });
   if (!r.ok && r.codigo === 'CONFIRMAR') {
@@ -864,7 +1158,7 @@ async function guardarPartido(accionPartido) {
     return;
   }
   if ($('dlgPartido').open) $('dlgPartido').close();
-  aviso('Partido guardado.');
+  aviso(editandoPrevia ? 'Previa guardada: el visitante ya la ve en el detalle del partido.' : 'Partido guardado.');
 }
 
 /* ---------------------------------------------------------------- posiciones */
@@ -880,6 +1174,7 @@ function dibujarTabla() {
   const t = E.tablas[Number($('selectorTabla').value) || 0];
   $('tablaPosiciones').innerHTML = t.filas.length ? t.filas.map((f, i) => {
     let clase = i < t.directos ? 'clasifica' : i < t.directos + t.repechaje ? 'repechaje' : '';
+    if (t.descenso && i >= t.filas.length - t.descenso) clase += ' desciende'; // liga con divisiones
     if (i === 0 && f.pj > 0) clase += ' lider';
     return `<tr class="${clase}"><td class="num"><span class="pos">${i + 1}</span></td><th scope="row"><b>${esc(f.nombre)}</b>${f.retirado ? ' <span class="etiqueta retirado">retirado</span>' : ''}</th>
       <td class="num">${f.pj}</td><td class="num extra">${f.g}</td><td class="num extra">${f.e}</td><td class="num extra">${f.p}</td>
@@ -887,7 +1182,8 @@ function dibujarTabla() {
       <td class="num extra">${f.ta}</td><td class="num extra">${f.tr}</td><td class="num puntos">${f.pts}</td></tr>`;
   }).join('') : '<tr><td colspan="12" class="vacia">Sin equipos.</td></tr>';
   let leyenda = E.leyenda;
-  if (t.directos) leyenda += ' Verde: clasifica.';
+  if (t.directos) leyenda += t.division ? ' Verde: asciende.' : ' Verde: clasifica.';
+  if (t.descenso) leyenda += ' Rojo: desciende.';
   if (t.repechaje) leyenda += ' Ámbar: repechaje.';
   if (t.filas.length && t.filas[0].pj > 0) leyenda += ' Dorado: líder.';
   $('leyendaPosiciones').textContent = leyenda;
@@ -910,7 +1206,59 @@ function renderLlaves() {
   $('contenedorLlaves').innerHTML = html;
 }
 
-/* ---------------------------------------------------------------- sanciones */
+/* ---------------------------------------------------------------- estadísticas globales del campeonato */
+
+let pestanaEstadisticas = 'goleadores';
+
+/**
+ * Estadísticas de TODO el campeonato: goleadores, asistencias, valla menos vencida y juego limpio.
+ * Las de un partido (goles, cambios y tarjetas minuto a minuto) están en su detalle, pestaña «Resumen».
+ * Administrador: «Corregir» abre el editor del partido. Visitante: solo lectura («Ver partido» abre el detalle).
+ */
+function renderEstadisticas() {
+  const est = E.estadisticas || { goleadores: [], asistidores: [], goles: [], golesSinAutor: 0, valla: [], fairPlay: [] };
+  const admin = puedeEditar();
+  $('ayudaEstadisticas').textContent = admin
+    ? 'Datos de todo el campeonato. Use «Corregir» en los registros de goles y tarjetas para abrir su partido.'
+    : 'Datos de todo el campeonato. Las estadísticas de cada partido están en su detalle: tóquelo en Partidos.';
+  document.querySelectorAll('[data-est]').forEach(b => {
+    const activa = b.dataset.est === pestanaEstadisticas;
+    b.classList.toggle('activa', activa);
+    b.setAttribute('aria-selected', String(activa));
+  });
+  document.querySelectorAll('.panel-estadistica').forEach(panel => { panel.hidden = panel.id !== 'est-' + pestanaEstadisticas; });
+  const jugador = f => `<span class="dorsal">${f.dorsal}</span> ${esc(f.nombre)}`;
+  const vacia = (columnas, texto) => `<tr><td colspan="${columnas}" class="vacia">${texto}</td></tr>`;
+  const pos = i => `<td class="num"><span class="pos">${i + 1}</span></td>`;
+  const abrir = id => `<button type="button" class="btn mini fantasma" data-abrir-partido="${id}">${admin ? 'Corregir' : 'Ver partido'}</button>`;
+
+  $('tablaGoleadores').innerHTML = est.goleadores.map((f, i) => `<tr>${pos(i)}<th scope="row">${jugador(f)}</th>
+      <td>${esc(f.equipoNombre)}</td><td class="num puntos">${f.goles}</td><td class="num">${f.asistencias}</td></tr>`).join('')
+    || vacia(5, 'Todavía no hay goles con autor. Se registran al editar un partido jugado.');
+  const sinAutor = est.golesSinAutor;
+  $('golesSinAutor').textContent = sinAutor > 0
+    ? `${sinAutor === 1 ? '1 gol del marcador todavía no tiene' : sinAutor + ' goles del marcador todavía no tienen'} autor registrado${admin ? ': regístrelos en el editor del partido.' : '.'}` : '';
+  $('tablaRegistroGoles').innerHTML = est.goles.map(g => `<tr>
+      <td data-label="Partido">${esc(g.partidoTexto)}${g.ronda ? `<br><span class="sutil pequeno">${esc(g.ronda)}</span>` : ''}</td>
+      <td data-label="Minuto" class="num">${g.minuto ? minutoTexto(g.minuto) : '–'}</td><td data-label="Equipo">${esc(g.equipoNombre)}</td>
+      <td data-label="Gol">#${g.autorDorsal} ${esc(g.autorNombre)}${g.enContra ? ' <span class="sutil">(en contra)</span>' : ''}</td>
+      <td data-label="Asistencia">${g.asistente ? `#${g.asistenteDorsal} ${esc(g.asistenteNombre)}` : '—'}</td>
+      <td class="acciones-fila">${abrir(g.partido)}</td></tr>`).join('') || vacia(6, 'Sin goles registrados.');
+
+  $('tablaAsistencias').innerHTML = est.asistidores.map((f, i) => `<tr>${pos(i)}<th scope="row">${jugador(f)}</th>
+      <td>${esc(f.equipoNombre)}</td><td class="num puntos">${f.asistencias}</td><td class="num">${f.goles}</td></tr>`).join('')
+    || vacia(5, 'Todavía no hay asistencias registradas. Se anotan junto con cada gol.');
+
+  $('tablaValla').innerHTML = est.valla.map((f, i) => `<tr>${pos(i)}<th scope="row"><b>${esc(f.nombre)}</b></th>
+      <td class="num">${f.pj}</td><td class="num">${f.gc}</td><td class="num puntos">${f.promedio}</td><td class="num">${f.invictas}</td></tr>`).join('')
+    || vacia(6, 'Todavía no hay partidos jugados.');
+
+  $('tablaFairPlay').innerHTML = est.fairPlay.map((f, i) => `<tr>${pos(i)}<th scope="row"><b>${esc(f.nombre)}</b></th>
+      <td class="num">${f.pj}</td><td class="num">${f.ta}</td><td class="num">${f.tr}</td><td class="num">${f.puntos}</td><td class="num puntos">${f.promedio}</td></tr>`).join('')
+    || vacia(7, 'Todavía no hay partidos jugados.');
+
+  renderSanciones();
+}
 
 function renderSanciones() {
   const filtro = $('filtroSanciones').value, s = E.sanciones;
@@ -923,62 +1271,32 @@ function renderSanciones() {
     return `<tr><td data-label="Partido">${esc(r.partido)}<br><span class="sutil pequeno">${esc(r.ronda)}</span></td>
       <td data-label="Fecha">${esc(fechaTexto(r))}</td><td data-label="Equipo">${esc(r.equipo)}</td>
       <td data-label="Jugador">#${r.dorsal} ${esc(r.jugador)}</td><td data-label="Tarjeta">${tarjetaHtml(r.tipo, roja ? 'Roja' : 'Amarilla')}</td>
-      <td data-label="Fechas" class="num">${roja ? r.fechas : '—'}</td><td data-label="Estado">${estado}</td></tr>`;
-  }).join('') : '<tr><td colspan="7" class="vacia">No hay tarjetas registradas. Se agregan al editar un partido.</td></tr>';
+      <td data-label="Fechas" class="num">${roja ? r.fechas : '—'}</td><td data-label="Estado">${estado}</td>
+      <td class="acciones-fila"><button type="button" class="btn mini fantasma" data-abrir-partido="${r.idPartido}">${puedeEditar() ? 'Corregir' : 'Ver partido'}</button></td></tr>`;
+  }).join('') : '<tr><td colspan="8" class="vacia">No hay tarjetas registradas. Se agregan al editar un partido.</td></tr>';
 }
 
-/* ---------------------------------------------------------------- ficha del partido */
+/* ---------------------------------------------------------------- resumen de un partido (pestaña del detalle) */
 
-let fichaElegida = null;
-
-function renderFicha() {
-  const sel = $('fichaPartido');
-  const conDatos = E.partidos.filter(conMarcador);
-  if (!conDatos.length) {
-    sel.hidden = true;
-    $('fichaContenido').innerHTML = vacioHtml('Todavía no hay partidos jugados ni en juego. Al registrar un resultado, sus cambios y tarjetas aparecen aquí.');
-    return;
-  }
-  sel.hidden = false;
-  sel.innerHTML = conDatos.map(p => `<option value="${p.id}">${p.estado === 'EN_JUEGO' ? 'En juego · ' : ''}${esc(p.localNombre)} ${p.gl}-${p.gv} ${esc(p.visitanteNombre)} · ${esc(p.nombreRonda || contextoPartido(p))}</option>`).join('');
-  // Por defecto, el partido en juego o el último jugado.
-  if (!conDatos.some(p => p.id === fichaElegida)) {
-    const vivo = conDatos.find(p => p.estado === 'EN_JUEGO');
-    fichaElegida = (vivo || conDatos[conDatos.length - 1]).id;
-  }
-  sel.value = String(fichaElegida);
-  dibujarFicha(E.partidos.find(p => p.id === fichaElegida));
+/** Fila «2  Cambios  0» con una barra a cada lado, como en las transmisiones. */
+function cifraDueloHtml(titulo, l, v) {
+  const total = l + v, pl = total ? Math.round(l / total * 100) : 0;
+  return `<div class="cifra-duelo"><b>${l}</b><span>${titulo}</span><b>${v}</b>
+    <div class="barra-duelo" aria-hidden="true"><i style="width:${pl}%"></i><i style="width:${total ? 100 - pl : 0}%"></i></div></div>`;
 }
 
-/** XI inicial de cada equipo con quién salió y quién entró (y en qué minuto). */
-function alineacionesHtml(p) {
-  const cambios = p.cambios || [];
-  if (!(p.titularesLocal || []).length && !(p.titularesVisitante || []).length) return '';
-  const columna = (idEq, nombre, ids) => {
-    const plantilla = plantillaDe(idEq);
-    const jugador = id => plantilla.find(j => j.id === id);
-    const filas = ids.map(jugador).filter(Boolean).sort((a, b) => a.dorsal - b.dorsal).map(j => {
-      const salio = cambios.find(x => x.sale === j.id);
-      return `<li><b>${j.dorsal}</b><span>${esc(j.nombre)}<small>${esc(j.posicion || '')}</small></span>${salio ? `<em class="sale-txt">${ICONO.cambio}${minutoTexto(salio.minuto)}</em>` : ''}</li>`;
-    }).join('');
-    const entraron = cambios.filter(x => x.equipo === idEq).map(x => `<li class="entro"><b>${x.entraDorsal}</b><span>${esc(x.entraNombre)}<small>por #${x.saleDorsal}</small></span><em class="entra-txt">${minutoTexto(x.minuto)}</em></li>`).join('');
-    return `<div class="alineacion"><h4>${esc(nombre)}</h4>${ids.length ? `<ol>${filas}</ol>` : '<p class="sutil pequeno">Sin XI registrado.</p>'}
-      ${entraron ? `<h5>Entraron</h5><ol>${entraron}</ol>` : ''}</div>`;
-  };
-  return `<h3 class="ficha-titulo">XI inicial</h3><div class="alineaciones">${columna(p.local, p.localNombre, p.titularesLocal || [])}${columna(p.visitante, p.visitanteNombre, p.titularesVisitante || [])}</div>`;
-}
-
-function dibujarFicha(p) {
-  const cambios = p.cambios || [];
+/**
+ * Estadísticas de ESTE partido: cifras por equipo y los goles, cambios y tarjetas minuto a minuto.
+ * (Antes estaban en la vista general de Estadísticas; ahora solo viven en el detalle.)
+ */
+function resumenPartidoHtml(p) {
+  if (!conMarcador(p)) return vacioHtml('El partido todavía no se juega. Aquí aparecerán los goles, los cambios y las tarjetas.');
+  const cambios = p.cambios || [], goles = p.goles || [];
   const am = id => p.tarjetas.filter(t => t.equipo === id && t.tipo !== 'ROJA').length;
   const ro = id => p.tarjetas.filter(t => t.equipo === id && t.tipo === 'ROJA').length;
   const cb = id => cambios.filter(x => x.equipo === id).length;
-  const cifra = (titulo, l, v) => {
-    const total = l + v, pl = total ? Math.round(l / total * 100) : 0;
-    return `<div class="cifra-duelo"><b>${l}</b><span>${titulo}</span><b>${v}</b>
-      <div class="barra-duelo" aria-hidden="true"><i style="width:${pl}%"></i><i style="width:${total ? 100 - pl : 0}%"></i></div></div>`;
-  };
   const eventos = [
+    ...goles.map(g => ({ minuto: g.minuto || 0, equipo: g.equipo, html: `${ICONO.gol}<span><b>#${g.autorDorsal} ${esc(g.autorNombre)}</b>${g.enContra ? ' <span class="sutil">(en contra)</span>' : ''}${g.asistente ? `<br><span class="sutil">Asistencia: #${g.asistenteDorsal} ${esc(g.asistenteNombre)}</span>` : ''}</span>` })),
     ...cambios.map(x => ({ minuto: x.minuto, equipo: x.equipo, html: `${ICONO.cambio}<span><span class="entra-txt">Entra #${x.entraDorsal} ${esc(x.entraNombre)}</span><br><span class="sale-txt">Sale #${x.saleDorsal} ${esc(x.saleNombre)}</span></span>` })),
     ...p.tarjetas.map(t => ({ minuto: t.minuto || 0, equipo: t.equipo, html: `${tarjetaHtml(t.tipo, '')}<span>#${t.dorsal} ${esc(t.nombre)}<br><span class="sutil">${t.tipo === 'ROJA' ? `Roja · ${plural(t.fechas, '1 fecha', t.fechas + ' fechas')} fuera` : 'Amarilla'}</span></span>` }))
   ].sort(porMinuto);
@@ -987,37 +1305,23 @@ function dibujarFicha(p) {
     const celda = `<div class="evento"><span class="solo-lector">${esc(local ? p.localNombre : p.visitanteNombre)}: </span>${e.html}</div>`;
     return `<li class="${local ? 'de-local' : 'de-visitante'}">${local ? celda : '<div></div>'}<span class="minuto-eje">${e.minuto ? minutoTexto(e.minuto) : '–'}</span>${local ? '<div></div>' : celda}</li>`;
   };
-  const meta = [contextoPartido(p), fechaDefinida(p) ? fechaTexto(p) : '', p.sede].filter(Boolean).map(esc).join(' · ');
-  $('fichaContenido').innerHTML = `
-    <article class="ficha vidrio ${p.estado === 'EN_JUEGO' ? 'en-vivo' : ''}">
-      <header class="ficha-cabecera">
-        <span class="partido-meta"><span>${meta}</span><span class="etiqueta ${p.estado.toLowerCase()}">${ESTADOS_TEXTO[p.estado]}</span></span>
-        <div class="ficha-marcador">
-          <span class="equipo-nombre local ${p.ganador === p.local ? 'ganador' : ''}">${esc(p.localNombre)}</span>
-          <span class="goles"><b>${p.gl}</b><i>:</i><b>${p.gv}</b>${p.penales ? `<small>${p.pl}-${p.pv} pen</small>` : ''}</span>
-          <span class="equipo-nombre ${p.ganador === p.visitante ? 'ganador' : ''}">${esc(p.visitanteNombre)}</span>
-        </div>
-      </header>
-      <div class="ficha-cifras">
-        ${cifra('Cambios', cb(p.local), cb(p.visitante))}
-        ${cifra('Amarillas', am(p.local), am(p.visitante))}
-        ${cifra('Rojas', ro(p.local), ro(p.visitante))}
-      </div>
-      ${alineacionesHtml(p)}
-      <h3 class="ficha-titulo">Minuto a minuto</h3>
-      ${eventos.length ? `<ol class="linea-tiempo">${eventos.map(fila).join('')}</ol>`
-        : '<p class="sutil ficha-vacia">No se registraron cambios ni tarjetas en este partido. Se anotan al abrir el partido en Partidos.</p>'}
-      <div class="acciones-izq"><button type="button" class="btn mini fantasma" data-detalle-ficha="${p.id}">Cara a cara y alineaciones</button>
-        ${puedeEditar() ? `<button type="button" class="btn mini fantasma" data-editar-ficha="${p.id}">Editar partido</button>` : ''}</div>
-    </article>`;
+  return `<div class="ficha-cifras">
+      ${cifraDueloHtml('Goles', p.gl, p.gv)}
+      ${cifraDueloHtml('Cambios', cb(p.local), cb(p.visitante))}
+      ${cifraDueloHtml('Amarillas', am(p.local), am(p.visitante))}
+      ${cifraDueloHtml('Rojas', ro(p.local), ro(p.visitante))}
+    </div>
+    <h3 class="ficha-titulo">Minuto a minuto</h3>
+    ${eventos.length ? `<ol class="linea-tiempo">${eventos.map(fila).join('')}</ol>`
+      : '<p class="sutil ficha-vacia">No se registraron goles, cambios ni tarjetas en este partido.</p>'}`;
 }
 
 /* ---------------------------------------------------------------- detalle del partido (estilo Flashscore) */
 
 let detalleActual = null;
-let detallePestana = 'caraACara';
+let detallePestana = 'resumen';
 
-/** Pide el detalle al servicio (cara a cara, racha y alineaciones) y lo muestra. Es de solo lectura. */
+/** Pide el detalle al servicio (resumen, cara a cara, racha y alineaciones) y lo muestra. Es de solo lectura. */
 async function abrirDetalle(id) {
   const r = await servicio.detalle(id);
   if (!r.ok) {
@@ -1026,7 +1330,7 @@ async function abrirDetalle(id) {
     return;
   }
   detalleActual = r;
-  detallePestana = 'caraACara';
+  detallePestana = 'resumen';
   const p = r.partido;
   $('dpContexto').textContent = contextoPartido(p);
   $('dpCabecera').innerHTML = cabeceraDetalle(p);
@@ -1057,8 +1361,13 @@ function dibujarDetalle() {
     b.setAttribute('aria-selected', String(activa));
   });
   const d = detalleActual, p = d.partido;
-  $('dpPanel').innerHTML = detallePestana === 'racha' ? rachaHtml(d.racha, p)
-    : detallePestana === 'alineaciones' ? alineacionesCanchaHtml(d.alineaciones, p) : caraACaraHtml(d.caraACara, p);
+  const pestanas = {
+    resumen: () => resumenPartidoHtml(p),
+    caraACara: () => caraACaraHtml(d.caraACara, p),
+    racha: () => rachaHtml(d.racha, p),
+    alineaciones: () => alineacionesCanchaHtml(d.alineaciones, p)
+  };
+  $('dpPanel').innerHTML = (pestanas[detallePestana] || pestanas.resumen)();
 }
 
 /** Cuadro de color con la letra (V/E/D), para no depender solo del color. */
@@ -1113,6 +1422,7 @@ function apellido(nombre) {
  * junto a su arco y la última línea cerca del medio campo (igual que en el escritorio).
  */
 function alineacionesCanchaHtml(a, p) {
+  const cambios = p.cambios || [];
   const fichas = (al, arriba) => {
     const lineas = al.lineas, ultima = Math.max(1, lineas.length - 1), arco = 0.93, frente = 0.55;
     return lineas.map((linea, i) => {
@@ -1120,18 +1430,27 @@ function alineacionesCanchaHtml(a, p) {
       return linea.map((j, k) => {
         const x = (k + 1) / (linea.length + 1);
         const izq = ((arriba ? 1 - x : x) * 100).toFixed(2), arr = ((arriba ? 1 - y : y) * 100).toFixed(2);
-        const titulo = j ? `#${j.dorsal} ${j.nombre} · ${j.posicion || ''}` : 'Por confirmar';
+        // Si salió en un cambio, el minuto va debajo del nombre.
+        const salio = j && cambios.find(x => x.sale === j.id);
+        const titulo = j ? `#${j.dorsal} ${j.nombre} · ${j.posicion || ''}${salio ? ` · salió en el minuto ${salio.minuto}` : ''}` : 'Por confirmar';
         return `<div class="ficha-cancha" style="left:${izq}%;top:${arr}%" title="${esc(titulo)}">
             <span class="ficha-dorsal ${arriba ? 'ficha-visitante' : 'ficha-local'}">${j ? j.dorsal : '?'}</span>
             ${j ? `<span class="ficha-nombre">${esc(apellido(j.nombre))}</span>` : ''}
+            ${salio ? `<span class="ficha-sale" aria-hidden="true">↓ ${minutoTexto(salio.minuto)}</span>` : ''}
             <span class="solo-lector">${esc(titulo)}</span></div>`;
       }).join('');
     }).join('');
   };
-  const rotulo = (equipo, al, donde) => `<div class="detalle-rotulo vidrio">
+  // Rótulo del equipo: formación, estado de la alineación y los cambios (quién entró por quién).
+  const rotulo = (equipo, al, donde, idEquipo) => {
+    const delEquipo = cambios.filter(x => x.equipo === idEquipo);
+    return `<div class="detalle-rotulo vidrio">
       <span class="sutil pequeno">${donde}</span><b>${esc(equipo)}</b>
       <span class="chip">Formación ${esc(al.formacion)}${al.formacionElegida ? '' : ' (por defecto)'}</span>
-      <span class="sutil pequeno">${al.confirmada ? 'Alineación confirmada' : 'Alineación por confirmar'}</span></div>`;
+      <span class="sutil pequeno">${al.confirmada ? 'Alineación confirmada' : 'Alineación por confirmar'}</span>
+      ${delEquipo.length ? `<span class="sutil pequeno">Cambios</span><ol class="rotulo-cambios">${delEquipo.map(x => `<li><b class="entra-txt">${minutoTexto(x.minuto)}</b>
+        <span><span>Entra #${x.entraDorsal} ${esc(x.entraNombre)}</span><small class="sale-txt">Sale #${x.saleDorsal} ${esc(x.saleNombre)}</small></span></li>`).join('')}</ol>` : ''}</div>`;
+  };
   const nota = !a.local.confirmada || !a.visitante.confirmada
     ? '<p class="sutil pequeno">Las casillas con «?» son puestos por confirmar: el XI inicial se registra al abrir el partido.</p>' : '';
   return `<div class="detalle-alineaciones">
@@ -1141,8 +1460,190 @@ function alineacionesCanchaHtml(a, p) {
         <span class="cancha-chica arriba"></span><span class="cancha-chica abajo"></span>
         ${fichas(a.visitante, true)}${fichas(a.local, false)}
       </div>
-      <div class="detalle-lado">${rotulo(p.visitanteNombre, a.visitante, 'Arriba')}${rotulo(p.localNombre, a.local, 'Abajo')}${nota}</div>
+      <div class="detalle-lado">${rotulo(p.visitanteNombre, a.visitante, 'Arriba', p.visitante)}${rotulo(p.localNombre, a.local, 'Abajo', p.local)}${nota}</div>
     </div>`;
+}
+
+/* ---------------------------------------------------------------- noticias (estilo Flashscore) */
+
+let N = { publicadas: [], pendientes: [], puedeModerar: false };
+
+/** «2026-11-15 18:40» -> «15/11/2026 · 18:40». */
+function fechaNoticia(f) {
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})$/.exec(f || '');
+  return m ? `${m[3]}/${m[2]}/${m[1]} · ${m[4]}` : (f || '');
+}
+
+/**
+ * Administrador: crea, edita y elimina noticias y modera las propuestas de los visitantes.
+ * Visitante: lee, comenta y propone noticias (quedan pendientes hasta que se aprueban).
+ */
+async function renderNoticias(datos) {
+  if (!datos) {
+    const r = await servicio.noticias();
+    if (!r.ok) { $('listaNoticias').innerHTML = vacioHtml(esc(r.error)); return; }
+    datos = r.noticias;
+  }
+  N = datos;
+  const admin = puedeEditar();
+  $('ayudaNoticias').textContent = admin
+    ? 'Publique noticias oficiales y apruebe o rechace las que envían los visitantes.'
+    : 'Noticias del torneo. Puede comentar o proponer una noticia: el administrador la revisa antes de publicarla.';
+  $('btnNuevaNoticia').textContent = admin ? '+ Nueva noticia' : 'Proponer una noticia';
+  if (admin) {
+    // Administrador: «Pendientes por aprobar» y «Publicadas y oficiales» en pestañas separadas.
+    $('listaPendientes').innerHTML = N.pendientes.map(n => tarjetaNoticiaHtml(n, true)).join('')
+      || vacioHtml('No hay aportes de visitantes por revisar.');
+    $('cuentaPendientes').textContent = N.pendientes.length;
+    $('cuentaPublicadas').textContent = N.publicadas.length;
+    $('tabPendientes').classList.toggle('con-pendientes', N.pendientes.length > 0);
+    if (!pestanaNoticias) pestanaNoticias = N.pendientes.length ? 'pendientes' : 'publicadas'; // al entrar: lo que necesita atención
+  } else {
+    pestanaNoticias = 'publicadas'; // el visitante solo ve el feed público
+    $('listaPendientes').innerHTML = ''; // y no queda nada del panel de moderación en la página
+  }
+  $('listaNoticias').innerHTML = N.publicadas.map(n => tarjetaNoticiaHtml(n, false)).join('')
+    || vacioHtml('Todavía no hay noticias publicadas.' + (admin ? ' Use «+ Nueva noticia» para crear la primera.' : ' ¡Proponga la primera!'));
+  $('pestanasNoticias').hidden = !admin;
+  $('ayudaPublicadas').hidden = !admin;
+  mostrarPestanaNoticias(pestanaNoticias);
+}
+
+/** «pendientes» o «publicadas» (se conserva al redibujar: al aprobar una, el administrador sigue revisando). */
+let pestanaNoticias = null;
+
+function mostrarPestanaNoticias(nombre) {
+  pestanaNoticias = nombre;
+  document.querySelectorAll('[data-nt]').forEach(b => {
+    const activa = b.dataset.nt === nombre;
+    b.classList.toggle('activa', activa);
+    b.setAttribute('aria-selected', String(activa));
+    b.tabIndex = activa ? 0 : -1;
+  });
+  $('panelPendientes').hidden = nombre !== 'pendientes';
+  $('panelPublicadas').hidden = nombre !== 'publicadas';
+}
+
+function tarjetaNoticiaHtml(n, pendiente) {
+  const admin = puedeEditar(), url = servicio.urlImagen(n.imagen);
+  const acciones = admin && pendiente
+    ? `<button type="button" class="btn mini primario" data-aprobar="${n.id}">Aprobar</button>
+       <button type="button" class="btn mini peligro" data-rechazar="${n.id}">Rechazar y eliminar</button>
+       <button type="button" class="btn mini fantasma" data-editar-noticia="${n.id}">Editar antes de publicar</button>`
+    : admin ? `<button type="button" class="btn mini fantasma" data-editar-noticia="${n.id}">Editar</button>
+       <button type="button" class="btn mini peligro" data-eliminar-noticia="${n.id}">Eliminar</button>` : '';
+  const comentarios = pendiente ? '' : `<section class="comentarios">
+      <h4>Comentarios (${n.comentarios.length})</h4>
+      <ul class="lista-comentarios">${n.comentarios.map(c => `<li><div><span class="sutil pequeno">${esc(c.autor)} · ${esc(fechaNoticia(c.fecha))}</span><p>${esc(c.texto)}</p></div>
+        ${admin ? `<button type="button" class="btn mini peligro" data-quitar-comentario="${c.id}" data-noticia="${n.id}">Quitar</button>` : ''}</li>`).join('')}</ul>
+      <form class="form-comentario" data-comentar="${n.id}">
+        <input name="autor" maxlength="40" placeholder="${admin ? 'Administración' : 'Su nombre (opcional)'}" aria-label="Su nombre">
+        <input name="texto" maxlength="500" required placeholder="Escriba un comentario…" aria-label="Comentario">
+        <button class="btn">Comentar</button>
+      </form>
+    </section>`;
+  return `<article class="tarjeta-noticia vidrio ${url ? 'con-foto' : ''}">
+      ${url ? `<img class="noticia-foto" src="${esc(url)}" alt="Foto de la noticia: ${esc(n.titulo)}" loading="lazy">` : ''}
+      <div class="noticia-contenido">
+        <h3>${esc(n.titulo)}</h3>
+        <p class="sutil pequeno noticia-meta">Por ${esc(n.autor)} · ${esc(fechaNoticia(n.fecha))}${pendiente ? ' <span class="etiqueta pendiente">Pendiente de aprobación</span>'
+          : n.deVisitante ? ` <span class="chip">${admin ? 'Aporte de visitante · aprobado' : 'Aporte de visitante'}</span>`
+          : admin ? ' <span class="chip">Oficial</span>' : ''}</p>
+        <p class="noticia-cuerpo">${esc(n.cuerpo)}</p>
+        ${acciones ? `<div class="acciones-izq">${acciones}</div>` : ''}
+      </div>
+      ${comentarios}
+    </article>`;
+}
+
+async function accionNoticia(ruta, cuerpo) {
+  const r = await servicio.ejecutar(ruta, cuerpo);
+  if (!r.ok) {
+    if (r.codigo === 'LOGIN') volverAlLogin('Su sesión terminó. Inicie sesión de nuevo.');
+    else mensaje('Noticias', r.error);
+    return r;
+  }
+  renderNoticias(r.noticias);
+  aviso(r.mensaje);
+  return r;
+}
+
+/* ---- crear, editar o proponer una noticia ---- */
+
+let noticiaEditando = null, noticiaPropuesta = false, fotoNueva = '', quitarFoto = false;
+
+function abrirNoticia(noticia, propuesta) {
+  noticiaEditando = noticia;
+  noticiaPropuesta = propuesta;
+  fotoNueva = '';
+  quitarFoto = false;
+  $('ntTitulo').textContent = propuesta ? 'Proponer una noticia' : noticia ? 'Editar noticia' : 'Nueva noticia';
+  $('ntGuardar').textContent = propuesta ? 'Enviar para aprobación' : noticia ? 'Guardar y publicar' : 'Publicar';
+  $('ntTituloNoticia').value = noticia ? noticia.titulo : '';
+  $('ntCuerpo').value = noticia ? noticia.cuerpo : '';
+  $('ntAutor').value = '';
+  $('ntFilaAutor').hidden = !propuesta;
+  $('ntAvisoPropuesta').hidden = !propuesta;
+  $('ntArchivo').value = '';
+  mostrarFotoNoticia(noticia && noticia.imagen ? servicio.urlImagen(noticia.imagen) : '');
+  $('ntError').hidden = true;
+  $('dlgNoticia').showModal();
+  $('ntTituloNoticia').focus();
+}
+
+function mostrarFotoNoticia(url) {
+  $('ntVista').hidden = !url;
+  if (url) $('ntVista').src = url; else $('ntVista').removeAttribute('src');
+  $('ntSinFoto').hidden = !!url;
+  $('ntQuitarFoto').disabled = !url;
+}
+
+/**
+ * Reduce la foto en el navegador (máximo 1280 px, JPEG) antes de enviarla: así no llena el
+ * almacenamiento del navegador ni pesa en la petición. Devuelve una «data URL».
+ */
+function reducirFoto(archivo) {
+  return new Promise((resolver, rechazar) => {
+    if (!/^image\/(jpeg|png|gif|webp)$/.test(archivo.type)) { rechazar(new Error('Escoja una imagen JPG, PNG, GIF o WEBP.')); return; }
+    if (archivo.size > 15 * 1024 * 1024) { rechazar(new Error('La foto es muy pesada (máximo 15 MB antes de reducirla).')); return; }
+    const url = URL.createObjectURL(archivo), img = new Image();
+    img.onload = () => {
+      const escala = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const lienzo = document.createElement('canvas');
+      lienzo.width = Math.round(img.width * escala);
+      lienzo.height = Math.round(img.height * escala);
+      lienzo.getContext('2d').drawImage(img, 0, 0, lienzo.width, lienzo.height);
+      URL.revokeObjectURL(url);
+      resolver(lienzo.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rechazar(new Error('No se pudo leer esa imagen.')); };
+    img.src = url;
+  });
+}
+
+async function alElegirFoto() {
+  const archivo = $('ntArchivo').files[0];
+  if (!archivo) return;
+  try {
+    fotoNueva = await reducirFoto(archivo);
+    quitarFoto = false;
+    mostrarFotoNoticia(fotoNueva);
+    $('ntError').hidden = true;
+  } catch (e) {
+    $('ntError').textContent = e.message;
+    $('ntError').hidden = false;
+  }
+}
+
+async function guardarNoticia(e) {
+  e.preventDefault();
+  const cuerpo = { titulo: $('ntTituloNoticia').value, cuerpo: $('ntCuerpo').value, autor: $('ntAutor').value, imagen: fotoNueva, quitarImagen: quitarFoto };
+  if (noticiaEditando) cuerpo.id = noticiaEditando.id;
+  const r = await servicio.ejecutar(noticiaPropuesta ? 'noticia/proponer' : 'noticia/guardar', cuerpo);
+  if (!r.ok) { $('ntError').textContent = r.error; $('ntError').hidden = false; return; }
+  $('dlgNoticia').close();
+  renderNoticias(r.noticias);
+  if (noticiaPropuesta) mensaje('Noticia enviada', r.mensaje); else aviso(r.mensaje);
 }
 
 /* ---------------------------------------------------------------- datos de prueba */
@@ -1271,6 +1772,9 @@ function abrirNuevo(obligatorio, cambiar = false) {
   $('nvFinalUnica').checked = cfg.finalUnica;
   $('nvVentaja').checked = cfg.ventajaDeportiva;
   $('nvReinicio').checked = cfg.granFinalConReinicio;
+  // Al cambiar el formato de una liga se conservan sus divisiones.
+  $('nvDivisiones').value = cambiar && E.campeonato.esLiga ? E.campeonato.divisiones.length : (cfg.divisiones || 1);
+  $('nvAscensos').value = cambiar && E.campeonato.esLiga ? E.campeonato.ascensos : (cfg.ascensos == null ? 2 : cfg.ascensos);
   $('nvSorteo').checked = cfg.sorteoAleatorio;
   editorNuevo.poner(cfg.criterios);
   $('tarjetasFormato').innerHTML = catalogo.formatos.map(f => `
@@ -1318,7 +1822,9 @@ async function crearDesdeFormulario(e) {
     clasificadosPlayoff: num('nvClasPlayoff', cfg.clasificadosPlayoff), tipoPlayoff: $('nvTipoPlayoff').value,
     ventajaDeportiva: $('nvVentaja').checked, rondasSuizo: num('nvRondas', cfg.rondasSuizo),
     directosSuizo: num('nvDirectos', cfg.directosSuizo), repechajeSuizo: num('nvRepechaje', cfg.repechajeSuizo),
-    granFinalConReinicio: $('nvReinicio').checked, criterios: editorNuevo.obtener()
+    granFinalConReinicio: $('nvReinicio').checked, criterios: editorNuevo.obtener(),
+    divisiones: formatoElegido === 'LIGA' ? Math.max(1, Math.min(6, num('nvDivisiones', 1))) : 1,
+    ascensos: Math.max(0, num('nvAscensos', 2))
   };
   if (cambiandoFormato) {
     const r = await accion('cambiarFormato', { nombre: $('nvNombre').value, formato: formatoElegido, config }, { silencioso: true });
@@ -1376,12 +1882,20 @@ async function accionMenu(nombre) {
         if (await mensaje('Nuevo campeonato', 'El campeonato actual se reemplazará por uno nuevo. Si ya tiene partidos jugados se guardará en el historial (como «sin terminar» si no ha terminado). ¿Continuar?', { confirmar: true })) abrirNuevo(false);
         break;
       case 'siguiente': {
-        const nombreNuevo = await mensaje('Siguiente torneo corto', 'Se creará un torneo nuevo con los mismos equipos, plantillas y reglas.\nNombre del nuevo torneo:',
-          { entrada: E.campeonato.nombre.replace('Apertura', 'Clausura') });
+        const c = E.campeonato, liga = c.esLiga, conDivisiones = (c.divisiones || []).length > 1;
+        // Nombre sugerido: «Apertura» -> «Clausura»; en una liga, sube el número final («Temporada 1» -> «Temporada 2»).
+        const sugerido = liga ? (/\d+$/.test(c.nombre) ? c.nombre.replace(/\d+$/, n => String(Number(n) + 1)) : c.nombre + ' 2')
+          : c.nombre.replace('Apertura', 'Clausura');
+        const texto = liga
+          ? `Se creará la nueva temporada con los mismos equipos, plantillas y reglas.${conDivisiones && c.ascensos ? `\nSuben los ${c.ascensos} primeros y bajan los ${c.ascensos} últimos de cada división.` : ''}\nNombre de la nueva temporada:`
+          : 'Se creará un torneo nuevo con los mismos equipos, plantillas y reglas.\nNombre del nuevo torneo:';
+        const nombreNuevo = await mensaje(liga ? 'Nueva temporada' : 'Siguiente torneo corto', texto, { entrada: sugerido });
         if (!nombreNuevo) return;
         const r = await accion('siguiente', { nombre: nombreNuevo }, { silencioso: true });
         if (!r.ok) { mensaje('Error', r.error); return; }
-        aviso(`Se creó «${nombreNuevo}». El torneo anterior quedó en el historial.`);
+        mostrarVista('equipos');
+        if (r.mensaje) mensaje('Ascensos y descensos', `Se creó «${nombreNuevo}». El torneo anterior quedó en el historial.\n\n${r.mensaje}`);
+        else aviso(`Se creó «${nombreNuevo}». El torneo anterior quedó en el historial.`);
         break;
       }
       case 'cambiarFormato': {
@@ -1557,6 +2071,15 @@ function verCampeon() {
   $('cpTorneo').textContent = 'Campeón de ' + E.campeonato.nombre;
   $('cpDt').textContent = 'Director técnico: ' + f.dt;
   [['cpPj', f.pj], ['cpG', f.g], ['cpE', f.e], ['cpP', f.p], ['cpGf', f.gf], ['cpGc', f.gc]].forEach(([id, v]) => { $(id).textContent = v; });
+  // Liga con divisiones: el campeón de cada división por separado (Liga A, Liga B, Liga C...).
+  const porDivision = E.campeonesDivision || [];
+  $('cpDivisiones').hidden = porDivision.length < 2;
+  if (porDivision.length > 1) {
+    $('cpTorneo').textContent = `Campeón de la ${porDivision[0].division} · ${E.campeonato.nombre}`;
+    $('cpDivisiones').innerHTML = '<h3>Campeones por división</h3><ul>' + porDivision.map(c => `<li>
+        <span class="division">${esc(c.division)}</span><span class="equipo"><b>${esc(c.nombre)}</b><small>DT: ${esc(c.dt)}</small></span>
+        <span class="cifras">${c.pts} pts · ${c.pj} PJ · ${c.g}G ${c.e}E ${c.p}P</span></li>`).join('') + '</ul>';
+  }
   lanzarConfeti();
   const dlg = $('dlgCampeon');
   // Mientras se celebra, los focos del estadio se vuelven dorados.
@@ -1656,11 +2179,72 @@ function conectarEventos() {
   $('formSemilla').addEventListener('submit', cargarDatosPrueba);
   $('smCancelar').addEventListener('click', () => $('dlgSemilla').close());
   $('smOtra').addEventListener('click', () => { $('smSemilla').value = semillaAlAzar(); });
-  $('fichaPartido').addEventListener('change', () => { fichaElegida = Number($('fichaPartido').value); renderFicha(); });
-  $('fichaContenido').addEventListener('click', e => {
-    const b = e.target.closest('[data-editar-ficha]'), d = e.target.closest('[data-detalle-ficha]');
-    if (b) abrirPartido(Number(b.dataset.editarFicha));
-    if (d) abrirDetalle(Number(d.dataset.detalleFicha));
+  // Estadísticas del campeonato: pestañas y «Corregir» / «Ver partido» en los registros.
+  document.querySelectorAll('[data-est]').forEach(b => b.addEventListener('click', () => { pestanaEstadisticas = b.dataset.est; renderEstadisticas(); }));
+  $('vista-sanciones').addEventListener('click', e => {
+    const b = e.target.closest('[data-abrir-partido]');
+    if (b) abrirSegunRol(Number(b.dataset.abrirPartido));
+  });
+  // Goles en el editor del partido
+  $('glEquipo').addEventListener('change', llenarJugadoresGol);
+  $('glEnContra').addEventListener('change', llenarJugadoresGol);
+  $('glAgregar').addEventListener('click', agregarGol);
+  $('glMinuto').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('glAutor').focus(); } });
+  $('glLista').addEventListener('click', e => {
+    const b = e.target.closest('[data-quitar-gol]');
+    if (b) { golesTemp.splice(Number(b.dataset.quitarGol), 1); renderGolesTemp(); }
+  });
+  // Noticias: nueva / proponer, moderación, edición, comentarios
+  $('btnNuevaNoticia').addEventListener('click', () => abrirNoticia(null, !puedeEditar()));
+  // Pestañas del administrador (clic y flechas del teclado)
+  document.querySelectorAll('[data-nt]').forEach(b => b.addEventListener('click', () => mostrarPestanaNoticias(b.dataset.nt)));
+  $('pestanasNoticias').addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const otra = pestanaNoticias === 'pendientes' ? 'publicadas' : 'pendientes';
+    mostrarPestanaNoticias(otra);
+    document.querySelector(`[data-nt="${otra}"]`).focus();
+  });
+  $('formNoticia').addEventListener('submit', guardarNoticia);
+  $('ntCancelar').addEventListener('click', () => $('dlgNoticia').close());
+  $('ntArchivo').addEventListener('change', alElegirFoto);
+  $('ntQuitarFoto').addEventListener('click', () => { fotoNueva = ''; quitarFoto = true; $('ntArchivo').value = ''; mostrarFotoNoticia(''); });
+  $('vista-noticias').addEventListener('click', async e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const todas = [...N.publicadas, ...N.pendientes], buscar = id => todas.find(n => n.id === Number(id));
+    if (b.dataset.aprobar) accionNoticia('noticia/aprobar', { id: Number(b.dataset.aprobar) });
+    if (b.dataset.editarNoticia) abrirNoticia(buscar(b.dataset.editarNoticia), false);
+    if (b.dataset.rechazar) {
+      const n = buscar(b.dataset.rechazar);
+      if (await mensaje('Rechazar propuesta', `¿Rechazar «${n.titulo}»? Se borra la propuesta y su foto.`, { confirmar: true, textoSi: 'Rechazar' })) {
+        accionNoticia('noticia/eliminar', { id: n.id, rechazo: true });
+      }
+    }
+    if (b.dataset.eliminarNoticia) {
+      const n = buscar(b.dataset.eliminarNoticia);
+      if (await mensaje('Eliminar noticia', `¿Eliminar «${n.titulo}» con su foto y sus comentarios?`, { confirmar: true, textoSi: 'Eliminar' })) {
+        accionNoticia('noticia/eliminar', { id: n.id });
+      }
+    }
+    if (b.dataset.quitarComentario) accionNoticia('comentario/eliminar', { noticia: Number(b.dataset.noticia), id: Number(b.dataset.quitarComentario) });
+  });
+  $('vista-noticias').addEventListener('submit', e => {
+    const f = e.target.closest('[data-comentar]');
+    if (!f) return;
+    e.preventDefault();
+    const autor = f.elements.autor.value || (puedeEditar() ? 'Administración' : '');
+    accionNoticia('noticia/comentar', { id: Number(f.dataset.comentar), autor, texto: f.elements.texto.value });
+  });
+
+  // Divisiones de la liga: agregar / quitar y mover un equipo de división
+  $('barraDivisiones').addEventListener('click', e => {
+    const b = e.target.closest('[data-division-accion]');
+    if (b) accionDivision('division/' + b.dataset.divisionAccion, {});
+  });
+  $('gridEquipos').addEventListener('change', e => {
+    const s = e.target.closest('[data-division-equipo]');
+    if (s) accionDivision('equipo/division', { id: Number(s.dataset.divisionEquipo), division: Number(s.value) });
   });
   $('gridEquipos').addEventListener('click', e => {
     const editar = e.target.closest('[data-editar-equipo]'), quitar = e.target.closest('[data-quitar-equipo]');
@@ -1680,7 +2264,7 @@ function conectarEventos() {
   $('listaPartidos').addEventListener('click', e => {
     const b = e.target.closest('[data-partido]'), detalle = e.target.closest('[data-detalle]'), rapido = e.target.closest('[data-guardar-rapido]');
     if (b) abrirSegunRol(Number(b.dataset.partido));
-    if (detalle) abrirPartido(Number(detalle.dataset.detalle));
+    if (detalle) abrirResultado(Number(detalle.dataset.detalle));
     if (rapido) guardarRapido(Number(rapido.dataset.guardarRapido));
   });
   // En carga rápida, Enter en el gol local salta al visitante, y Enter en el visitante guarda.
@@ -1711,6 +2295,20 @@ function conectarEventos() {
     const b = e.target.closest('[data-quitar-cambio]');
     if (b) { cambiosTemp.splice(Number(b.dataset.quitarCambio), 1); renderCambiosTemp(); renderXI(); llenarJugadoresCambio(); }
   });
+  // Gestionar partidos: pestañas «Previa del partido» y «Registrar resultados» (con flechas, como Noticias).
+  $('pestanasPartidos').addEventListener('click', e => {
+    const b = e.target.closest('[data-pp]');
+    if (b) mostrarPestanaPartidos(b.dataset.pp);
+  });
+  $('pestanasPartidos').addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const otra = pestanaPartidos === 'previa' ? 'resultados' : 'previa';
+    mostrarPestanaPartidos(otra);
+    document.querySelector(`[data-pp="${otra}"]`).focus();
+  });
+  $('ptPlegar').addEventListener('click', () => plegarAlineacion(!$('ptAlineacion').hidden));
+  ['fmLocal', 'fmVisitante'].forEach(id => $(id).addEventListener('change', actualizarResumenPrevia));
   $('xiEquipos').addEventListener('change', alMarcarTitular);
   $('xiEquipos').addEventListener('click', accionXI);
   $('formPartido').addEventListener('submit', e => { e.preventDefault(); guardarPartido('guardar'); });

@@ -39,6 +39,7 @@ public class Partido implements Serializable {
     private int rojasVisitante;
     private ArrayList<Tarjeta> tarjetas = new ArrayList<>();
     private ArrayList<Cambio> cambios = new ArrayList<>();
+    private ArrayList<Gol> goles = new ArrayList<>();                 // goles por jugador (null en archivos anteriores)
     private ArrayList<Integer> titularesLocal = new ArrayList<>();     // ids del XI inicial
     private ArrayList<Integer> titularesVisitante = new ArrayList<>();
     // Formacion tactica elegida por cada entrenador ("4-4-2"...). null en archivos anteriores = sin definir.
@@ -114,8 +115,8 @@ public class Partido implements Serializable {
         rojasVisitante = 0;
         getTarjetas().clear();
         getCambios().clear();
-        getTitularesLocal().clear();
-        getTitularesVisitante().clear();
+        getGoles().clear();
+        // El XI inicial y la formacion NO se borran: son datos de la previa (se eligen antes del pitazo).
     }
 
     /**
@@ -139,6 +140,10 @@ public class Partido implements Serializable {
         cambios = new ArrayList<>();
         for (Cambio c : otro.getCambios()) {
             cambios.add(c.copia());
+        }
+        goles = new ArrayList<>();
+        for (Gol g : otro.getGoles()) {
+            goles.add(g.copia());
         }
         titularesLocal = new ArrayList<>(otro.getTitularesLocal());
         titularesVisitante = new ArrayList<>(otro.getTitularesVisitante());
@@ -346,6 +351,18 @@ public class Partido implements Serializable {
 
     public void setCambios(ArrayList<Cambio> cambios) {
         this.cambios = cambios;
+    }
+
+    /** Goles por jugador. Puede haber menos que el marcador (goles sin autor registrado), nunca mas. */
+    public ArrayList<Gol> getGoles() {
+        if (goles == null) { // archivos guardados antes de existir los goles por jugador
+            goles = new ArrayList<>();
+        }
+        return goles;
+    }
+
+    public void setGoles(ArrayList<Gol> goles) {
+        this.goles = goles;
     }
 
     public ArrayList<Integer> getTitularesLocal() {

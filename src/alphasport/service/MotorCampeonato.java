@@ -43,6 +43,41 @@ public class MotorCampeonato {
         return campeonato;
     }
 
+    /**
+     * Campeon de cada division en una liga con divisiones: el primero de la tabla de cada una
+     * (posicion 0 = Liga A, que tambien es el campeon del torneo). Vacia si el torneo no ha
+     * terminado o no tiene divisiones.
+     */
+    public ArrayList<Integer> campeonesPorDivision() {
+        ArrayList<Integer> campeones = new ArrayList<>();
+        if (!campeonato.isTerminado() || campeonato.getFases().isEmpty() || !campeonato.getFases().get(0).isDivisiones()) {
+            return campeones;
+        }
+        for (int g = 0; g < campeonato.getFases().get(0).getGrupos().size(); g++) {
+            ArrayList<FilaTabla> tabla = tablaDeGrupo(0, g);
+            campeones.add(tabla.isEmpty() ? -1 : tabla.get(0).getIdEquipo());
+        }
+        return campeones;
+    }
+
+    /** «Campeon: X» o, con divisiones, «Campeones: Liga A: X · Liga B: Y · ...». */
+    public String textoCampeones() {
+        ArrayList<Integer> porDivision = campeonesPorDivision();
+        if (porDivision.isEmpty()) {
+            return "Campeón: " + campeonato.nombreDe(campeonato.getIdCampeon());
+        }
+        ArrayList<String> partes = new ArrayList<>();
+        for (int d = 0; d < porDivision.size(); d++) {
+            partes.add(campeonato.getFases().get(0).nombreGrupo(d) + ": " + campeonato.nombreDe(porDivision.get(d)));
+        }
+        return "Campeones: " + String.join(" · ", partes);
+    }
+
+    /** true si el formato puede tener llaves; si no, la interfaz oculta la seccion «Llaves». */
+    public boolean usaLlaves() {
+        return formato.usaLlaves();
+    }
+
     public TablaPosiciones getTabla() {
         return tabla;
     }
@@ -111,7 +146,7 @@ public class MotorCampeonato {
                 throw new IllegalStateException("No se pudo determinar el campeon.");
             }
             campeonato.setIdCampeon(ganador);
-            return "¡El campeonato termino! Campeon: " + campeonato.nombreDe(ganador);
+            return "¡El campeonato termino! " + textoCampeones();
         }
         agregarFase(siguiente);
         return "Comienza la fase: " + siguiente.getNombre() + ".";
@@ -132,7 +167,7 @@ public class MotorCampeonato {
             return "Sin iniciar: registre los equipos y pulse \"Iniciar campeonato\".";
         }
         if (campeonato.isTerminado()) {
-            return "Terminado. Campeon: " + campeonato.nombreDe(campeonato.getIdCampeon());
+            return "Terminado. " + textoCampeones();
         }
         int indice = campeonato.getFases().size() - 1;
         Fase fase = campeonato.getFaseActual();
@@ -909,9 +944,18 @@ public class MotorCampeonato {
     }
 
     public static void darWalkover(Partido p, int idGanador, String motivo) {
+        darWalkover(p, p.getIdLocal(), idGanador, motivo);
+    }
+
+    /**
+     * W.O. 3-0 a favor de {@code idGanador}. Se pasa el id del local aparte porque el editor trabaja
+     * sobre una COPIA de los datos del partido que no trae los ids de los equipos (antes se comparaba
+     * con el id 0 de la copia y los 3 goles siempre iban al visitante).
+     */
+    public static void darWalkover(Partido p, int idLocal, int idGanador, String motivo) {
         p.reiniciarResultado();
         p.setEstado(EstadoPartido.JUGADO);
-        if (p.getIdLocal() == idGanador) {
+        if (idLocal == idGanador) {
             p.setGolesLocal(3);
         } else {
             p.setGolesVisitante(3);

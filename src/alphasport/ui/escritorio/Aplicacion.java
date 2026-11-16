@@ -75,18 +75,19 @@ import javafx.util.Duration;
  */
 public class Aplicacion extends Application {
 
-    static final String[] VISTAS = {"equipos", "partidos", "posiciones", "llaves", "sanciones", "reglas"};
+    static final String[] VISTAS = {"equipos", "partidos", "posiciones", "llaves", "sanciones", "noticias", "reglas"};
     /** Vistas que el visitante no ve (no le aportan: son de gestión). */
     static final java.util.Set<String> VISTAS_SOLO_ADMIN = java.util.Set.of("equipos", "reglas");
     /** Vista con la que entra el visitante. */
     static final String VISTA_INICIAL_VISITANTE = "partidos";
-    static final String[] NOMBRES_VISTAS = {"Equipos", "Partidos", "Posiciones", "Llaves", "Estadísticas", "Reglas"};
+    static final String[] NOMBRES_VISTAS = {"Equipos", "Partidos", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas"};
     static final String[] ICONOS_VISTAS = {
         "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z",
         "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM3 10h18M8 3v4M16 3v4",
         "M4 20V10M10 20V4M16 20v-7M22 20H2",
         "M3 4h5v6H3M3 14h5v6H3M8 7h4v10H8M12 12h5M17 9h4v6h-4",
         "M6.5 4h6a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 5 15.5v-10A1.5 1.5 0 0 1 6.5 4ZM15 7h3a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6a1.5 1.5 0 0 1-1.5-1.5V18",
+        "M4 5h13v14H6a2 2 0 0 1-2-2V5ZM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4",
         "M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7"};
     /* Iconos de trazo (24x24) en lugar de emojis. */
     static final String ICONO_TROFEO = "M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z";
@@ -128,13 +129,15 @@ public class Aplicacion extends Application {
     private int filtroEquipo = -1;
     private int tablaElegida;
     private String filtroSanciones = "todas";
-    private int fichaElegida = -1;
+    private int pestanaEstadisticas; // pestaña elegida en Estadísticas (se conserva al redibujar)
+    private String pestanaNoticias;  // «pendientes» o «publicadas» (null = se elige al entrar)
+    private String pestanaPartidos = "previa"; // «previa» o «resultados» en Gestionar partidos
 
     @Override
     public void start(Stage stage) {
         this.stage = stage;
         servicio = Arranque.servicio();
-        api = new ApiControlador(servicio, new AutenticacionService());
+        api = new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias());
         catalogo = api.consultar("catalogo");
         dialogos = new Dialogos(this);
         cargarFuentes();
@@ -300,14 +303,6 @@ public class Aplicacion extends Application {
         return r;
     }
 
-    /** Muestra u oculta las etiquetas de la cabecera (formato, equipos y estado del torneo). */
-    private void mostrarDatosCabecera(boolean visibles) {
-        for (Node nodo : List.of(chipEstado, chipFormato, chipEquipos, estado)) {
-            nodo.setVisible(visibles);
-            nodo.setManaged(visibles);
-        }
-    }
-
     /* ---------------------------------------------------------------- permisos */
 
     /** true si quien inicio sesion puede crear, editar o eliminar. */
@@ -316,8 +311,11 @@ public class Aplicacion extends Application {
         return u != null && u.puedeEditar();
     }
 
-    /** true si el usuario actual puede abrir esa vista. */
+    /** true si el usuario actual puede abrir esa vista (y si es «Llaves», si el formato las tiene). */
     boolean puedeVer(String vista) {
+        if (vista.equals("llaves") && !usaLlaves()) {
+            return false;
+        }
         return puedeEditar() || !VISTAS_SOLO_ADMIN.contains(vista);
     }
 
@@ -371,6 +369,18 @@ public class Aplicacion extends Application {
 
     /* ---------------------------------------------------------------- login */
 
+    private static void mostrarErrorLogin(Label error, Throwable ex) {
+        if (!(ex instanceof alphasport.service.ReglaNegocioException)) {
+            ex.printStackTrace(); // un error inesperado queda también en la consola para revisarlo
+        }
+        boolean malCompilado = String.valueOf(ex.getMessage()).contains("Unresolved compilation");
+        error.setText(malCompilado
+                ? "El programa quedó mal compilado. Ciérrelo, limpie la compilación en VS Code (Java: Clean Java Language Server Workspace) y ábralo de nuevo."
+                : ex.getMessage() == null ? "No se pudo entrar: " + ex : ex.getMessage());
+        error.setWrapText(true);
+        error.setVisible(true);
+    }
+
     void mostrarLogin() {
         ImageView logo = new ImageView(imagen("logo-texto.png"));
         logo.setFitWidth(380);
@@ -390,9 +400,10 @@ public class Aplicacion extends Application {
             try {
                 api.ejecutar("login", mapa("usuario", usuario.getText(), "clave", clave.getText()));
                 mostrarPrincipal();
-            } catch (Exception ex) {
-                error.setText(ex.getMessage());
-                error.setVisible(true);
+            } catch (Exception | Error ex) {
+                // Nunca falla en silencio: si algo se rompe al entrar (por ejemplo, el programa quedó mal
+                // compilado y lanza «Unresolved compilation problem»), se muestra aquí en vez de no hacer nada.
+                mostrarErrorLogin(error, ex);
             }
         });
         Button visitante = boton("Entrar como visitante (solo lectura)", "fantasma", "ancho");
@@ -401,9 +412,8 @@ public class Aplicacion extends Application {
             try {
                 api.ejecutar("login/visitante", mapa());
                 mostrarPrincipal();
-            } catch (Exception ex) {
-                error.setText(ex.getMessage());
-                error.setVisible(true);
+            } catch (Exception | Error ex) {
+                mostrarErrorLogin(error, ex);
             }
         });
         VBox tarjeta = new VBox(12, logo, etiqueta("Gestión profesional de campeonatos de fútbol", "sutil", "centro"),
@@ -454,7 +464,9 @@ public class Aplicacion extends Application {
             SVGPath icono = new SVGPath();
             icono.setContent(ICONOS_VISTAS[i]);
             icono.getStyleClass().add("icono-nav");
-            ToggleButton b = new ToggleButton(NOMBRES_VISTAS[i], icono);
+            // El administrador gestiona los partidos (previa y resultados); el visitante solo los consulta.
+            String nombre = clave.equals("partidos") && puedeEditar() ? "Gestionar partidos" : NOMBRES_VISTAS[i];
+            ToggleButton b = new ToggleButton(nombre, icono);
             b.setGraphicTextGap(12);
             b.setToggleGroup(grupo);
             b.setMaxWidth(Double.MAX_VALUE);
@@ -533,10 +545,6 @@ public class Aplicacion extends Application {
             dialogos.nuevo(true, false);
         } else {
             titulo.setText("Sin campeonato activo");
-            // Sin campeonato no hay formato, equipos, estado ni campeón que mostrar en la cabecera.
-            mostrarDatosCabecera(false);
-            btnCampeon.setVisible(false);
-            btnCampeon.setManaged(false);
             contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
         }
     }
@@ -580,6 +588,8 @@ public class Aplicacion extends Application {
             } catch (Exception ignorado) {
                 // cerrar sesion nunca falla
             }
+            pestanaNoticias = null; // el próximo administrador entra a lo que necesite atención
+            pestanaPartidos = "previa";
             mostrarLogin();
         });
         soloAdmin(nuevo, itemSiguiente, cambiar, cancelar, abrir);
@@ -604,9 +614,22 @@ public class Aplicacion extends Application {
         dialogos.nuevo(true, false);
     }
 
+    /** Clausura de un torneo corto o nueva temporada de una liga (con ascensos y descensos si hay divisiones). */
     private void siguienteTorneo() {
-        String nombre = dialogos.pedirTexto("Siguiente torneo corto", "Se creará un torneo nuevo con los mismos equipos, plantillas y reglas.\nNombre del nuevo torneo:",
-                s(m(E, "campeonato"), "nombre").replace("Apertura", "Clausura"));
+        Map<String, Object> c = m(E, "campeonato");
+        boolean liga = b(c, "esLiga");
+        boolean conDivisiones = l(c, "divisiones").size() > 1;
+        String actual = s(c, "nombre");
+        // Nombre sugerido: «Apertura» -> «Clausura»; en una liga sube el número final («Temporada 1» -> «Temporada 2»).
+        java.util.regex.Matcher numero = java.util.regex.Pattern.compile("(\\d+)$").matcher(actual);
+        String sugerido = !liga ? actual.replace("Apertura", "Clausura")
+                : numero.find() ? actual.substring(0, numero.start()) + (Long.parseLong(numero.group(1)) + 1) : actual + " 2";
+        String texto = liga
+                ? "Se creará la nueva temporada con los mismos equipos, plantillas y reglas."
+                + (conDivisiones && n(c, "ascensos") > 0 ? "\nSuben los " + n(c, "ascensos") + " primeros y bajan los " + n(c, "ascensos") + " últimos de cada división." : "")
+                + "\nNombre de la nueva temporada:"
+                : "Se creará un torneo nuevo con los mismos equipos, plantillas y reglas.\nNombre del nuevo torneo:";
+        String nombre = dialogos.pedirTexto(liga ? "Nueva temporada" : "Siguiente torneo corto", texto, sugerido);
         if (nombre == null || nombre.isBlank()) {
             return;
         }
@@ -615,7 +638,12 @@ public class Aplicacion extends Application {
             dialogos.mensaje("Error", s(r, "error"));
             return;
         }
-        aviso("Se creó «" + nombre + "». El torneo anterior quedó en el historial.");
+        mostrarVista("equipos");
+        if (!s(r, "mensaje").isEmpty()) {
+            dialogos.mensaje("Ascensos y descensos", "Se creó «" + nombre + "». El torneo anterior quedó en el historial.\n\n" + s(r, "mensaje"));
+        } else {
+            aviso("Se creó «" + nombre + "». El torneo anterior quedó en el historial.");
+        }
     }
 
     private void guardarRespaldo() {
@@ -706,7 +734,6 @@ public class Aplicacion extends Application {
             return;
         }
         Map<String, Object> c = m(E, "campeonato");
-        mostrarDatosCabecera(true);
         titulo.setText(s(c, "nombre"));
         stage.setTitle(s(c, "nombre") + " · AlphaSport");
         chipFormato.setText(s(c, "formatoNombre"));
@@ -731,10 +758,26 @@ public class Aplicacion extends Application {
         estado.getStyleClass().removeAll("en-juego", "terminado");
         estado.getStyleClass().add(terminado ? "terminado" : "en-juego");
         itemSiguiente.setDisable(!b(c, "puedeSiguiente"));
+        itemSiguiente.setText(s(c, "textoSiguiente").isEmpty() ? "Siguiente torneo corto (Clausura)…" : s(c, "textoSiguiente"));
+        // Sin llaves (formato Liga) el botón «Llaves» desaparece del menú lateral.
+        ToggleButton botonLlaves = navegacion.get("llaves");
+        if (botonLlaves != null) {
+            botonLlaves.setVisible(puedeVer("llaves"));
+            botonLlaves.setManaged(puedeVer("llaves"));
+        }
         mostrarVista(vista);
     }
 
+    /** true si el formato del campeonato puede tener llaves (todos menos Liga). */
+    boolean usaLlaves() {
+        Map<String, Object> c = m(E, "campeonato");
+        return c == null || !Boolean.FALSE.equals(c.get("usaLlaves"));
+    }
+
     void mostrarVista(String nombre) {
+        if (nombre.equals("llaves") && !usaLlaves()) {
+            nombre = "posiciones"; // sin llaves, la tabla es donde se define el campeón
+        }
         if (!puedeVer(nombre)) {
             nombre = VISTA_INICIAL_VISITANTE;
         }
@@ -744,20 +787,16 @@ public class Aplicacion extends Application {
             b.setSelected(true);
         }
         if (!b(E, "hay")) {
-            // El visitante no puede crear campeonatos: en cualquier vista ve el mismo aviso (antes quedaba en blanco).
-            if (puedeEditar()) {
-                contenido.getChildren().clear();
-            } else {
-                contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
-            }
+            contenido.getChildren().clear();
             return;
         }
         Node nodo = switch (nombre) {
             case "partidos" -> vistaPartidos();
             case "posiciones" -> vistaPosiciones();
             case "llaves" -> vistaLlaves();
-            case "sanciones" -> vistaSanciones();
+            case "sanciones" -> vistaEstadisticas();
             case "reglas" -> vistaReglas();
+            case "noticias" -> vistaNoticias();
             default -> vistaEquipos();
         };
         contenido.getChildren().setAll(nodo);
@@ -841,17 +880,80 @@ public class Aplicacion extends Application {
                 ? "El campeonato ya inició: puede editar nombre, DT y jugadores, pero no agregar equipos nuevos."
                 : "Registre los equipos (mínimo 2) y pulse «Iniciar campeonato» para generar el fixture automáticamente.",
                 nombre, agregar, completo, prueba);
+        Map<String, Object> c = m(E, "campeonato");
+        if (puedeEditar() && b(c, "esLiga")) {
+            caja.getChildren().add(barraDivisiones(c));
+        }
         List<Map<String, Object>> equipos = l(E, "equipos");
         if (equipos.isEmpty()) {
             caja.getChildren().add(vacio("Todavía no hay equipos. Escriba un nombre arriba y pulse «Agregar»."));
             return caja;
         }
-        FlowPane grid = new FlowPane(16, 16);
-        for (int i = 0; i < equipos.size(); i++) {
-            grid.getChildren().add(tarjetaEquipo(equipos.get(i), i, iniciado));
+        List<Map<String, Object>> divisiones = l(c, "divisiones");
+        if (divisiones.size() <= 1) {
+            FlowPane grid = new FlowPane(16, 16);
+            for (int i = 0; i < equipos.size(); i++) {
+                grid.getChildren().add(tarjetaEquipo(equipos.get(i), i, iniciado));
+            }
+            caja.getChildren().add(grid);
+            return caja;
         }
-        caja.getChildren().add(grid);
+        // Liga con divisiones: un bloque por división (Liga A, Liga B...).
+        for (Map<String, Object> d : divisiones) {
+            List<Map<String, Object>> deDivision = equipos.stream().filter(e -> n(e, "division") == n(d, "indice")).toList();
+            HBox titulo = new HBox(10, etiqueta(s(d, "nombre"), "h3"),
+                    etiqueta(deDivision.size() == 1 ? "1 equipo" : deDivision.size() + " equipos", "sutil"));
+            titulo.setAlignment(Pos.BASELINE_LEFT);
+            FlowPane grid = new FlowPane(16, 16);
+            for (Map<String, Object> e : deDivision) {
+                grid.getChildren().add(tarjetaEquipo(e, equipos.indexOf(e), iniciado));
+            }
+            if (deDivision.isEmpty()) {
+                grid.getChildren().add(etiqueta("Sin equipos en esta división.", "sutil"));
+            }
+            caja.getChildren().add(new VBox(10, titulo, grid));
+        }
         return caja;
+    }
+
+    /** Barra de divisiones (administrador, formato Liga): ver, agregar y quitar divisiones antes de iniciar. */
+    private Node barraDivisiones(Map<String, Object> c) {
+        List<Map<String, Object>> divisiones = l(c, "divisiones");
+        boolean bloqueada = b(c, "iniciado");
+        String ayuda = divisiones.size() > 1
+                ? "Cada división es una liga aparte; el campeón sale de la " + s(divisiones.get(0), "nombre") + "."
+                + (n(c, "ascensos") > 0 ? " En la siguiente temporada suben y bajan " + n(c, "ascensos") + " por división." : "")
+                : "Liga de una sola división. Agregue divisiones para tener Liga A, Liga B, Liga C…";
+        if (bloqueada) {
+            ayuda += " Ya inició: los cambios de división se hacen en la siguiente temporada.";
+        }
+        Label textoAyuda = etiqueta(ayuda, "sutil", "pequeno");
+        textoAyuda.setWrapText(true);
+        VBox textos = new VBox(2, etiqueta("Divisiones", "jugador-texto", "titulo-alineacion"), textoAyuda);
+        HBox.setHgrow(textos, Priority.ALWAYS);
+        HBox chips = new HBox(6);
+        for (Map<String, Object> d : divisiones) {
+            chips.getChildren().add(etiqueta(s(d, "nombre") + " · " + n(d, "equipos"), "chip"));
+        }
+        Button agregar = boton("+ Agregar división", "mini");
+        agregar.setDisable(bloqueada || divisiones.size() >= n(c, "maximoDivisiones"));
+        agregar.setOnAction(e -> accionDivision("division/agregar", mapa()));
+        Button quitar = boton("Quitar la última", "mini", "fantasma");
+        quitar.setDisable(bloqueada || divisiones.size() <= 1);
+        quitar.setOnAction(e -> accionDivision("division/quitar", mapa()));
+        HBox barra = new HBox(14, textos, chips, agregar, quitar);
+        barra.setAlignment(Pos.CENTER_LEFT);
+        barra.getStyleClass().addAll("vidrio", "barra-divisiones");
+        return barra;
+    }
+
+    private void accionDivision(String ruta, Map<String, Object> cuerpo) {
+        Map<String, Object> r = ejecutar(ruta, cuerpo);
+        if (!b(r, "ok")) {
+            dialogos.mensaje("Divisiones", s(r, "error"));
+            return;
+        }
+        aviso(s(r, "mensaje").isEmpty() ? "Equipo movido de división." : s(r, "mensaje"));
     }
 
     static StackPane escudo(Map<String, Object> e, double tamano) {
@@ -885,6 +987,13 @@ public class Aplicacion extends Application {
         Button editar = boton("Editar", "mini");
         editar.setOnAction(ev -> dialogos.equipo(e));
         HBox botones = new HBox(8, espacio(), editar);
+        // Antes de iniciar, el administrador mueve el equipo a otra división.
+        List<Map<String, Object>> divisiones = l(m(E, "campeonato"), "divisiones");
+        if (divisiones.size() > 1 && !iniciado && !b(e, "retirado")) {
+            ComboBox<String> division = combo(divisiones.stream().map(d -> s(d, "nombre")).toList(), n(e, "division"),
+                    elegida -> accionDivision("equipo/division", mapa("id", n(e, "id"), "division", elegida)));
+            botones.getChildren().add(0, division);
+        }
         soloAdmin(botones);
         if (!b(e, "retirado")) {
             Button quitar = boton(iniciado ? "Retirar" : "Eliminar", "mini", "peligro");
@@ -929,7 +1038,7 @@ public class Aplicacion extends Application {
         List<String> partes = new ArrayList<>();
         partes.add(s(l(E, "fases").get(n(p, "fase")), "nombre"));
         if (!s(p, "grupo").isEmpty()) {
-            partes.add("Grupo " + s(p, "grupo"));
+            partes.add(s(p, "grupoNombre").isEmpty() ? "Grupo " + s(p, "grupo") : s(p, "grupoNombre")); // «Liga B» en divisiones
         }
         if (!s(p, "nombreRonda").isEmpty()) {
             partes.add(s(p, "nombreRonda"));
@@ -958,31 +1067,97 @@ public class Aplicacion extends Application {
             filtroEquipo = i == 0 ? -1 : n(equipos.get(i - 1), "id");
             mostrarVista("partidos");
         });
-        VBox caja = seccion("Partidos", puedeEditar() ? "Abra un partido para registrar el resultado, las tarjetas y la programación."
-                : "Calendario y resultados. Toque cualquier partido para ver el cara a cara, la racha y las alineaciones.", cFase, cEstado, cEquipo);
-        Map<String, List<Map<String, Object>>> bloques = new LinkedHashMap<>();
-        for (Map<String, Object> p : l(E, "partidos")) {
+        // Filtros comunes (fase y equipo) y filtro de estado (solo donde hay partidos de todos los estados).
+        java.util.function.Predicate<Map<String, Object>> faseYEquipo = p -> (filtroFase < 0 || n(p, "fase") == filtroFase)
+                && (filtroEquipo < 0 || n(p, "local") == filtroEquipo || n(p, "visitante") == filtroEquipo);
+        java.util.function.Predicate<Map<String, Object>> porEstado = p -> {
             boolean jugado = b(p, "jugado");
             String est = s(p, "estado");
-            boolean pasa = (filtroFase < 0 || n(p, "fase") == filtroFase)
-                    && (filtroEquipo < 0 || n(p, "local") == filtroEquipo || n(p, "visitante") == filtroEquipo)
-                    && (filtroEstado.equals("todos") || (filtroEstado.equals("pendientes") && !jugado)
+            return filtroEstado.equals("todos") || (filtroEstado.equals("pendientes") && !jugado)
                     || (filtroEstado.equals("jugados") && jugado)
-                    || (filtroEstado.equals("aplazados") && (est.equals("APLAZADO") || est.equals("SUSPENDIDO"))));
-            if (pasa) {
-                bloques.computeIfAbsent(contexto(p), k -> new ArrayList<>()).add(p);
-            }
-        }
-        if (bloques.isEmpty()) {
-            caja.getChildren().add(vacio(b(m(E, "campeonato"), "iniciado") ? "No hay partidos con estos filtros."
-                    : "El fixture se genera automáticamente al pulsar «Iniciar campeonato»."));
+                    || (filtroEstado.equals("aplazados") && (est.equals("APLAZADO") || est.equals("SUSPENDIDO")));
+        };
+        List<Map<String, Object>> todos = l(E, "partidos");
+        String sinFixture = "El fixture se genera automáticamente al pulsar «Iniciar campeonato».";
+        boolean iniciado = b(m(E, "campeonato"), "iniciado");
+        if (!puedeEditar()) {
+            VBox caja = seccion("Partidos", "Calendario y resultados. Toque cualquier partido para ver la previa, el cara a cara, la racha y las alineaciones.",
+                    cFase, cEstado, cEquipo);
+            caja.getChildren().add(bloquesPartidos(todos.stream().filter(faseYEquipo.and(porEstado)).toList(), false,
+                    iniciado ? "No hay partidos con estos filtros." : sinFixture));
             return caja;
         }
-        bloques.forEach((tituloBloque, partidos) -> {
+        // Administrador: dos pasos separados, como en Noticias. Primero la previa (antes del pitazo), después el resultado.
+        VBox caja = seccion("Gestionar partidos", "Prepare cada partido en la «Previa» y, cuando se juegue, cargue lo ocurrido en «Registrar resultados».",
+                cFase, cEquipo);
+        List<Map<String, Object>> porJugar = todos.stream().filter(p -> !b(p, "jugado")).filter(faseYEquipo).toList();
+        List<Map<String, Object>> resultados = todos.stream().filter(faseYEquipo.and(porEstado)).toList();
+        VBox panelPrevia = panelPestana("Partidos del fixture que todavía no se juegan. Defina fecha, hora, sede, formación y XI titular de cada equipo.");
+        panelPrevia.getChildren().add(bloquesPartidos(porJugar, true, !iniciado ? sinFixture
+                : todos.stream().anyMatch(p -> !b(p, "jugado")) ? "No hay partidos por jugar con estos filtros." : "Todos los partidos ya se jugaron."));
+        VBox panelResultados = panelPestana("Elija el partido que se jugó (o se está jugando) para cargar el marcador o el W.O., los goles, las tarjetas y los cambios.");
+        HBox filtroResultados = new HBox(10, etiqueta("Mostrar", "sutil"), cEstado);
+        filtroResultados.setAlignment(Pos.CENTER_LEFT);
+        panelResultados.getChildren().addAll(filtroResultados, bloquesPartidos(resultados, false,
+                iniciado ? "No hay partidos con estos filtros." : sinFixture));
+        javafx.scene.control.Tab tabPrevia = new javafx.scene.control.Tab("Previa del partido (" + porJugar.size() + ")", panelPrevia);
+        javafx.scene.control.Tab tabResultados = new javafx.scene.control.Tab("Registrar resultados", panelResultados);
+        javafx.scene.control.TabPane pestanas = new javafx.scene.control.TabPane(tabPrevia, tabResultados);
+        pestanas.setTabClosingPolicy(javafx.scene.control.TabPane.TabClosingPolicy.UNAVAILABLE);
+        pestanas.getStyleClass().addAll("detalle-pestanas", "pestanas-noticias");
+        pestanas.getSelectionModel().select(pestanaPartidos.equals("previa") ? tabPrevia : tabResultados);
+        pestanas.getSelectionModel().selectedItemProperty().addListener((o, antes, ahora) ->
+                pestanaPartidos = ahora == tabPrevia ? "previa" : "resultados");
+        caja.getChildren().add(pestanas);
+        return caja;
+    }
+
+    /** Panel de una pestaña con su explicación corta arriba. */
+    private static VBox panelPestana(String ayuda) {
+        VBox panel = new VBox(14);
+        panel.getStyleClass().add("detalle-panel");
+        Label texto = etiqueta(ayuda, "sutil");
+        texto.setWrapText(true);
+        panel.getChildren().add(texto);
+        return panel;
+    }
+
+    /** Tarjetas de partidos agrupadas por fase / fecha. {@code previa}: cada tarjeta muestra cómo va su previa. */
+    private Node bloquesPartidos(List<Map<String, Object>> partidos, boolean previa, String vacia) {
+        if (partidos.isEmpty()) {
+            return vacio(vacia);
+        }
+        Map<String, List<Map<String, Object>>> bloques = new LinkedHashMap<>();
+        partidos.forEach(p -> bloques.computeIfAbsent(contexto(p), k -> new ArrayList<>()).add(p));
+        VBox caja = new VBox(18);
+        bloques.forEach((tituloBloque, lista) -> {
             FlowPane grid = new FlowPane(14, 14);
-            partidos.forEach(p -> grid.getChildren().add(tarjetaPartido(p)));
+            lista.forEach(p -> grid.getChildren().add(tarjetaPartido(p, previa)));
             caja.getChildren().add(new VBox(10, etiqueta(tituloBloque, "titulo-bloque"), grid));
         });
+        return caja;
+    }
+
+    /** Fichas de la previa: formación y XI de cada equipo («4-4-2 · XI 11/11» o «XI 3/11»). */
+    private VBox fichasPrevia(Map<String, Object> p) {
+        HBox fichas = new HBox(6);
+        fichas.setAlignment(Pos.CENTER);
+        String[][] lados = {{"local", "titularesLocal", "formacionLocal"}, {"visitante", "titularesVisitante", "formacionVisitante"}};
+        boolean todoListo = true;
+        for (String[] lado : lados) {
+            int plantilla = (int) l(equipoPorId(n(p, lado[0])), "jugadores").stream().filter(j -> n(j, "id") > 0).count();
+            int necesarios = Math.min(Dialogos.TITULARES, plantilla);
+            int elegidos = Datos.lista(p, lado[1]).size();
+            boolean listo = necesarios > 0 && elegidos == necesarios;
+            todoListo &= listo && !s(p, lado[2]).isEmpty();
+            String formacion = s(p, lado[2]).isEmpty() ? "Sin formación" : s(p, lado[2]);
+            Label ficha = etiqueta(formacion + " · XI " + elegidos + "/" + necesarios, "etiqueta",
+                    listo ? "etiqueta-jugado" : "etiqueta-pendiente");
+            ficha.setMinWidth(Region.USE_PREF_SIZE); // en una sola línea
+            fichas.getChildren().add(ficha);
+        }
+        VBox caja = new VBox(4, fichas, etiqueta(todoListo ? "Previa lista" : "Previa incompleta", "sutil", "pequeno"));
+        caja.setAlignment(Pos.CENTER);
         return caja;
     }
 
@@ -1019,7 +1194,7 @@ public class Aplicacion extends Application {
         return String.join(" · ", partes);
     }
 
-    private Node tarjetaPartido(Map<String, Object> p) {
+    private Node tarjetaPartido(Map<String, Object> p, boolean previa) {
         boolean jugado = conMarcador(p);
         Label local = etiqueta(s(p, "localNombre"), "equipo-partido");
         Label visitante = etiqueta(s(p, "visitanteNombre"), "equipo-partido");
@@ -1048,11 +1223,14 @@ public class Aplicacion extends Application {
         if (!obs.isEmpty()) {
             tarjeta.getChildren().add(etiqueta(obs, "sutil", "pequeno"));
         }
-        String resumen = jugado ? incidencias(p) : "";
+        String resumen = jugado && !previa ? incidencias(p) : "";
         if (!resumen.isEmpty()) {
             Label inc = etiqueta(resumen, "sutil", "pequeno", "incidencias");
             inc.setMaxWidth(Double.MAX_VALUE);
             tarjeta.getChildren().add(inc);
+        }
+        if (previa) {
+            tarjeta.getChildren().add(fichasPrevia(p));
         }
         tarjeta.getStyleClass().addAll("vidrio", "partido");
         if (b(p, "jugado")) {
@@ -1062,14 +1240,86 @@ public class Aplicacion extends Application {
             tarjeta.getStyleClass().add("en-vivo");
         }
         tarjeta.setPrefWidth(380);
-        tarjeta.setOnMouseClicked(e -> abrirPartido(p));
+        tarjeta.setOnMouseClicked(e -> abrirPartido(p, previa));
         return tarjeta;
     }
 
-    /** Administrador: editor del partido. Visitante: detalle estilo Flashscore (cualquier estado). */
-    private void abrirPartido(Map<String, Object> p) {
-        if (puedeEditar()) {
-            dialogos.partido(p);
+    /**
+     * Lo que le falta a la previa de un partido: XI completo y formación de cada equipo, fecha y hora, y sede.
+     * Lista vacía = previa completa.
+     */
+    List<String> faltantesPrevia(Map<String, Object> p) {
+        List<String> falta = new ArrayList<>();
+        String[][] lados = {{"local", "localNombre", "titularesLocal", "formacionLocal"},
+            {"visitante", "visitanteNombre", "titularesVisitante", "formacionVisitante"}};
+        for (String[] lado : lados) {
+            long plantilla = l(equipoPorId(n(p, lado[0])), "jugadores").stream().filter(j -> n(j, "id") > 0).count();
+            int necesarios = (int) Math.min(Dialogos.TITULARES, plantilla);
+            if (necesarios > 0 && Datos.lista(p, lado[2]).size() != necesarios) {
+                falta.add("el XI titular de " + s(p, lado[1]));
+            }
+        }
+        for (String[] lado : lados) {
+            if (s(p, lado[3]).isEmpty()) {
+                falta.add("la formación de " + s(p, lado[1]));
+            }
+        }
+        if (!s(p, "fecha").matches("\\d{4}-\\d{2}-\\d{2}") || s(p, "hora").isBlank()) {
+            falta.add("la fecha y la hora");
+        }
+        if (s(p, "sede").isBlank()) {
+            falta.add("la sede");
+        }
+        return falta;
+    }
+
+    /** Nada de la previa: ni XI, ni formación, ni fecha. */
+    private static boolean previaVacia(Map<String, Object> p) {
+        return Datos.lista(p, "titularesLocal").isEmpty() && Datos.lista(p, "titularesVisitante").isEmpty()
+                && s(p, "formacionLocal").isEmpty() && s(p, "formacionVisitante").isEmpty()
+                && !s(p, "fecha").matches("\\d{4}-\\d{2}-\\d{2}");
+    }
+
+    /** «a, b y c» */
+    static String enumerar(List<String> partes) {
+        return partes.size() <= 1 ? String.join("", partes)
+                : String.join(", ", partes.subList(0, partes.size() - 1)) + " y " + partes.get(partes.size() - 1);
+    }
+
+    /**
+     * «Registrar resultados» de un partido que todavía no tiene marcador y cuya previa no está completa:
+     * se advierte antes de abrir el editor. «Ir a registrar previa» lleva a la pestaña Previa con ese
+     * partido abierto; «Continuar de todas formas» abre el resultado (goles y tarjetas usan la plantilla
+     * completa del equipo). Cerrar la advertencia no abre nada.
+     */
+    private void abrirResultado(Map<String, Object> p) {
+        List<String> falta = conMarcador(p) ? List.of() : faltantesPrevia(p);
+        if (!falta.isEmpty()) {
+            String texto = previaVacia(p)
+                    ? "Aún no ha registrado la previa de este partido (alineaciones, formación y datos logísticos). "
+                            + "¿Está seguro de que desea registrar el resultado directamente?"
+                    : "La previa de este partido está incompleta: falta " + enumerar(falta) + ". "
+                            + "¿Está seguro de que desea registrar el resultado directamente?";
+            String eleccion = dialogos.elegir("Atención: previa sin registrar", texto, "Continuar de todas formas", "Ir a registrar previa");
+            if (eleccion == null) {
+                return;
+            }
+            if (eleccion.equals("si")) {
+                pestanaPartidos = "previa";   // la vista vuelve a dibujarse ya en la pestaña Previa
+                mostrarVista("partidos");
+                dialogos.partido(p, true);
+                return;
+            }
+        }
+        dialogos.partido(p, false);
+    }
+
+    /** Administrador: editor de la previa o del resultado (según la pestaña). Visitante: detalle estilo Flashscore. */
+    private void abrirPartido(Map<String, Object> p, boolean previa) {
+        if (puedeEditar() && !previa) {
+            abrirResultado(p);
+        } else if (puedeEditar()) {
+            dialogos.partido(p, true);
         } else {
             dialogos.detallePartido(p);
         }
@@ -1111,14 +1361,19 @@ public class Aplicacion extends Application {
         Map<String, Object> t = tablas.get(Math.max(0, tablaElegida));
         int directos = n(t, "directos");
         int repechaje = n(t, "repechaje");
+        int descenso = n(t, "descenso");       // liga con divisiones: los últimos bajan
+        int totalFilas = l(t, "filas").size();
         TableView<Map<String, Object>> tabla = tabla(l(t, "filas"), COLUMNAS_TABLA);
         tabla.setRowFactory(tv -> new TableRow<>() {
             @Override
             protected void updateItem(Map<String, Object> fila, boolean vacia) {
                 super.updateItem(fila, vacia);
-                getStyleClass().removeAll("clasifica", "repechaje", "lider");
+                getStyleClass().removeAll("clasifica", "repechaje", "lider", "desciende");
                 if (!vacia && fila != null) {
                     int i = getIndex();
+                    if (descenso > 0 && i >= totalFilas - descenso) {
+                        getStyleClass().add("desciende");
+                    }
                     // El líder queda bajo un foco dorado en cuanto se juega algún partido.
                     if (i == 0 && n(fila, "pj") > 0) {
                         getStyleClass().add("lider");
@@ -1131,7 +1386,8 @@ public class Aplicacion extends Application {
                 }
             }
         });
-        String leyenda = s(E, "leyenda") + (directos > 0 ? " Verde: clasifica." : "") + (repechaje > 0 ? " Ámbar: repechaje." : "")
+        String leyenda = s(E, "leyenda") + (directos > 0 ? (b(t, "division") ? " Verde: asciende." : " Verde: clasifica.") : "")
+                + (descenso > 0 ? " Rojo: desciende." : "") + (repechaje > 0 ? " Ámbar: repechaje." : "")
                 + (!l(t, "filas").isEmpty() && n(l(t, "filas").get(0), "pj") > 0 ? " Dorado: líder." : "");
         caja.getChildren().addAll(tabla, etiqueta(leyenda, "sutil", "pequeno"));
         return caja;
@@ -1199,246 +1455,364 @@ public class Aplicacion extends Application {
         return nombres.isEmpty() ? "—" : String.join(", ", nombres.stream().map(String::valueOf).toList());
     }
 
-    private Node vistaSanciones() {
-        VBox todo = new VBox(26, vistaFicha(), vistaTarjetas());
-        todo.getStyleClass().add("vista");
-        return todo;
-    }
+    /* ---------------------------------------------------------------- estadisticas globales del campeonato */
 
-    /** Estadísticas de un partido: marcador, cifras por equipo y los cambios y tarjetas minuto a minuto. */
-    private Node vistaFicha() {
-        List<Map<String, Object>> partidos = l(E, "partidos").stream().filter(Aplicacion::conMarcador).toList();
-        if (partidos.isEmpty()) {
-            VBox caja = seccion("Estadísticas del partido", "Escoja un partido para ver sus cambios y tarjetas minuto a minuto.");
-            caja.getChildren().add(vacio("Todavía no hay partidos jugados ni en juego. Al registrar un resultado, sus cambios y tarjetas aparecen aquí."));
-            return caja;
-        }
-        if (partidos.stream().noneMatch(p -> n(p, "id") == fichaElegida)) {
-            Map<String, Object> vivo = partidos.stream().filter(p -> s(p, "estado").equals("EN_JUEGO")).findFirst().orElse(null);
-            fichaElegida = n(vivo != null ? vivo : partidos.get(partidos.size() - 1), "id");
-        }
-        int indice = 0;
-        for (int i = 0; i < partidos.size(); i++) {
-            if (n(partidos.get(i), "id") == fichaElegida) {
-                indice = i;
-            }
-        }
-        ComboBox<String> selector = combo(partidos.stream().map(p -> (s(p, "estado").equals("EN_JUEGO") ? "En juego · " : "")
-                + s(p, "localNombre") + " " + n(p, "gl") + "-" + n(p, "gv") + " " + s(p, "visitanteNombre") + " · "
-                + (s(p, "nombreRonda").isEmpty() ? contexto(p) : s(p, "nombreRonda"))).toList(), indice,
-                i -> { fichaElegida = n(partidos.get(i), "id"); mostrarVista("sanciones"); });
-        selector.setPrefWidth(420);
-        VBox caja = seccion("Estadísticas del partido", "Escoja un partido para ver sus cambios y tarjetas minuto a minuto.", selector);
-        caja.getChildren().add(ficha(partidos.get(indice)));
+    /**
+     * Estadísticas de TODO el campeonato: goleadores, asistencias, valla menos vencida y juego limpio.
+     * Las estadísticas de un partido (goles, cambios, tarjetas minuto a minuto) están en su detalle.
+     * Administrador: los registros de goles y tarjetas abren el editor para corregir. Visitante: solo lectura.
+     */
+    private Node vistaEstadisticas() {
+        Map<String, Object> est = m(E, "estadisticas");
+        String ayuda = puedeEditar()
+                ? "Datos de todo el campeonato. Toque un gol o una tarjeta de los registros para abrir su partido y corregirlo."
+                : "Datos de todo el campeonato. Las estadísticas de cada partido están en su detalle: tóquelo en Partidos.";
+        VBox caja = seccion("Estadísticas del campeonato", ayuda);
+        javafx.scene.control.TabPane pestanas = new javafx.scene.control.TabPane(
+                new javafx.scene.control.Tab("Goleadores", goleadores(est)),
+                new javafx.scene.control.Tab("Asistencias", asistencias(est)),
+                new javafx.scene.control.Tab("Valla menos vencida", valla(est)),
+                new javafx.scene.control.Tab("Juego limpio", juegoLimpio(est)));
+        pestanas.setTabClosingPolicy(javafx.scene.control.TabPane.TabClosingPolicy.UNAVAILABLE);
+        pestanas.getStyleClass().add("detalle-pestanas");
+        pestanas.getSelectionModel().select(pestanaEstadisticas);
+        pestanas.getSelectionModel().selectedIndexProperty().addListener((o, antes, ahora) -> pestanaEstadisticas = ahora.intValue());
+        caja.getChildren().add(pestanas);
         return caja;
     }
 
-    private Node ficha(Map<String, Object> p) {
-        int local = n(p, "local"), visitante = n(p, "visitante");
-        List<Map<String, Object>> tarjetas = l(p, "tarjetas"), cambios = l(p, "cambios");
-
-        String fecha = s(p, "fecha").matches("\\d{4}-\\d{2}-\\d{2}") ? Datos.fecha(p) : "";
-        String meta = String.join(" · ", java.util.stream.Stream.of(contexto(p), fecha, s(p, "sede")).filter(x -> !x.isEmpty()).toList());
-        HBox filaMeta = new HBox(8, etiqueta(meta, "sutil", "pequeno"), espacio(), etiquetaEstado(s(p, "estado")));
-        filaMeta.setAlignment(Pos.CENTER_LEFT);
-
-        Label nLocal = etiqueta(s(p, "localNombre"), "equipo-nombre");
-        Label nVisitante = etiqueta(s(p, "visitanteNombre"), "equipo-nombre");
-        if (n(p, "ganador") == local) {
-            nLocal.getStyleClass().add("ganador");
-        }
-        if (n(p, "ganador") == visitante) {
-            nVisitante.getStyleClass().add("ganador");
-        }
-        nLocal.setMaxWidth(Double.MAX_VALUE);
-        nVisitante.setMaxWidth(Double.MAX_VALUE);
-        nLocal.setAlignment(Pos.CENTER_RIGHT);
-        HBox.setHgrow(nLocal, Priority.ALWAYS);
-        HBox.setHgrow(nVisitante, Priority.ALWAYS);
-        VBox goles = new VBox(etiqueta(n(p, "gl") + " : " + n(p, "gv"), "ficha-goles"));
-        if (b(p, "penales")) {
-            goles.getChildren().add(etiqueta(n(p, "pl") + "-" + n(p, "pv") + " pen", "penales-texto"));
-        }
-        goles.setAlignment(Pos.CENTER);
-        HBox marcador = new HBox(20, nLocal, goles, nVisitante);
-        marcador.setAlignment(Pos.CENTER);
-        marcador.getStyleClass().add("marcador-partido");
-
-        java.util.function.BiFunction<Integer, String, Long> contar = (equipo, tipo) -> tipo.equals("CAMBIO")
-                ? cambios.stream().filter(x -> n(x, "equipo") == equipo).count()
-                : tarjetas.stream().filter(t -> n(t, "equipo") == equipo && (tipo.equals("ROJA") == s(t, "tipo").equals("ROJA"))).count();
-        VBox cifras = new VBox(12);
-        cifras.setMaxWidth(620);
-        for (String[] c : new String[][]{{"Cambios", "CAMBIO"}, {"Amarillas", "AMARILLA"}, {"Rojas", "ROJA"}}) {
-            cifras.getChildren().add(cifraDuelo(c[0], contar.apply(local, c[1]), contar.apply(visitante, c[1])));
-        }
-        HBox centroCifras = new HBox(cifras);
-        centroCifras.setAlignment(Pos.CENTER);
-        HBox.setHgrow(cifras, Priority.ALWAYS);
-
-        // eventos ordenados por minuto (los que no tienen minuto van al final)
-        List<Object[]> eventos = new ArrayList<>();
-        for (Map<String, Object> x : cambios) {
-            Label entra = etiqueta("Entra #" + n(x, "entraDorsal") + " " + s(x, "entraNombre"), "entra-texto");
-            Label sale = etiqueta("Sale #" + n(x, "saleDorsal") + " " + s(x, "saleNombre"), "sale-texto");
-            eventos.add(new Object[]{n(x, "minuto"), n(x, "equipo"), iconoCambio(), new VBox(1, entra, sale)});
-        }
-        for (Map<String, Object> t : tarjetas) {
-            boolean roja = s(t, "tipo").equals("ROJA");
-            Region carton = new Region();
-            carton.getStyleClass().addAll("carton", roja ? "carton-roja" : "carton-amarilla");
-            carton.setMinSize(12, 17);
-            carton.setMaxSize(12, 17);
-            carton.setRotate(-6);
-            int fechas = n(t, "fechas");
-            eventos.add(new Object[]{n(t, "minuto"), n(t, "equipo"), carton, new VBox(1, etiqueta("#" + n(t, "dorsal") + " " + s(t, "nombre"), "jugador-texto"),
-                    etiqueta(roja ? "Roja · " + fechas + (fechas == 1 ? " fecha" : " fechas") + " fuera" : "Amarilla", "sutil", "pequeno"))});
-        }
-        eventos.sort(Comparator.comparingInt(e -> (int) e[0] > 0 ? (int) e[0] : 999));
-        // Linea de tiempo: local a la izquierda, visitante a la derecha y el minuto en el eje central.
-        javafx.scene.layout.GridPane linea = new javafx.scene.layout.GridPane();
-        linea.setHgap(10);
-        linea.setVgap(8);
-        linea.getStyleClass().add("linea-tiempo");
-        javafx.scene.layout.ColumnConstraints lado = new javafx.scene.layout.ColumnConstraints();
-        lado.setPercentWidth(44);
-        javafx.scene.layout.ColumnConstraints eje = new javafx.scene.layout.ColumnConstraints();
-        eje.setPercentWidth(12);
-        eje.setHalignment(javafx.geometry.HPos.CENTER);
-        linea.getColumnConstraints().addAll(lado, eje, lado);
-        int filaEvento = 0;
-        for (Object[] e : eventos) {
-            boolean deLocal = (int) e[1] == local;
-            VBox textos = (VBox) e[3];
-            HBox evento = deLocal ? new HBox(8, textos, (Node) e[2]) : new HBox(8, (Node) e[2], textos);
-            evento.setAlignment(deLocal ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
-            textos.setAlignment(deLocal ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
-            evento.getStyleClass().add("evento");
-            evento.setMaxWidth(Double.MAX_VALUE);
-            Label minuto = etiqueta((int) e[0] > 0 ? e[0] + "′" : "–", "minuto-eje");
-            minuto.setMinWidth(54);
-            minuto.setAlignment(Pos.CENTER);
-            linea.add(evento, deLocal ? 0 : 2, filaEvento);
-            linea.add(minuto, 1, filaEvento);
-            filaEvento++;
-        }
-        VBox ficha = new VBox(16, filaMeta, marcador, centroCifras);
-        if (!Datos.lista(p, "titularesLocal").isEmpty() || !Datos.lista(p, "titularesVisitante").isEmpty()) {
-            HBox alineaciones = new HBox(16, alineacion(p, local, s(p, "localNombre"), Datos.lista(p, "titularesLocal")),
-                    alineacion(p, visitante, s(p, "visitanteNombre"), Datos.lista(p, "titularesVisitante")));
-            ficha.getChildren().addAll(etiqueta("XI inicial", "h3"), alineaciones);
-        }
-        ficha.getChildren().add(etiqueta("Minuto a minuto", "h3"));
-        ficha.getChildren().add(eventos.isEmpty()
-                ? etiqueta("No se registraron cambios ni tarjetas en este partido. Se anotan al abrir el partido en Partidos.", "sutil")
-                : linea);
-        Button editar = boton("Editar partido", "mini", "fantasma");
-        editar.setOnAction(e -> dialogos.partido(p));
-        soloAdmin(editar);
-        ficha.getChildren().add(new HBox(editar));
-        ficha.getStyleClass().addAll("vidrio", "ficha");
-        if (s(p, "estado").equals("EN_JUEGO")) {
-            ficha.getStyleClass().add("en-vivo");
-        }
-        return ficha;
+    private static VBox panelEstadistica() {
+        VBox v = new VBox(14);
+        v.getStyleClass().add("detalle-panel");
+        return v;
     }
 
-    /** XI inicial de un equipo con quién salió y quién entró (y en qué minuto). */
-    private Node alineacion(Map<String, Object> p, int idEquipo, String nombre, List<Object> ids) {
-        List<Map<String, Object>> cambios = l(p, "cambios");
-        List<Map<String, Object>> plantilla = l(equipoPorId(idEquipo), "jugadores");
-        VBox columna = new VBox(5, etiqueta(nombre, "jugador-texto", "titulo-alineacion"));
-        if (ids.isEmpty()) {
-            columna.getChildren().add(etiqueta("Sin XI registrado.", "sutil", "pequeno"));
+    private Node goleadores(Map<String, Object> est) {
+        VBox v = panelEstadistica();
+        List<Map<String, Object>> filas = l(est, "goleadores").stream().map(this::filaJugador).toList();
+        TableView<Map<String, Object>> tabla = tabla(filas, new String[][]{{"#", "#", "50"}, {"Jugador", "jugador"},
+            {"Equipo", "equipoNombre"}, {"Goles", "goles", "80"}, {"Asist.", "asistencias", "80"}});
+        tabla.setPlaceholder(etiqueta("Todavía no hay goles con autor. Se registran al editar un partido jugado.", "sutil"));
+        v.getChildren().add(tabla);
+        int sinAutor = n(est, "golesSinAutor");
+        if (sinAutor > 0) {
+            v.getChildren().add(etiqueta((sinAutor == 1 ? "1 gol del marcador todavía no tiene" : sinAutor + " goles del marcador todavía no tienen")
+                    + " autor registrado" + (puedeEditar() ? ": regístrelos en el editor del partido." : "."), "sutil", "pequeno"));
         }
-        plantilla.stream().filter(j -> ids.contains(n(j, "id"))).sorted(Comparator.comparingInt(j -> n(j, "dorsal"))).forEach(j -> {
-            Map<String, Object> salio = cambios.stream().filter(x -> n(x, "sale") == n(j, "id")).findFirst().orElse(null);
-            HBox fila = new HBox(10, etiqueta(String.valueOf(n(j, "dorsal")), "dorsal"),
-                    new VBox(0, etiqueta(s(j, "nombre"), "jugador-texto"), etiqueta(s(j, "posicion"), "sutil", "pequeno")), espacio());
-            if (salio != null) {
-                HBox marca = new HBox(4, icono(ICONO_SALE, "icono-mini", "icono-sale"), etiqueta(n(salio, "minuto") + "′", "sale-texto"));
-                marca.setAlignment(Pos.CENTER);
-                fila.getChildren().add(marca);
-            }
-            fila.setAlignment(Pos.CENTER_LEFT);
-            fila.getStyleClass().add("fila-alineacion");
-            columna.getChildren().add(fila);
-        });
-        List<Map<String, Object>> entraron = cambios.stream().filter(x -> n(x, "equipo") == idEquipo).toList();
-        if (!entraron.isEmpty()) {
-            columna.getChildren().add(etiqueta("Entraron", "sutil", "pequeno"));
-            for (Map<String, Object> x : entraron) {
-                HBox fila = new HBox(10, etiqueta(String.valueOf(n(x, "entraDorsal")), "dorsal"),
-                        new VBox(0, etiqueta(s(x, "entraNombre"), "jugador-texto"), etiqueta("por #" + n(x, "saleDorsal"), "sutil", "pequeno")),
-                        espacio(), etiqueta(n(x, "minuto") + "′", "entra-texto"));
-                fila.setAlignment(Pos.CENTER_LEFT);
-                fila.getStyleClass().addAll("fila-alineacion", "entro");
-                columna.getChildren().add(fila);
-            }
+        // Registro para auditar (solo administrador): cada gol con su partido; al tocarlo se abre el editor.
+        // El visitante no lo necesita: los goles de cada partido los ve en el detalle, pestaña «Resumen».
+        if (!puedeEditar()) {
+            return v;
         }
-        columna.setPrefWidth(1);
-        HBox.setHgrow(columna, Priority.ALWAYS);
-        return columna;
+        List<Map<String, Object>> goles = new ArrayList<>();
+        for (Map<String, Object> g : l(est, "goles")) {
+            goles.add(mapa("idPartido", n(g, "partido"),
+                    "partido", s(g, "partidoTexto") + (s(g, "ronda").isEmpty() ? "" : "  (" + s(g, "ronda") + ")"),
+                    "minuto", n(g, "minuto") > 0 ? n(g, "minuto") + "′" : "–", "equipo", s(g, "equipoNombre"),
+                    "gol", "#" + n(g, "autorDorsal") + " " + s(g, "autorNombre") + (b(g, "enContra") ? " (en contra)" : ""),
+                    "asistencia", n(g, "asistente") == 0 ? "—" : "#" + n(g, "asistenteDorsal") + " " + s(g, "asistenteNombre")));
+        }
+        TableView<Map<String, Object>> registro = tabla(goles, new String[][]{{"Partido", "partido"}, {"Min.", "minuto", "70"},
+            {"Equipo", "equipo"}, {"Gol", "gol"}, {"Asistencia", "asistencia"}});
+        registro.setPlaceholder(etiqueta("Sin goles registrados.", "sutil"));
+        abrirAlTocar(registro);
+        v.getChildren().addAll(etiqueta("Registro de goles", "h3"), registro);
+        return v;
     }
 
-    /** Fila «2  Cambios  0» con una barra a cada lado, como en las transmisiones. */
-    private static Node cifraDuelo(String titulo, long izquierda, long derecha) {
-        long total = izquierda + derecha;
-        Label l = etiqueta(String.valueOf(izquierda), "cifra-duelo");
-        Label r = etiqueta(String.valueOf(derecha), "cifra-duelo");
-        Label t = etiqueta(titulo, "sutil");
-        Region medio = new Region();
-        HBox.setHgrow(medio, Priority.ALWAYS);
-        Region medio2 = new Region();
-        HBox.setHgrow(medio2, Priority.ALWAYS);
-        HBox textos = new HBox(l, medio, t, medio2, r);
-        textos.setAlignment(Pos.CENTER);
-        StackPane barraIzq = barra(total == 0 ? 0 : (double) izquierda / total, true);
-        StackPane barraDer = barra(total == 0 ? 0 : (double) derecha / total, false);
-        HBox.setHgrow(barraIzq, Priority.ALWAYS);
-        HBox.setHgrow(barraDer, Priority.ALWAYS);
-        HBox barras = new HBox(4, barraIzq, barraDer);
-        return new VBox(4, textos, barras);
+    private Node asistencias(Map<String, Object> est) {
+        VBox v = panelEstadistica();
+        List<Map<String, Object>> filas = l(est, "asistidores").stream().map(this::filaJugador).toList();
+        TableView<Map<String, Object>> tabla = tabla(filas, new String[][]{{"#", "#", "50"}, {"Jugador", "jugador"},
+            {"Equipo", "equipoNombre"}, {"Asistencias", "asistencias", "110"}, {"Goles", "goles", "80"}});
+        tabla.setPlaceholder(etiqueta("Todavía no hay asistencias registradas. Se anotan junto con cada gol.", "sutil"));
+        v.getChildren().add(tabla);
+        return v;
     }
 
-    private static StackPane barra(double fraccion, boolean izquierda) {
-        Region fondo = new Region();
-        fondo.getStyleClass().add("barra-fondo");
-        fondo.setMaxWidth(Double.MAX_VALUE);
-        Region lleno = new Region();
-        lleno.getStyleClass().add(izquierda ? "barra-local" : "barra-visitante");
-        StackPane sp = new StackPane(fondo, lleno);
-        sp.setAlignment(izquierda ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
-        sp.setPrefWidth(10);
-        sp.setMinHeight(6);
-        sp.setMaxHeight(6);
-        lleno.maxWidthProperty().bind(sp.widthProperty().multiply(fraccion));
-        lleno.setMinWidth(0);
-        return sp;
+    private Map<String, Object> filaJugador(Map<String, Object> f) {
+        return mapa("jugador", "#" + n(f, "dorsal") + " " + s(f, "nombre"), "equipoNombre", s(f, "equipoNombre"),
+                "goles", n(f, "goles"), "asistencias", n(f, "asistencias"));
     }
 
-    private Node vistaTarjetas() {
+    private Node valla(Map<String, Object> est) {
+        VBox v = panelEstadistica();
+        TableView<Map<String, Object>> tabla = tabla(l(est, "valla"), new String[][]{{"#", "#", "50"}, {"Equipo", "nombre"},
+            {"PJ", "pj", "70"}, {"Goles recibidos", "gc", "140"}, {"Por partido", "promedio", "120"}, {"Vallas invictas", "invictas", "140"}});
+        tabla.setPlaceholder(etiqueta("Todavía no hay partidos jugados.", "sutil"));
+        v.getChildren().addAll(tabla, etiqueta("Orden: menos goles recibidos por partido; luego menos goles en total y más vallas invictas.", "sutil", "pequeno"));
+        return v;
+    }
+
+    private Node juegoLimpio(Map<String, Object> est) {
+        VBox v = panelEstadistica();
+        TableView<Map<String, Object>> tabla = tabla(l(est, "fairPlay"), new String[][]{{"#", "#", "50"}, {"Equipo", "nombre"},
+            {"PJ", "pj", "70"}, {"Amarillas", "ta", "100"}, {"Rojas", "tr", "80"}, {"Puntos", "puntos", "90"}, {"Por partido", "promedio", "120"}});
+        tabla.setPlaceholder(etiqueta("Todavía no hay partidos jugados.", "sutil"));
+        v.getChildren().addAll(tabla, etiqueta("Amarilla = 1 punto, roja = 3. Gana el que tenga menos puntos por partido.", "sutil", "pequeno"));
+
+        // Tarjetas y sanciones acumuladas (también para auditar: al tocar una se abre su partido).
         Map<String, Object> sanciones = m(E, "sanciones");
         String[] filtros = {"todas", "rojas", "pendientes"};
         ComboBox<String> filtro = combo(List.of("Todas las tarjetas", "Solo rojas", "Suspensiones vigentes"),
                 List.of(filtros).indexOf(filtroSanciones), i -> { filtroSanciones = filtros[i]; mostrarVista("sanciones"); });
-        VBox caja = seccion("Tarjetas y sanciones", s(sanciones, "resumen"), filtro);
+        VBox textos = new VBox(2, etiqueta("Tarjetas y sanciones", "h3"), etiqueta(s(sanciones, "resumen"), "sutil", "pequeno"));
+        HBox.setHgrow(textos, Priority.ALWAYS);
+        HBox cabecera = new HBox(10, textos, filtro);
+        cabecera.setAlignment(Pos.CENTER_LEFT);
         List<Map<String, Object>> filas = new ArrayList<>();
         for (Map<String, Object> r : l(sanciones, "registros")) {
             boolean roja = s(r, "tipo").equals("ROJA");
             if (filtroSanciones.equals("rojas") && !roja || filtroSanciones.equals("pendientes") && n(r, "pendientes") == 0) {
                 continue;
             }
-            filas.add(mapa("partido", s(r, "partido") + "  (" + s(r, "ronda") + ")", "fecha", Datos.fecha(r), "equipo", s(r, "equipo"),
-                    "jugador", "#" + n(r, "dorsal") + " " + s(r, "jugador"), "tarjeta", roja ? "Roja" : "Amarilla",
+            filas.add(mapa("idPartido", n(r, "idPartido"), "partido", s(r, "partido") + "  (" + s(r, "ronda") + ")", "fecha", Datos.fecha(r),
+                    "equipo", s(r, "equipo"), "jugador", "#" + n(r, "dorsal") + " " + s(r, "jugador"), "tarjeta", roja ? "Roja" : "Amarilla",
                     "fechas", roja ? String.valueOf(n(r, "fechas")) : "—",
                     "estado", !roja ? "—" : n(r, "pendientes") == 1 ? "Falta 1 fecha" : n(r, "pendientes") > 1 ? "Faltan " + n(r, "pendientes") + " fechas" : "Cumplida"));
         }
-        TableView<Map<String, Object>> tabla = tabla(filas, new String[][]{{"Partido", "partido"}, {"Fecha", "fecha"},
+        TableView<Map<String, Object>> registro = tabla(filas, new String[][]{{"Partido", "partido"}, {"Fecha", "fecha"},
             {"Equipo", "equipo"}, {"Jugador", "jugador"}, {"Tarjeta", "tarjeta"}, {"Fechas", "fechas", "80"}, {"Estado", "estado"}});
-        tabla.setPlaceholder(etiqueta("No hay tarjetas registradas. Se agregan al editar un partido.", "sutil"));
-        caja.getChildren().add(tabla);
+        registro.setPlaceholder(etiqueta("No hay tarjetas registradas. Se agregan al editar un partido.", "sutil"));
+        abrirAlTocar(registro);
+        v.getChildren().addAll(cabecera, registro);
+        return v;
+    }
+
+    /** Al tocar una fila con «idPartido» se abre ese partido: editor (administrador) o detalle (visitante). */
+    private void abrirAlTocar(TableView<Map<String, Object>> tabla) {
+        tabla.setRowFactory(tv -> {
+            TableRow<Map<String, Object>> fila = new TableRow<>();
+            fila.setOnMouseClicked(e -> {
+                if (!fila.isEmpty() && fila.getItem() != null) {
+                    l(E, "partidos").stream().filter(p -> n(p, "id") == n(fila.getItem(), "idPartido")).findFirst()
+                            .ifPresent(p -> abrirPartido(p, !conMarcador(p))); // jugado: su resultado; sin jugar: su previa
+                }
+            });
+            fila.getStyleClass().add("fila-clicable");
+            return fila;
+        });
+    }
+
+    /* ---------------------------------------------------------------- noticias */
+
+    /**
+     * Noticias estilo Flashscore. Administrador: crea, edita y elimina noticias y modera las
+     * propuestas de los visitantes. Visitante: lee, comenta y propone noticias (quedan pendientes).
+     */
+    private Node vistaNoticias() {
+        Map<String, Object> datos;
+        try {
+            datos = m(api.consultar("noticias"), "noticias");
+        } catch (RuntimeException e) {
+            return vacio("No se pudieron cargar las noticias: " + e.getMessage());
+        }
+        boolean admin = puedeEditar();
+        Button nueva = boton(admin ? "+ Nueva noticia" : "Proponer una noticia", "primario");
+        nueva.setOnAction(e -> dialogos.noticia(null, !admin));
+        VBox caja = seccion("Noticias", admin
+                ? "Publique noticias oficiales y apruebe o rechace las que envían los visitantes."
+                : "Noticias del torneo. Puede comentar o proponer una noticia: el administrador la revisa antes de publicarla.", nueva);
+        List<Map<String, Object>> publicadas = l(datos, "publicadas");
+        if (!admin) {
+            // Visitante: solo el feed público (aprobado = true).
+            if (publicadas.isEmpty()) {
+                caja.getChildren().add(vacio("Todavía no hay noticias publicadas. ¡Proponga la primera!"));
+            }
+            for (Map<String, Object> nt : publicadas) {
+                caja.getChildren().add(tarjetaNoticia(nt, false));
+            }
+            return caja;
+        }
+        // Administrador: dos pestañas separadas para no mezclar lo que espera moderación con lo publicado.
+        List<Map<String, Object>> pendientes = l(datos, "pendientes");
+        if (pestanaNoticias == null) {
+            pestanaNoticias = pendientes.isEmpty() ? "publicadas" : "pendientes"; // al entrar: lo que necesita atención
+        }
+        javafx.scene.control.Tab tabPendientes = new javafx.scene.control.Tab("Pendientes por aprobar (" + pendientes.size() + ")",
+                listaNoticias(pendientes, true, "Aportes enviados por los visitantes. Nadie los ve hasta que usted los apruebe.",
+                        "No hay aportes de visitantes por revisar."));
+        javafx.scene.control.Tab tabPublicadas = new javafx.scene.control.Tab("Publicadas y oficiales (" + publicadas.size() + ")",
+                listaNoticias(publicadas, false, "Lo que ven los visitantes: las noticias oficiales y los aportes ya aprobados.",
+                        "Todavía no hay noticias publicadas. Use «+ Nueva noticia» para crear la primera."));
+        if (!pendientes.isEmpty()) {
+            tabPendientes.getStyleClass().add("pestana-con-pendientes");
+        }
+        javafx.scene.control.TabPane pestanas = new javafx.scene.control.TabPane(tabPendientes, tabPublicadas);
+        pestanas.setTabClosingPolicy(javafx.scene.control.TabPane.TabClosingPolicy.UNAVAILABLE);
+        pestanas.getStyleClass().addAll("detalle-pestanas", "pestanas-noticias");
+        pestanas.getSelectionModel().select(pestanaNoticias.equals("pendientes") ? tabPendientes : tabPublicadas);
+        pestanas.getSelectionModel().selectedItemProperty().addListener((o, antes, ahora) ->
+                pestanaNoticias = ahora == tabPendientes ? "pendientes" : "publicadas");
+        caja.getChildren().add(pestanas);
         return caja;
+    }
+
+    /** Contenido de una pestaña de noticias del administrador: explicación corta y las tarjetas (o un aviso si está vacía). */
+    private Node listaNoticias(List<Map<String, Object>> noticias, boolean pendientes, String ayuda, String vacia) {
+        VBox lista = new VBox(14);
+        lista.getStyleClass().add("detalle-panel");
+        Label texto = etiqueta(ayuda, "sutil");
+        texto.setWrapText(true);
+        lista.getChildren().add(texto);
+        if (noticias.isEmpty()) {
+            lista.getChildren().add(vacio(vacia));
+        }
+        for (Map<String, Object> nt : noticias) {
+            lista.getChildren().add(tarjetaNoticia(nt, pendientes));
+        }
+        return lista;
+    }
+
+    /** Foto de una noticia (se pide al API: respeta los permisos y sirve con cualquier repositorio). Null si no hay. */
+    javafx.scene.image.Image fotoNoticia(String nombre) {
+        if (nombre == null || nombre.isEmpty()) {
+            return null;
+        }
+        try {
+            byte[] bytes = api.imagenNoticia(nombre);
+            javafx.scene.image.Image foto = bytes == null ? null : new javafx.scene.image.Image(new java.io.ByteArrayInputStream(bytes));
+            return foto == null || foto.isError() ? null : foto;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Foto con esquinas redondeadas a un tamaño FIJO calculado una sola vez con las medidas de la imagen.
+     *
+     * Antes el alto del recorte estaba enlazado (bind) a vista.boundsInLocal; pero los límites de un nodo
+     * ya incluyen su recorte, así que recorte y límites se recalculaban el uno al otro sin fin
+     * (computeLocalBounds -> Rectangle.getHeight -> DoublePropertyBase.computeValue) hasta un
+     * StackOverflowError en cada dibujo: la ventana quedaba congelada. Aquí no hay ningún enlace.
+     */
+    static javafx.scene.image.ImageView fotoRedondeada(javafx.scene.image.Image foto, double anchoMaximo, double altoMaximo) {
+        double ancho = foto.getWidth() > 0 ? foto.getWidth() : anchoMaximo;
+        double alto = foto.getHeight() > 0 ? foto.getHeight() : altoMaximo;
+        double escala = Math.min(anchoMaximo / ancho, altoMaximo / alto);   // cabe en el recuadro sin deformarse
+        double w = Math.round(ancho * escala), h = Math.round(alto * escala);
+        javafx.scene.image.ImageView vista = new javafx.scene.image.ImageView(foto);
+        vista.setFitWidth(w);
+        vista.setFitHeight(h);
+        vista.setPreserveRatio(true);
+        vista.setSmooth(true);
+        javafx.scene.shape.Rectangle recorte = new javafx.scene.shape.Rectangle(w, h); // medidas fijas: sin bind
+        recorte.setArcWidth(24);
+        recorte.setArcHeight(24);
+        vista.setClip(recorte);
+        return vista;
+    }
+
+    private Node tarjetaNoticia(Map<String, Object> nt, boolean pendiente) {
+        boolean admin = puedeEditar();
+        int id = n(nt, "id");
+        Label titulo = etiqueta(s(nt, "titulo"), "h3");
+        titulo.setWrapText(true);
+        HBox meta = new HBox(8, etiqueta("Por " + s(nt, "autor") + " · " + s(nt, "fecha"), "sutil", "pequeno"));
+        meta.setAlignment(Pos.CENTER_LEFT);
+        if (pendiente) {
+            meta.getChildren().add(etiqueta("Pendiente de aprobación", "etiqueta", "etiqueta-pendiente"));
+        } else if (b(nt, "deVisitante")) {
+            meta.getChildren().add(etiqueta(admin ? "Aporte de visitante · aprobado" : "Aporte de visitante", "chip"));
+        } else if (admin) {
+            meta.getChildren().add(etiqueta("Oficial", "chip"));
+        }
+        Label cuerpo = etiqueta(s(nt, "cuerpo"), "noticia-cuerpo");
+        cuerpo.setWrapText(true);
+        VBox textos = new VBox(6, titulo, meta, cuerpo);
+        HBox.setHgrow(textos, Priority.ALWAYS);
+        HBox arriba = new HBox(18);
+        javafx.scene.image.Image foto = fotoNoticia(s(nt, "imagen"));
+        if (foto != null) {
+            arriba.getChildren().add(fotoRedondeada(foto, 260, 360));
+        }
+        arriba.getChildren().add(textos);
+        VBox tarjeta = new VBox(14, arriba);
+
+        HBox acciones = new HBox(8);
+        acciones.setAlignment(Pos.CENTER_LEFT);
+        if (admin && pendiente) {
+            Button aprobar = boton("Aprobar", "primario", "mini");
+            aprobar.setOnAction(e -> accionNoticia("noticia/aprobar", mapa("id", id)));
+            Button rechazar = boton("Rechazar y eliminar", "peligro", "mini");
+            rechazar.setOnAction(e -> {
+                if (dialogos.confirmar("Rechazar propuesta", "¿Rechazar «" + s(nt, "titulo") + "»? Se borra la propuesta y su foto.", "Rechazar")) {
+                    accionNoticia("noticia/eliminar", mapa("id", id, "rechazo", true));
+                }
+            });
+            Button editar = boton("Editar antes de publicar", "fantasma", "mini");
+            editar.setOnAction(e -> dialogos.noticia(nt, false));
+            acciones.getChildren().addAll(aprobar, rechazar, editar);
+        } else if (admin) {
+            Button editar = boton("Editar", "fantasma", "mini");
+            editar.setOnAction(e -> dialogos.noticia(nt, false));
+            Button eliminar = boton("Eliminar", "peligro", "mini");
+            eliminar.setOnAction(e -> {
+                if (dialogos.confirmar("Eliminar noticia", "¿Eliminar «" + s(nt, "titulo") + "» con su foto y sus comentarios?", "Eliminar")) {
+                    accionNoticia("noticia/eliminar", mapa("id", id));
+                }
+            });
+            acciones.getChildren().addAll(editar, eliminar);
+        }
+        if (!acciones.getChildren().isEmpty()) {
+            tarjeta.getChildren().add(acciones);
+        }
+        if (!pendiente) {
+            tarjeta.getChildren().add(comentarios(nt));
+        }
+        tarjeta.getStyleClass().addAll("vidrio", "tarjeta-noticia");
+        return tarjeta;
+    }
+
+    /** Comentarios de una noticia publicada y el formulario para comentar (con filtro anti-obscenidades en el servicio). */
+    private Node comentarios(Map<String, Object> nt) {
+        List<Map<String, Object>> lista = l(nt, "comentarios");
+        VBox caja = new VBox(8, etiqueta("Comentarios (" + lista.size() + ")", "jugador-texto", "titulo-alineacion"));
+        for (Map<String, Object> c : lista) {
+            Label texto = etiqueta(s(c, "texto"), "jugador-texto");
+            texto.setWrapText(true);
+            VBox contenido = new VBox(2, etiqueta(s(c, "autor") + " · " + s(c, "fecha"), "sutil", "pequeno"), texto);
+            HBox.setHgrow(contenido, Priority.ALWAYS);
+            HBox fila = new HBox(10, contenido);
+            if (puedeEditar()) {
+                Button quitar = boton("Quitar", "mini", "peligro");
+                quitar.setOnAction(e -> accionNoticia("comentario/eliminar", mapa("noticia", n(nt, "id"), "id", n(c, "id"))));
+                fila.getChildren().add(quitar);
+            }
+            fila.setAlignment(Pos.CENTER_LEFT);
+            fila.getStyleClass().add("fila-lista");
+            caja.getChildren().add(fila);
+        }
+        TextField autor = new TextField();
+        autor.setPromptText(puedeEditar() ? "Administración" : "Su nombre (opcional)");
+        autor.setPrefWidth(170);
+        TextField texto = new TextField();
+        texto.setPromptText("Escriba un comentario…");
+        HBox.setHgrow(texto, Priority.ALWAYS);
+        Button comentar = boton("Comentar");
+        Runnable enviar = () -> {
+            if (texto.getText().isBlank()) {
+                texto.requestFocus();
+                return;
+            }
+            String nombre = autor.getText().isBlank() && puedeEditar() ? "Administración" : autor.getText();
+            accionNoticia("noticia/comentar", mapa("id", n(nt, "id"), "autor", nombre, "texto", texto.getText()));
+        };
+        comentar.setOnAction(e -> enviar.run());
+        texto.setOnAction(e -> enviar.run());
+        HBox formulario = new HBox(8, autor, texto, comentar);
+        formulario.setAlignment(Pos.CENTER_LEFT);
+        caja.getChildren().add(formulario);
+        return caja;
+    }
+
+    void accionNoticia(String ruta, Map<String, Object> cuerpo) {
+        Map<String, Object> r = ejecutar(ruta, cuerpo);
+        if (b(r, "ok")) {
+            aviso(s(r, "mensaje"));
+        } else {
+            dialogos.mensaje("Noticias", s(r, "error"));
+        }
     }
 
     private Node vistaReglas() {

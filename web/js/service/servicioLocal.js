@@ -15,6 +15,11 @@ function crearServicioLocal() {
   }
 
   const exigir = () => { if (!c) throw new ErrorRegla('Primero cree un campeonato.'); };
+  const exigirLigaSinIniciar = () => {
+    exigir();
+    if (c.formato !== 'LIGA') throw new ErrorRegla('Las divisiones solo existen en el formato Liga.');
+    if (m.iniciado()) throw new ErrorRegla('El campeonato ya inició: las divisiones se cambian antes de iniciar o en la siguiente temporada.');
+  };
   const exigirNoIniciado = () => { if (m.iniciado()) throw new ErrorRegla('El campeonato ya inició: no se pueden agregar equipos nuevos.'); };
   const usar = nuevo => { c = nuevo; m = new Motor(c); };
   const guardar = () => Almacen.campeonato.guardar(c);
@@ -36,12 +41,20 @@ function crearServicioLocal() {
 
   function tablas() {
     const cfg = c.config, corto = c.formato === 'TORNEO_CORTO', lista = [];
-    const tabla = (texto, directos, repechaje, filas) => ({ texto, directos, repechaje, filas: filas.map(fila) });
+    const tabla = (texto, directos, repechaje, filas) => ({ texto, directos, repechaje, descenso: 0, division: false, filas: filas.map(fila) });
     c.fases.forEach((f, i) => {
       if (f.tipo === 'LIGA') lista.push(tabla(f.nombre, corto ? cfg.clasificadosPlayoff : 1, 0, m.tablaDeFase(i)));
       if (f.tipo === 'SUIZO') lista.push(tabla(f.nombre, cfg.directosSuizo, cfg.repechajeSuizo, m.tablaDeFase(i)));
-      if (f.tipo === 'GRUPOS') f.grupos.forEach((_, g) => lista.push(tabla(`${f.nombre} - Grupo ${letraGrupo(g)}`,
-        corto ? 1 : cfg.clasificadosPorGrupo, 0, m.tablaDeGrupo(i, g))));
+      if (f.tipo === 'GRUPOS' && f.divisiones) {
+        // Liga con divisiones: verde = asciende (no en la Liga A), rojo = desciende (no en la última).
+        const n = f.grupos.length;
+        f.grupos.forEach((_, g) => {
+          const filas = m.tablaDeGrupo(i, g), k = Math.max(0, Math.min(cfg.ascensos == null ? 2 : cfg.ascensos, filas.length - 1));
+          lista.push(Object.assign(tabla(nombreGrupo(f, g), g > 0 ? k : 0, 0, filas), { descenso: g < n - 1 ? k : 0, division: true }));
+        });
+      } else if (f.tipo === 'GRUPOS') {
+        f.grupos.forEach((_, g) => lista.push(tabla(`${f.nombre} - ${nombreGrupo(f, g)}`, corto ? 1 : cfg.clasificadosPorGrupo, 0, m.tablaDeGrupo(i, g))));
+      }
     });
     lista.push(tabla('Estadísticas generales (todos los partidos)', 0, 0, m.tablaGeneral()));
     return lista;
@@ -113,7 +126,7 @@ function crearServicioLocal() {
     return {
       resumen: suspendidos.length ? 'Suspendidos (fechas que faltan): ' + suspendidos.join(', ') : 'No hay jugadores suspendidos.',
       registros: registros.map(({ partido: p, tarjeta: t, pendientes }) => ({
-        partido: `${m.nombre(p.local)} vs ${m.nombre(p.visitante)}`, ronda: p.nombreRonda, fecha: p.fecha, hora: p.hora,
+        idPartido: p.id, partido: `${m.nombre(p.local)} vs ${m.nombre(p.visitante)}`, ronda: p.nombreRonda, fecha: p.fecha, hora: p.hora,
         equipo: m.nombre(t.equipo), jugador: t.nombre, dorsal: t.dorsal, tipo: t.tipo, fechas: t.fechas, pendientes
       }))
     };
@@ -121,16 +134,34 @@ function crearServicioLocal() {
 
   function partido(p) {
     return {
-      id: p.id, fase: p.fase, grupo: p.grupo || '', ronda: p.ronda, nombreRonda: p.nombreRonda, pierna: p.pierna || 0,
+      id: p.id, fase: p.fase, grupo: p.grupo || '', grupoNombre: p.grupo ? nombreGrupo(c.fases[p.fase], p.grupo.charCodeAt(0) - 65) : '', ronda: p.ronda, nombreRonda: p.nombreRonda, pierna: p.pierna || 0,
       llave: p.llave || '', eliminatorio: !!p.eliminatorio, local: p.local, visitante: p.visitante,
       localNombre: m.nombre(p.local), visitanteNombre: m.nombre(p.visitante), estado: p.estado, jugado: P.jugado(p),
       gl: p.gl, gv: p.gv, pl: p.pl, pv: p.pv, penales: P.tienePenales(p), ganador: P.jugado(p) ? P.ganador(p) : -1,
       fecha: p.fecha || 'Por definir', hora: p.hora || '', sede: p.sede || '', obs: p.obs || '',
       tarjetas: P.tarjetas(p).map(t => Object.assign({ minuto: 0 }, t)),
       cambios: P.cambios(p).map(x => Object.assign({}, x)),
+      goles: P.goles(p).map(x => Object.assign({}, x)),
       titularesLocal: (p.titularesLocal || []).slice(), titularesVisitante: (p.titularesVisitante || []).slice(),
       formacionLocal: p.formacionLocal || '', formacionVisitante: p.formacionVisitante || '',
       suspendidos: m.suspendidosEn(p).map(t => ({ jugador: t.jugador, nombre: t.nombre, equipo: t.equipo, equipoNombre: m.nombre(t.equipo) }))
+    };
+  }
+
+  /** Estadísticas globales (mismo JSON que Presentador.estadisticas en Java). */
+  function estadisticas() {
+    const est = EstadisticasCampeonato.calcular(c);
+    const filaJugador = f => ({ jugador: f.idJugador, nombre: f.nombre, dorsal: f.dorsal, equipo: f.idEquipo, equipoNombre: f.equipo, goles: f.goles, asistencias: f.asistencias });
+    return {
+      goleadores: est.goleadores.map(filaJugador),
+      asistidores: est.asistidores.map(filaJugador),
+      goles: est.registroGoles.map(({ partido: p, gol: g }) => Object.assign({}, g, {
+        partido: p.id, partidoTexto: `${m.nombre(p.local)} ${p.gl}-${p.gv} ${m.nombre(p.visitante)}`, ronda: p.nombreRonda,
+        fecha: p.fecha || 'Por definir', hora: p.hora || '', equipoNombre: m.nombre(g.equipo)
+      })),
+      golesSinAutor: est.golesSinAutor,
+      valla: est.valla.map(v => ({ id: v.fila.id, nombre: v.fila.equipo.nombre, pj: v.fila.pj, gc: v.fila.gc, promedio: v.promedio.toFixed(2), invictas: v.vallasInvictas })),
+      fairPlay: est.fairPlay.map(f => ({ id: f.id, nombre: f.equipo.nombre, pj: f.pj, ta: f.ta, tr: f.tr, puntos: f.ta + 3 * f.tr, promedio: ((f.ta + 3 * f.tr) / f.pj).toFixed(2) }))
     };
   }
 
@@ -145,10 +176,15 @@ function crearServicioLocal() {
         formatoDescripcion: FORMATOS[c.formato].descripcion, iniciado: m.iniciado(), terminado: m.terminado(),
         estado: m.describirEstado(), campeon: c.campeon, campeonNombre: m.terminado() ? m.nombre(c.campeon) : null,
         reglas: resumenReglas(c), criterios: c.config.criterios.slice(), equiposActivos: m.activos().length,
-        puedeSiguiente: c.formato === 'TORNEO_CORTO'
+        puedeSiguiente: c.formato === 'TORNEO_CORTO' || c.formato === 'LIGA',
+        textoSiguiente: c.formato === 'LIGA' ? 'Nueva temporada' + (tieneDivisiones(c) ? ' (ascensos y descensos)…' : '…') : 'Siguiente torneo corto (Clausura)…',
+        // Sin llaves (formato Liga) la interfaz oculta la sección «Llaves».
+        usaLlaves: usaLlaves(c), esLiga: c.formato === 'LIGA',
+        divisiones: Array.from({ length: c.formato === 'LIGA' ? numeroDivisiones(c) : 1 }, (_, d) => ({ indice: d, nombre: nombreDivision(d), equipos: equiposDeDivision(c, d).length })),
+        ascensos: c.config.ascensos == null ? 2 : c.config.ascensos, maximoDivisiones: MAXIMO_DIVISIONES
       },
       equipos: c.equipos.map(e => ({
-        id: e.id, nombre: e.nombre, estadio: e.estadio || '', retirado: !!e.retirado,
+        id: e.id, nombre: e.nombre, estadio: e.estadio || '', retirado: !!e.retirado, division: divisionDe(c, e),
         dt: e.dt ? Object.assign({}, e.dt) : null,
         jugadores: e.jugadores.map(j => ({
           id: j.id || 0, nombre: j.nombre, documento: j.documento || '', dorsal: j.dorsal, posicion: j.posicion,
@@ -162,10 +198,19 @@ function crearServicioLocal() {
       leyenda: 'Orden: puntos › ' + c.config.criterios.map(x => CRITERIOS[x]).join(' › ') + '.',
       llaves: llaves(),
       sanciones: sanciones(),
+      estadisticas: estadisticas(),
       campeonFicha: campeon ? {
         nombre: campeon.equipo.nombre, dt: campeon.equipo.dt ? campeon.equipo.dt.nombre : 'Sin asignar',
         pj: campeon.pj, g: campeon.g, e: campeon.e, p: campeon.p, gf: campeon.gf, gc: campeon.gc
-      } : null
+      } : null,
+      // Liga con divisiones: un campeón por división, cada uno con las cifras de su propia tabla.
+      campeonesDivision: m.campeonesPorDivision().map((id, d) => {
+        const f = m.tablaDeGrupo(0, d).find(x => x.id === id);
+        return f ? {
+          division: nombreGrupo(c.fases[0], d), nombre: f.equipo.nombre, dt: f.equipo.dt ? f.equipo.dt.nombre : 'Sin asignar',
+          pj: f.pj, g: f.g, e: f.e, p: f.p, gf: f.gf, gc: f.gc, pts: f.pts
+        } : null;
+      }).filter(Boolean)
     };
   }
 
@@ -184,7 +229,7 @@ function crearServicioLocal() {
       premios,
       clasificacion: r.clasificacion.map(fila),
       resultados: datos.partidos.map(x => ({
-        fase: datos.fases[x.fase].nombre + (x.grupo ? ' · Grupo ' + x.grupo : ''), ronda: x.nombreRonda,
+        fase: datos.fases[x.fase].nombre + (x.grupo ? ' · ' + nombreGrupo(datos.fases[x.fase], x.grupo.charCodeAt(0) - 65) : ''), ronda: x.nombreRonda,
         local: h.nombre(x.local), marcador: P.marcador(x), visitante: h.nombre(x.visitante), estado: ESTADOS[x.estado]
       })),
       tarjetas: h.listarTarjetas().map(({ partido: x, tarjeta: t }) => ({
@@ -210,7 +255,7 @@ function crearServicioLocal() {
     c.fases.forEach((f, i) => {
       l.push('', '=== ' + f.nombre.toUpperCase() + ' ===');
       if (f.tipo === 'LIGA' || f.tipo === 'SUIZO') tabla(m.tablaDeFase(i));
-      if (f.tipo === 'GRUPOS') f.grupos.forEach((_, g) => { l.push('Grupo ' + letraGrupo(g) + ':'); tabla(m.tablaDeGrupo(i, g)); });
+      if (f.tipo === 'GRUPOS') f.grupos.forEach((_, g) => { l.push(nombreGrupo(f, g) + ':'); tabla(m.tablaDeGrupo(i, g)); });
       l.push('RESULTADOS:');
       for (const p of m.partidosDeFase(i)) {
         l.push([(p.grupo ? 'Grupo ' + p.grupo + ' | ' : '') + p.nombreRonda, m.nombre(p.local), P.marcador(p), m.nombre(p.visitante), fechaTexto(p), ESTADOS[p.estado]].join('\t'));
@@ -241,7 +286,7 @@ function crearServicioLocal() {
       usados.add(j.dorsal);
     }
     let equipo = existente;
-    if (!equipo) { exigirNoIniciado(); equipo = m.agregarEquipo(nombre); }
+    if (!equipo) { exigirNoIniciado(); const division = divisionConMenosEquipos(c); equipo = m.agregarEquipo(nombre); equipo.division = division; }
     equipo.nombre = nombre;
     equipo.estadio = String(d.estadio || '').trim();
     equipo.dt = d.dt && String(d.dt.nombre || '').trim()
@@ -300,6 +345,34 @@ function crearServicioLocal() {
     return cambios;
   }
 
+  /**
+   * Goles por jugador: el autor es del equipo que suma el gol (o del rival si es en contra)
+   * y la asistencia, opcional, es de un compañero distinto del autor. Igual que en Java.
+   */
+  function leerGoles(lista, p) {
+    return lista.map(x => {
+      const equipo = x.equipo | 0;
+      if (equipo !== p.local && equipo !== p.visitante) throw new ErrorRegla('Uno de los goles es de un equipo que no juega este partido.');
+      const minuto = x.minuto | 0;
+      if (minuto < 0 || minuto > MINUTO_MAXIMO) throw new ErrorRegla(`El minuto del gol debe estar entre 1 y ${MINUTO_MAXIMO}.`);
+      const enContra = !!x.enContra;
+      const eqAutor = c.equipos.find(q => q.id === (enContra ? P.rival(p, equipo) : equipo));
+      const autor = eqAutor && eqAutor.jugadores.find(j => j.id === x.autor);
+      if (!autor) throw new ErrorRegla(`Uno de los goles es de un jugador que no está en la plantilla${enContra ? ' del rival' : ' de su equipo'}.`);
+      let asistente = null;
+      if (x.asistente && !enContra) {
+        const eq = c.equipos.find(q => q.id === equipo);
+        asistente = eq.jugadores.find(j => j.id === x.asistente);
+        if (!asistente) throw new ErrorRegla(`La asistencia del gol de ${autor.nombre} es de un jugador que no está en su equipo.`);
+        if (asistente.id === autor.id) throw new ErrorRegla(`${autor.nombre} no puede darse la asistencia a sí mismo.`);
+      }
+      return {
+        equipo, minuto, enContra, autor: autor.id, autorNombre: autor.nombre, autorDorsal: autor.dorsal,
+        asistente: asistente ? asistente.id : 0, asistenteNombre: asistente ? asistente.nombre : '', asistenteDorsal: asistente ? asistente.dorsal : 0
+      };
+    }).sort((a, b) => (a.minuto || 9999) - (b.minuto || 9999));
+  }
+
   /** Valida el texto de una formación ('' = sin definir). */
   function leerFormacion(texto) {
     const f = String(texto || '').trim();
@@ -322,7 +395,9 @@ function crearServicioLocal() {
     const r = DatosPrueba.generar(semilla, pedidos, c.equipos.map(e => e.nombre), sinPlantilla.length);
     const conIds = jugadores => jugadores.map(j => Object.assign(j, { id: m.nuevoIdJugador() }));
     for (const e of r.equipos) {
+      const division = divisionConMenosEquipos(c); // reparte los equipos entre las divisiones
       const equipo = m.agregarEquipo(e.nombre);
+      equipo.division = division;
       equipo.estadio = e.estadio;
       equipo.dt = e.dt;
       equipo.jugadores = e.jugadores;
@@ -340,6 +415,12 @@ function crearServicioLocal() {
     const p = c.partidos.find(x => x.id === id);
     if (!p) throw new ErrorRegla('El partido no existe.');
     const datos = P.datos(p);
+    // XI inicial de los dos equipos, si viene (la carga rápida no lo envía: se conserva).
+    const ponerTitulares = () => {
+      if (!d.titularesLocal) return;
+      datos.titularesLocal = leerTitulares(d.titularesLocal, p.local);
+      datos.titularesVisitante = leerTitulares(d.titularesVisitante || [], p.visitante);
+    };
     if (d.estado === 'JUGADO' || d.estado === 'EN_JUEGO') {
       // «En juego»: el marcador, las tarjetas y los cambios se registran en vivo (sin penales).
       const jugado = d.estado === 'JUGADO';
@@ -350,15 +431,20 @@ function crearServicioLocal() {
         if (minuto < 0 || minuto > MINUTO_MAXIMO) throw new ErrorRegla(`El minuto de la tarjeta debe estar entre 1 y ${MINUTO_MAXIMO}.`);
         return Object.assign({}, t, { minuto, fechas: t.tipo === 'ROJA' ? Math.max(1, t.fechas | 0) : 0 });
       }), p.local);
-      // la carga rápida no envía el XI ni los cambios: se conservan
-      if (d.titularesLocal) {
-        datos.titularesLocal = leerTitulares(d.titularesLocal, p.local);
-        datos.titularesVisitante = leerTitulares(d.titularesVisitante || [], p.visitante);
-      }
+      ponerTitulares(); // antes de los cambios: se validan contra este XI
       if (d.cambios) datos.cambios = leerCambios(d.cambios, p, datos);
+      if (d.goles) datos.goles = leerGoles(d.goles, p); // la carga rápida no envía los goles: se conservan
+      // Nunca puede haber más goles con autor que goles en el marcador (también al bajar el marcador).
+      for (const [id, marcador] of [[p.local, datos.gl], [p.visitante, datos.gv]]) {
+        const registrados = P.goles(datos).filter(g => g.equipo === id).length;
+        if (registrados > marcador) {
+          throw new ErrorRegla(`Hay ${registrados} ${registrados === 1 ? 'gol registrado' : 'goles registrados'} de ${m.nombre(id)}, pero el marcador dice ${marcador}. Corrija el marcador o quite goles en el editor del partido.`);
+        }
+      }
     } else {
       P.reiniciar(datos);
       datos.estado = d.estado;
+      ponerTitulares(); // «Previa del partido»: el XI se elige antes de jugar
     }
     // La formación se elige antes del partido: se guarda en cualquier estado.
     if ('formacionLocal' in d) {
@@ -457,15 +543,58 @@ function crearServicioLocal() {
       importarEquipos(nuevo, c.equipos);
       usar(nuevo);
     },
+    // Clausura de un torneo corto o siguiente temporada de una liga (con ascensos y descensos si hay divisiones).
     siguiente: d => {
       exigir();
       const nombre = String(d.nombre || '').trim();
       if (!nombre) throw new ErrorRegla('Escriba el nombre del nuevo torneo.');
+      if (c.formato !== 'TORNEO_CORTO' && c.formato !== 'LIGA') throw new ErrorRegla('La siguiente temporada solo existe en los formatos Liga y Apertura/Clausura.');
+      const nuevaDivision = new Map();
+      let movimientos = '';
+      const k = c.config.ascensos == null ? 2 : c.config.ascensos;
+      if (tieneDivisiones(c) && k > 0) {
+        if (!m.terminado()) throw new ErrorRegla('Termine la temporada (hasta tener campeón) para saber quién asciende y quién desciende.');
+        const n = c.fases[0].grupos.length, partes = [];
+        for (let dv = 0; dv + 1 < n; dv++) {
+          const arriba = m.tablaDeGrupo(0, dv).map(f => f.id), abajo = m.tablaDeGrupo(0, dv + 1).map(f => f.id);
+          const cuantos = Math.min(k, Math.min(arriba.length, abajo.length) - 1); // cada división conserva al menos un equipo
+          if (cuantos <= 0) continue;
+          const bajan = arriba.slice(arriba.length - cuantos), suben = abajo.slice(0, cuantos);
+          bajan.forEach(id => nuevaDivision.set(id, dv + 1));
+          suben.forEach(id => nuevaDivision.set(id, dv));
+          partes.push(`Suben a la ${nombreDivision(dv)}: ${suben.map(id => m.nombre(id)).join(', ')}. Bajan a la ${nombreDivision(dv + 1)}: ${bajan.map(id => m.nombre(id)).join(', ')}.`);
+        }
+        movimientos = partes.join(' ');
+      }
       archivarActual();
       const copia = JSON.parse(JSON.stringify(c));
       Object.assign(copia, { nombre, partidos: [], fases: [], paso: 0, campeon: -1, semilla: Math.floor(Math.random() * 2147483647), codigo: nuevoCodigo(), fechaArchivo: null });
       copia.equipos = copia.equipos.filter(e => !e.retirado);
+      copia.equipos.forEach(e => { if (nuevaDivision.has(e.id)) e.division = nuevaDivision.get(e.id); });
       usar(copia);
+      return movimientos;
+    },
+    'equipo/division': d => {
+      exigirLigaSinIniciar();
+      const e = m.equipo(d.id);
+      if (!e) throw new ErrorRegla('El equipo no existe.');
+      if (!(d.division >= 0 && d.division < numeroDivisiones(c))) throw new ErrorRegla('Esa división no existe.');
+      e.division = d.division;
+    },
+    'division/agregar': () => {
+      exigirLigaSinIniciar();
+      if (numeroDivisiones(c) >= MAXIMO_DIVISIONES) throw new ErrorRegla(`Se permiten como máximo ${MAXIMO_DIVISIONES} divisiones.`);
+      c.config.divisiones = numeroDivisiones(c) + 1;
+      return `Se creó la ${nombreDivision(c.config.divisiones - 1)}. Asígnele equipos.`;
+    },
+    'division/quitar': () => {
+      exigirLigaSinIniciar();
+      const n = numeroDivisiones(c);
+      if (n <= 1) throw new ErrorRegla('La liga ya tiene una sola división.');
+      const movidos = equiposDeDivision(c, n - 1);
+      movidos.forEach(e => { e.division = n - 2; });
+      c.config.divisiones = n - 1;
+      return `Se quitó la ${nombreDivision(n - 1)}.` + (movidos.length ? ` Sus ${movidos.length} equipos pasaron a la ${nombreDivision(n - 2)}.` : '');
     },
     avanzar: () => {
       exigir();
@@ -480,7 +609,10 @@ function crearServicioLocal() {
       exigirNoIniciado();
       const nombre = String(d.nombre || '').trim();
       if (!nombre) throw new ErrorRegla('Escriba el nombre del equipo.');
-      if (!m.agregarEquipo(nombre)) throw new ErrorRegla(`El equipo «${nombre}» ya existe.`);
+      const division = divisionConMenosEquipos(c);
+      const nuevo = m.agregarEquipo(nombre);
+      if (!nuevo) throw new ErrorRegla(`El equipo «${nombre}» ya existe.`);
+      nuevo.division = division;
     },
     equipo: d => { exigir(); guardarEquipo(d); },
     'equipo/quitar': d => {
@@ -498,8 +630,31 @@ function crearServicioLocal() {
     archivar: () => archivarActual(),
     'historial/eliminar': d => {
       if (!Almacen.historial.eliminar(d.codigo)) throw new ErrorRegla('No se encontró ese campeonato en el historial.');
-    }
+    },
+    // Noticias (mismas rutas y mensajes que ApiControlador)
+    'noticia/proponer': d => { noticias.proponer(d); return '¡Gracias! Su noticia quedó pendiente: se publicará cuando el administrador la apruebe.'; },
+    'noticia/comentar': d => { noticias.comentar(d.id, d.autor, d.texto); return 'Comentario publicado.'; },
+    'noticia/guardar': d => { noticias.publicar(d); return d.id == null ? 'Noticia publicada.' : 'Noticia guardada.'; },
+    'noticia/aprobar': d => { noticias.aprobar(d.id); return 'Noticia aprobada: ya aparece en el feed.'; },
+    'noticia/eliminar': d => { noticias.eliminar(d.id); return d.rechazo ? 'Propuesta rechazada.' : 'Noticia eliminada.'; },
+    'comentario/eliminar': d => { noticias.eliminarComentario(d.noticia, d.id); return 'Comentario eliminado.'; }
   };
+
+  /* ---------------------------------------------------------------- noticias */
+
+  const noticias = crearNoticiasLocal(ErrorRegla);
+  /** Lo único que un visitante puede crear: proponer noticias (quedan pendientes) y comentar. */
+  const RUTAS_VISITANTE = new Set(['noticia/proponer', 'noticia/comentar']);
+
+  /** Mismo JSON que Presentador.noticias en Java. «imagen» es la foto como data URL ('' = sin foto). */
+  function noticiasJson() {
+    const admin = !!(usuario && ROLES[usuario.rol].puedeEditar);
+    const noticia = n => ({
+      id: n.id, titulo: n.titulo, cuerpo: n.cuerpo, autor: n.autor, deVisitante: n.rolAutor === 'VISITANTE', fecha: n.fecha,
+      imagen: n.imagenRuta || '', aprobado: n.aprobado, comentarios: n.comentarios.map(x => Object.assign({}, x))
+    });
+    return { publicadas: noticias.publicadas().map(noticia), pendientes: admin ? noticias.pendientes().map(noticia) : [], puedeModerar: admin };
+  }
 
   const nombreArchivo = s => s.trim().replace(/[^a-zA-Z0-9-_]+/g, '_') || 'campeonato';
 
@@ -527,6 +682,11 @@ function crearServicioLocal() {
     async historial() {
       try { exigirSesion(); return historial(); } catch (e) { return fallo(e); }
     },
+    async noticias() {
+      try { exigirSesion(); return { ok: true, noticias: noticiasJson() }; } catch (e) { return fallo(e); }
+    },
+    /** En la web sola la foto ya es una «data URL»: se usa tal cual. */
+    urlImagen: imagen => imagen || '',
     /** Detalle tipo Flashscore de un partido (mismo JSON que GET /api/partido/{id}). */
     async detalle(id) {
       try {
@@ -544,9 +704,13 @@ function crearServicioLocal() {
       const comando = comandos[ruta];
       if (!comando) return { ok: false, codigo: 'ERROR', error: 'Acción desconocida: ' + ruta };
       try {
-        if (!RUTAS_PUBLICAS.has(ruta)) exigirAdministrador(); // toda acción que modifica datos pasa por aquí
+        if (RUTAS_VISITANTE.has(ruta)) exigirSesion();                  // cualquiera con sesión: proponer y comentar
+        else if (!RUTAS_PUBLICAS.has(ruta)) exigirAdministrador();      // toda acción que modifica datos pasa por aquí
         const mensaje = comando(cuerpo) || null;
         if (ruta === 'logout') return { ok: true };
+        if (ruta.startsWith('noticia/') || ruta.startsWith('comentario/')) {
+          return { ok: true, mensaje, estado: estado(), sesion: sesion(), noticias: noticiasJson() };
+        }
         if (c && !RUTAS_PUBLICAS.has(ruta)) guardar();
         return { ok: true, mensaje, estado: estado(), sesion: sesion() };
       } catch (e) {

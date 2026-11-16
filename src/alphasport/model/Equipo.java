@@ -18,8 +18,18 @@ public class Equipo implements Serializable {
     private boolean retirado;
     private DirectorTecnico directorTecnico;
     private ArrayList<Jugador> jugadores = new ArrayList<>();
+    // Division de una liga con divisiones: 0 = Liga A, 1 = Liga B... (0 en archivos anteriores)
+    private int division;
 
     public Equipo() {
+    }
+
+    public int getDivision() {
+        return division;
+    }
+
+    public void setDivision(int division) {
+        this.division = Math.max(0, division);
     }
 
     public Equipo(int id, String nombreEquipo) {

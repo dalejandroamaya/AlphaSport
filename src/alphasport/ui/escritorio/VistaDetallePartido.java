@@ -40,6 +40,7 @@ final class VistaDetallePartido {
     static Node construir(Map<String, Object> detalle) {
         Map<String, Object> p = m(detalle, "partido");
         TabPane pestanas = new TabPane(
+                new Tab("Resumen", resumen(p)),
                 new Tab("Cara a cara", caraACara(m(detalle, "caraACara"), p)),
                 new Tab("Racha", racha(m(detalle, "racha"), p)),
                 new Tab("Alineaciones", alineaciones(m(detalle, "alineaciones"), p)));
@@ -89,6 +90,131 @@ final class VistaDetallePartido {
     /** Mapa {id, nombre} para dibujar el escudo de un equipo del partido. */
     private static Map<String, Object> mapa(Map<String, Object> p, String id, String nombre) {
         return Datos.mapa("id", n(p, id), "nombre", s(p, nombre));
+    }
+
+    /* ---------------------------------------------------------------- resumen: estadisticas y eventos del partido */
+
+    /**
+     * Estadisticas de ESTE partido: cifras por equipo y los goles, cambios y tarjetas
+     * minuto a minuto (antes estaban en la vista general de Estadisticas).
+     */
+    private static Node resumen(Map<String, Object> p) {
+        VBox caja = new VBox(16);
+        caja.getStyleClass().add("detalle-panel");
+        if (!Aplicacion.conMarcador(p)) {
+            caja.getChildren().add(etiqueta("El partido todavía no se juega. Aquí aparecerán los goles, los cambios y las tarjetas.", "vacio"));
+            return caja;
+        }
+        int local = n(p, "local"), visitante = n(p, "visitante");
+        List<Map<String, Object>> tarjetas = l(p, "tarjetas"), cambios = l(p, "cambios"), goles = l(p, "goles");
+        java.util.function.BiFunction<Integer, String, Long> contar = (equipo, tipo) -> switch (tipo) {
+            case "GOL" -> goles.stream().filter(g -> n(g, "equipo") == equipo).count();
+            case "CAMBIO" -> cambios.stream().filter(x -> n(x, "equipo") == equipo).count();
+            default -> tarjetas.stream().filter(t -> n(t, "equipo") == equipo && (tipo.equals("ROJA") == s(t, "tipo").equals("ROJA"))).count();
+        };
+        VBox cifras = new VBox(12);
+        cifras.setMaxWidth(620);
+        cifras.getChildren().add(cifraDuelo("Goles", n(p, "gl"), n(p, "gv")));
+        for (String[] c : new String[][]{{"Cambios", "CAMBIO"}, {"Amarillas", "AMARILLA"}, {"Rojas", "ROJA"}}) {
+            cifras.getChildren().add(cifraDuelo(c[0], contar.apply(local, c[1]), contar.apply(visitante, c[1])));
+        }
+        HBox centroCifras = new HBox(cifras);
+        centroCifras.setAlignment(Pos.CENTER);
+        HBox.setHgrow(cifras, Priority.ALWAYS);
+        caja.getChildren().addAll(centroCifras, etiqueta("Minuto a minuto", "h3"));
+
+        // eventos ordenados por minuto (los que no tienen minuto van al final)
+        List<Object[]> eventos = new java.util.ArrayList<>();
+        for (Map<String, Object> g : goles) {
+            Label autor = etiqueta("#" + n(g, "autorDorsal") + " " + s(g, "autorNombre") + (b(g, "enContra") ? " (en contra)" : ""), "jugador-texto");
+            VBox textos = new VBox(1, autor);
+            if (n(g, "asistente") != 0) {
+                textos.getChildren().add(etiqueta("Asistencia: #" + n(g, "asistenteDorsal") + " " + s(g, "asistenteNombre"), "sutil", "pequeno"));
+            }
+            eventos.add(new Object[]{n(g, "minuto"), n(g, "equipo"), Aplicacion.icono(Aplicacion.ICONO_DADO, "icono-mini", "icono-gol"), textos});
+        }
+        for (Map<String, Object> x : cambios) {
+            Label entra = etiqueta("Entra #" + n(x, "entraDorsal") + " " + s(x, "entraNombre"), "entra-texto");
+            Label sale = etiqueta("Sale #" + n(x, "saleDorsal") + " " + s(x, "saleNombre"), "sale-texto");
+            eventos.add(new Object[]{n(x, "minuto"), n(x, "equipo"), Aplicacion.iconoCambio(), new VBox(1, entra, sale)});
+        }
+        for (Map<String, Object> t : tarjetas) {
+            boolean roja = s(t, "tipo").equals("ROJA");
+            javafx.scene.layout.Region carton = new javafx.scene.layout.Region();
+            carton.getStyleClass().addAll("carton", roja ? "carton-roja" : "carton-amarilla");
+            carton.setMinSize(12, 17);
+            carton.setMaxSize(12, 17);
+            carton.setRotate(-6);
+            int fechas = n(t, "fechas");
+            eventos.add(new Object[]{n(t, "minuto"), n(t, "equipo"), carton, new VBox(1, etiqueta("#" + n(t, "dorsal") + " " + s(t, "nombre"), "jugador-texto"),
+                    etiqueta(roja ? "Roja · " + fechas + (fechas == 1 ? " fecha" : " fechas") + " fuera" : "Amarilla", "sutil", "pequeno"))});
+        }
+        if (eventos.isEmpty()) {
+            caja.getChildren().add(etiqueta("No se registraron goles, cambios ni tarjetas en este partido.", "sutil"));
+            return caja;
+        }
+        eventos.sort(java.util.Comparator.comparingInt(e -> (int) e[0] > 0 ? (int) e[0] : 999));
+        // Linea de tiempo: local a la izquierda, visitante a la derecha y el minuto en el eje central.
+        javafx.scene.layout.GridPane linea = new javafx.scene.layout.GridPane();
+        linea.setHgap(10);
+        linea.setVgap(8);
+        linea.getStyleClass().add("linea-tiempo");
+        javafx.scene.layout.ColumnConstraints lado = new javafx.scene.layout.ColumnConstraints();
+        lado.setPercentWidth(44);
+        javafx.scene.layout.ColumnConstraints eje = new javafx.scene.layout.ColumnConstraints();
+        eje.setPercentWidth(12);
+        eje.setHalignment(javafx.geometry.HPos.CENTER);
+        linea.getColumnConstraints().addAll(lado, eje, lado);
+        int fila = 0;
+        for (Object[] e : eventos) {
+            boolean deLocal = (int) e[1] == local;
+            VBox textos = (VBox) e[3];
+            HBox evento = deLocal ? new HBox(8, textos, (Node) e[2]) : new HBox(8, (Node) e[2], textos);
+            evento.setAlignment(deLocal ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+            textos.setAlignment(deLocal ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+            evento.getStyleClass().add("evento");
+            evento.setMaxWidth(Double.MAX_VALUE);
+            Label minuto = etiqueta((int) e[0] > 0 ? e[0] + "′" : "–", "minuto-eje");
+            minuto.setMinWidth(54);
+            minuto.setAlignment(Pos.CENTER);
+            linea.add(evento, deLocal ? 0 : 2, fila);
+            linea.add(minuto, 1, fila);
+            fila++;
+        }
+        caja.getChildren().add(linea);
+        return caja;
+    }
+
+    /** Fila «2  Cambios  0» con una barra a cada lado, como en las transmisiones. */
+    static Node cifraDuelo(String titulo, long izquierda, long derecha) {
+        long total = izquierda + derecha;
+        Label l = etiqueta(String.valueOf(izquierda), "cifra-duelo");
+        Label r = etiqueta(String.valueOf(derecha), "cifra-duelo");
+        Label t = etiqueta(titulo, "sutil");
+        HBox textos = new HBox(l, Aplicacion.espacio(), t, Aplicacion.espacio(), r);
+        textos.setAlignment(Pos.CENTER);
+        StackPane barraIzq = barra(total == 0 ? 0 : (double) izquierda / total, true);
+        StackPane barraDer = barra(total == 0 ? 0 : (double) derecha / total, false);
+        HBox.setHgrow(barraIzq, Priority.ALWAYS);
+        HBox.setHgrow(barraDer, Priority.ALWAYS);
+        HBox barras = new HBox(4, barraIzq, barraDer);
+        return new VBox(4, textos, barras);
+    }
+
+    private static StackPane barra(double fraccion, boolean izquierda) {
+        javafx.scene.layout.Region fondo = new javafx.scene.layout.Region();
+        fondo.getStyleClass().add("barra-fondo");
+        fondo.setMaxWidth(Double.MAX_VALUE);
+        javafx.scene.layout.Region lleno = new javafx.scene.layout.Region();
+        lleno.getStyleClass().add(izquierda ? "barra-local" : "barra-visitante");
+        StackPane sp = new StackPane(fondo, lleno);
+        sp.setAlignment(izquierda ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        sp.setPrefWidth(10);
+        sp.setMinHeight(6);
+        sp.setMaxHeight(6);
+        lleno.maxWidthProperty().bind(sp.widthProperty().multiply(fraccion));
+        lleno.setMinWidth(0);
+        return sp;
     }
 
     /* ---------------------------------------------------------------- cara a cara */
@@ -213,12 +339,13 @@ final class VistaDetallePartido {
         cancha.setMaxSize(ANCHO_CANCHA, ALTO_CANCHA);
         cancha.getStyleClass().add("cancha");
         dibujarLineas(cancha);
-        ubicar(cancha, visitante, true);
-        ubicar(cancha, local, false);
+        List<Map<String, Object>> cambios = l(p, "cambios");
+        ubicar(cancha, visitante, true, cambios);
+        ubicar(cancha, local, false, cambios);
 
         VBox lado = new VBox(14,
-                rotuloEquipo(s(p, "visitanteNombre"), visitante, "Arriba"),
-                rotuloEquipo(s(p, "localNombre"), local, "Abajo"));
+                rotuloEquipo(s(p, "visitanteNombre"), visitante, "Arriba", cambiosDe(cambios, n(p, "visitante"))),
+                rotuloEquipo(s(p, "localNombre"), local, "Abajo", cambiosDe(cambios, n(p, "local"))));
         if (!b(local, "confirmada") || !b(visitante, "confirmada")) {
             Label nota = etiqueta("Las casillas con «?» son puestos por confirmar: el XI inicial se registra al abrir el partido.",
                     "sutil", "pequeno");
@@ -231,11 +358,27 @@ final class VistaDetallePartido {
         return caja;
     }
 
-    private static Node rotuloEquipo(String equipo, Map<String, Object> al, String donde) {
+    private static List<Map<String, Object>> cambiosDe(List<Map<String, Object>> cambios, int idEquipo) {
+        return cambios.stream().filter(x -> n(x, "equipo") == idEquipo).toList();
+    }
+
+    /** Rótulo del equipo: formación, estado de la alineación y los cambios (quién entró por quién). */
+    private static Node rotuloEquipo(String equipo, Map<String, Object> al, String donde, List<Map<String, Object>> cambios) {
         String formacion = s(al, "formacion") + (b(al, "formacionElegida") ? "" : " (por defecto)");
         VBox v = new VBox(4, etiqueta(donde, "sutil", "pequeno"), etiqueta(equipo, "h3"),
                 etiqueta("Formación " + formacion, "chip"),
                 etiqueta(b(al, "confirmada") ? "Alineación confirmada" : "Alineación por confirmar", "sutil", "pequeno"));
+        if (!cambios.isEmpty()) {
+            v.getChildren().add(etiqueta("Cambios", "sutil", "pequeno"));
+            for (Map<String, Object> x : cambios) {
+                HBox fila = new HBox(8, etiqueta(n(x, "minuto") + "′", "entra-texto"),
+                        new VBox(0, etiqueta("Entra #" + n(x, "entraDorsal") + " " + s(x, "entraNombre"), "jugador-texto"),
+                                etiqueta("Sale #" + n(x, "saleDorsal") + " " + s(x, "saleNombre"), "sale-texto", "pequeno")));
+                fila.setAlignment(Pos.CENTER_LEFT);
+                fila.getStyleClass().addAll("fila-alineacion", "entro");
+                v.getChildren().add(fila);
+            }
+        }
         v.getStyleClass().addAll("vidrio", "detalle-rotulo");
         return v;
     }
@@ -263,7 +406,7 @@ final class VistaDetallePartido {
      * Coloca las lineas del equipo en su mitad: el portero junto a su arco y la ultima
      * linea cerca del medio campo. El de arriba se refleja para que ataque hacia abajo.
      */
-    private static void ubicar(Pane cancha, Map<String, Object> al, boolean arriba) {
+    private static void ubicar(Pane cancha, Map<String, Object> al, boolean arriba, List<Map<String, Object>> cambios) {
         List<Object> lineas = lista(al, "lineas");
         double arco = 0.93, frente = 0.55; // fraccion de alto (equipo de abajo)
         int ultima = Math.max(1, lineas.size() - 1);
@@ -275,7 +418,7 @@ final class VistaDetallePartido {
                 double x = (k + 1.0) / (linea.size() + 1);
                 @SuppressWarnings("unchecked")
                 Map<String, Object> j = (Map<String, Object>) linea.get(k);
-                Node ficha = ficha(j, arriba);
+                Node ficha = ficha(j, arriba, cambios);
                 double fx = (arriba ? 1 - x : x) * ANCHO_CANCHA;
                 double fy = (arriba ? 1 - y : y) * ALTO_CANCHA;
                 ficha.setLayoutX(fx - 45);
@@ -285,7 +428,7 @@ final class VistaDetallePartido {
         }
     }
 
-    private static Node ficha(Map<String, Object> j, boolean visitante) {
+    private static Node ficha(Map<String, Object> j, boolean visitante, List<Map<String, Object>> cambios) {
         Label dorsal = etiqueta(j == null ? "?" : String.valueOf(n(j, "dorsal")), "ficha-dorsal",
                 visitante ? "ficha-visitante" : "ficha-local");
         dorsal.setMinSize(34, 34);
@@ -296,6 +439,9 @@ final class VistaDetallePartido {
             Label nombre = etiqueta(apellido(s(j, "nombre")), "ficha-nombre");
             nombre.setMaxWidth(90);
             v.getChildren().add(nombre);
+            // Si salió en un cambio, el minuto va debajo del nombre.
+            cambios.stream().filter(x -> n(x, "sale") == n(j, "id")).findFirst()
+                    .ifPresent(x -> v.getChildren().add(etiqueta("↓ " + n(x, "minuto") + "′", "ficha-sale")));
         }
         v.setAlignment(Pos.TOP_CENTER);
         v.setPrefWidth(90);

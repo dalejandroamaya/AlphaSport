@@ -6,6 +6,7 @@ import alphasport.model.CriterioDesempate;
 import alphasport.model.DirectorTecnico;
 import alphasport.model.EstadoPartido;
 import alphasport.model.Formacion;
+import alphasport.model.Gol;
 import alphasport.model.Jugador;
 import alphasport.model.Partido;
 import alphasport.model.Tarjeta;
@@ -13,6 +14,7 @@ import alphasport.model.TipoFormato;
 import alphasport.model.Usuario;
 import alphasport.service.AutenticacionService;
 import alphasport.service.CampeonatoService;
+import alphasport.service.NoticiasService;
 import alphasport.service.ReglaNegocioException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -30,11 +32,22 @@ public class ApiControlador {
     private final CampeonatoService servicio;
     private final AutenticacionService autenticacion;
     private final Presentador presentador;
+    private final NoticiasService noticias;
 
-    public ApiControlador(CampeonatoService servicio, AutenticacionService autenticacion) {
+    public ApiControlador(CampeonatoService servicio, AutenticacionService autenticacion, NoticiasService noticias) {
         this.servicio = servicio;
         this.autenticacion = autenticacion;
+        this.noticias = noticias;
         this.presentador = new Presentador(servicio);
+    }
+
+    /** Sin servicio de noticias propio: noticias solo en memoria (pruebas). */
+    public ApiControlador(CampeonatoService servicio, AutenticacionService autenticacion) {
+        this(servicio, autenticacion, new NoticiasService(new alphasport.persistence.RepositorioNoticiasEnMemoria()));
+    }
+
+    public NoticiasService getNoticias() {
+        return noticias;
     }
 
     /* ---------------------------------------------------------------- sesion y permisos */
@@ -44,6 +57,9 @@ public class ApiControlador {
 
     /** Rutas de ejecutar() que no exigen ser administrador. Todo lo demas si (lista blanca). */
     private static final Set<String> RUTAS_PUBLICAS = Set.of("login", "login/visitante", "logout");
+
+    /** Lo unico que un visitante puede crear: proponer noticias (quedan pendientes) y comentar. */
+    private static final Set<String> RUTAS_VISITANTE = Set.of("noticia/proponer", "noticia/comentar");
 
     public Usuario getUsuarioActual() {
         return usuarioActual;
@@ -84,13 +100,21 @@ public class ApiControlador {
             case "sesion" -> Presentador.mapa("ok", true, "sesion", sesion());
             case "estado" -> presentador.estado();
             case "historial" -> presentador.historial(servicio.historial());
+            case "noticias" -> Presentador.mapa("ok", true, "noticias", noticiasJson());
             default -> throw new ReglaNegocioException("Ruta desconocida: " + ruta);
         };
     }
 
     public Map<String, Object> ejecutar(String ruta, Map<String, Object> cuerpo) throws Exception {
-        if (!RUTAS_PUBLICAS.contains(ruta)) {
+        if (RUTAS_VISITANTE.contains(ruta)) {
+            exigirSesion();       // cualquiera con sesion: proponer noticias y comentar
+        } else if (!RUTAS_PUBLICAS.contains(ruta)) {
             exigirAdministrador(); // toda accion que modifica datos pasa por aqui
+        }
+        if (ruta.startsWith("noticia/") || ruta.startsWith("comentario/")) {
+            Map<String, Object> r = respuesta(ejecutarNoticia(ruta, cuerpo));
+            r.put("noticias", noticiasJson());
+            return r;
         }
         String mensaje = null;
         switch (ruta) {
@@ -102,7 +126,10 @@ public class ApiControlador {
             }
             case "nuevo" -> servicio.crear(texto(cuerpo, "nombre"), TipoFormato.valueOf(texto(cuerpo, "formato")),
                     configuracion(objeto(cuerpo, "config")), Boolean.TRUE.equals(cuerpo.get("mismosEquipos")));
-            case "siguiente" -> servicio.siguienteTorneoCorto(texto(cuerpo, "nombre"));
+            case "siguiente" -> mensaje = servicio.siguienteTemporada(texto(cuerpo, "nombre"));
+            case "equipo/division" -> servicio.cambiarDivision(entero(cuerpo.get("id")), entero(cuerpo.get("division")));
+            case "division/agregar" -> mensaje = servicio.agregarDivision();
+            case "division/quitar" -> mensaje = servicio.quitarDivision();
             case "cancelar" -> servicio.cancelar();
             case "cambiarFormato" -> servicio.cambiarFormato(texto(cuerpo, "nombre"),
                     TipoFormato.valueOf(texto(cuerpo, "formato")), configuracion(objeto(cuerpo, "config")));
@@ -119,6 +146,53 @@ public class ApiControlador {
             default -> throw new ReglaNegocioException("Ruta desconocida: " + ruta);
         }
         return respuesta(mensaje);
+    }
+
+    /* ---------------------------------------------------------------- noticias y comentarios */
+
+    /** Noticias para la interfaz: el feed publico para todos y las pendientes solo para el administrador. */
+    private Map<String, Object> noticiasJson() {
+        boolean admin = usuarioActual != null && usuarioActual.puedeEditar();
+        return Presentador.noticias(noticias.publicadas(), admin ? noticias.pendientes() : List.of(), admin);
+    }
+
+    private String ejecutarNoticia(String ruta, Map<String, Object> cuerpo) throws Exception {
+        switch (ruta) {
+            case "noticia/proponer" -> {
+                noticias.proponer(texto(cuerpo, "titulo"), texto(cuerpo, "cuerpo"), texto(cuerpo, "autor"),
+                        NoticiasService.imagenDesdeDataUrl(texto(cuerpo, "imagen")));
+                return "¡Gracias! Su noticia quedó pendiente: se publicará cuando el administrador la apruebe.";
+            }
+            case "noticia/comentar" -> {
+                noticias.comentar(entero(cuerpo.get("id")), texto(cuerpo, "autor"), texto(cuerpo, "texto"));
+                return "Comentario publicado.";
+            }
+            case "noticia/guardar" -> {
+                Object id = cuerpo.get("id");
+                noticias.publicar(id == null ? null : entero(id), texto(cuerpo, "titulo"), texto(cuerpo, "cuerpo"),
+                        NoticiasService.imagenDesdeDataUrl(texto(cuerpo, "imagen")), Boolean.TRUE.equals(cuerpo.get("quitarImagen")));
+                return id == null ? "Noticia publicada." : "Noticia guardada.";
+            }
+            case "noticia/aprobar" -> {
+                noticias.aprobar(entero(cuerpo.get("id")));
+                return "Noticia aprobada: ya aparece en el feed.";
+            }
+            case "noticia/eliminar" -> {
+                noticias.eliminar(entero(cuerpo.get("id")));
+                return Boolean.TRUE.equals(cuerpo.get("rechazo")) ? "Propuesta rechazada." : "Noticia eliminada.";
+            }
+            case "comentario/eliminar" -> {
+                noticias.eliminarComentario(entero(cuerpo.get("noticia")), entero(cuerpo.get("id")));
+                return "Comentario eliminado.";
+            }
+            default -> throw new ReglaNegocioException("Ruta desconocida: " + ruta);
+        }
+    }
+
+    /** Foto de una noticia (la pide ServidorWeb para /api/imagen/{nombre}). Las de pendientes solo las ve el administrador. */
+    public byte[] imagenNoticia(String nombre) throws Exception {
+        exigirSesion();
+        return noticias.imagen(nombre, usuarioActual.puedeEditar());
     }
 
     public Map<String, Object> respuesta(String mensaje) {
@@ -158,16 +232,19 @@ public class ApiControlador {
             datos.setPenalesLocal(jugado ? entero(d.get("pl")) : Partido.SIN_PENALES);
             datos.setPenalesVisitante(jugado ? entero(d.get("pv")) : Partido.SIN_PENALES);
             datos.setTarjetas(tarjetas(lista(d, "tarjetas")), original.getIdLocal());
-            if (d.containsKey("titularesLocal")) { // la carga rapida no envia el XI ni los cambios: se conservan
-                datos.setTitulares(titulares(lista(d, "titularesLocal"), original.getIdLocal()),
-                        titulares(lista(d, "titularesVisitante"), original.getIdVisitante()));
-            }
+            leerTitulares(d, original, datos); // antes de los cambios: se validan contra este XI
             if (d.containsKey("cambios")) {
                 datos.setCambios(cambios(lista(d, "cambios"), original, datos));
             }
+            if (d.containsKey("goles")) { // la carga rapida no envia los goles: se conservan
+                datos.setGoles(goles(lista(d, "goles"), original));
+            }
+            // Nunca puede haber mas goles con autor que goles en el marcador (tambien al bajar el marcador).
+            validarCantidadGoles(original, datos);
         } else {
             datos.reiniciarResultado();
             datos.setEstado(estado);
+            leerTitulares(d, original, datos); // «Previa del partido»: el XI se elige antes de jugar
         }
         // La formacion se elige antes del partido: se guarda en cualquier estado.
         if (d.containsKey("formacionLocal")) {
@@ -226,6 +303,14 @@ public class ApiControlador {
      * Lee el XI inicial de un equipo: jugadores de su plantilla, sin repetir,
      * y exactamente 11 (o toda la plantilla si tiene menos de 11).
      */
+    /** XI inicial de los dos equipos, si viene en la petición (la carga rápida no lo envía: se conserva). */
+    private void leerTitulares(Map<String, Object> d, Partido original, Partido datos) {
+        if (d.containsKey("titularesLocal")) {
+            datos.setTitulares(titulares(lista(d, "titularesLocal"), original.getIdLocal()),
+                    titulares(lista(d, "titularesVisitante"), original.getIdVisitante()));
+        }
+    }
+
     private ArrayList<Integer> titulares(List<Object> lista, int idEquipo) {
         ArrayList<Integer> ids = new ArrayList<>();
         if (lista.isEmpty()) {
@@ -312,6 +397,58 @@ public class ApiControlador {
         return cambios;
     }
 
+    /**
+     * Lee los goles por jugador: el autor es del equipo que suma el gol (o del rival si es
+     * en contra) y la asistencia, opcional, es de un companero distinto del autor.
+     */
+    private ArrayList<Gol> goles(List<Object> lista, Partido partido) {
+        ArrayList<Gol> goles = new ArrayList<>();
+        for (Object o : lista) {
+            Map<String, Object> g = mapa(o);
+            int idEquipo = entero(g.get("equipo"));
+            if (!partido.involucra(idEquipo)) {
+                throw new ReglaNegocioException("Uno de los goles es de un equipo que no juega este partido.");
+            }
+            int minuto = g.get("minuto") == null ? 0 : entero(g.get("minuto"));
+            if (minuto < 0 || minuto > MINUTO_MAXIMO) {
+                throw new ReglaNegocioException("El minuto del gol debe estar entre 1 y " + MINUTO_MAXIMO + ".");
+            }
+            boolean enContra = Boolean.TRUE.equals(g.get("enContra"));
+            int idEquipoAutor = enContra ? partido.getRival(idEquipo) : idEquipo;
+            Jugador autor = servicio.getCampeonato().buscarJugador(idEquipoAutor, entero(g.get("autor")));
+            if (autor == null) {
+                throw new ReglaNegocioException("Uno de los goles es de un jugador que no está en la plantilla"
+                        + (enContra ? " del rival." : " de su equipo."));
+            }
+            int idAsistente = g.get("asistente") == null ? 0 : entero(g.get("asistente"));
+            Jugador asistente = null;
+            if (idAsistente != Gol.SIN_ASISTENCIA && !enContra) {
+                asistente = servicio.getCampeonato().buscarJugador(idEquipo, idAsistente);
+                if (asistente == null) {
+                    throw new ReglaNegocioException("La asistencia del gol de " + autor.getNombre() + " es de un jugador que no está en su equipo.");
+                }
+                if (asistente.getId() == autor.getId()) {
+                    throw new ReglaNegocioException(autor.getNombre() + " no puede darse la asistencia a sí mismo.");
+                }
+            }
+            goles.add(new Gol(idEquipo, minuto, autor, enContra, asistente));
+        }
+        goles.sort(Comparator.comparingInt(x -> x.getMinuto() == 0 ? Integer.MAX_VALUE : x.getMinuto()));
+        return goles;
+    }
+
+    private void validarCantidadGoles(Partido partido, Partido datos) {
+        for (int idEquipo : new int[]{partido.getIdLocal(), partido.getIdVisitante()}) {
+            long registrados = datos.getGoles().stream().filter(g -> g.getIdEquipo() == idEquipo).count();
+            int marcador = idEquipo == partido.getIdLocal() ? datos.getGolesLocal() : datos.getGolesVisitante();
+            if (registrados > marcador) {
+                throw new ReglaNegocioException("Hay " + registrados + (registrados == 1 ? " gol registrado" : " goles registrados")
+                        + " de " + servicio.getCampeonato().nombreDe(idEquipo) + ", pero el marcador dice " + marcador
+                        + ". Corrija el marcador o quite goles en el editor del partido.");
+            }
+        }
+    }
+
     /** Valida el texto de una formacion ("" = sin definir). */
     private static String formacion(String texto) {
         if (texto.isBlank()) {
@@ -340,6 +477,8 @@ public class ApiControlador {
         cfg.setDirectosSuizo(entero(c.get("directosSuizo")));
         cfg.setRepechajeSuizo(entero(c.get("repechajeSuizo")));
         cfg.setGranFinalConReinicio(Boolean.TRUE.equals(c.get("granFinalConReinicio")));
+        cfg.setDivisiones(c.get("divisiones") == null ? 1 : entero(c.get("divisiones")));
+        cfg.setAscensos(c.get("ascensos") == null ? 2 : entero(c.get("ascensos")));
         cfg.setCriterios(criterios(lista(c, "criterios")));
         return cfg;
     }

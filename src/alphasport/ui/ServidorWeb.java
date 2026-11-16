@@ -25,7 +25,8 @@ public class ServidorWeb {
     private static final Map<String, String> TIPOS = Map.of(
             "html", "text/html; charset=utf-8", "css", "text/css; charset=utf-8",
             "js", "text/javascript; charset=utf-8", "json", "application/json; charset=utf-8",
-            "png", "image/png", "svg", "image/svg+xml", "ico", "image/x-icon", "webp", "image/webp");
+            "png", "image/png", "svg", "image/svg+xml", "ico", "image/x-icon", "webp", "image/webp",
+            "jpg", "image/jpeg", "gif", "image/gif");
 
     private final Path carpetaWeb;
     private final CampeonatoService servicio;
@@ -85,6 +86,17 @@ public class ServidorWeb {
                     detener();
                     System.exit(0);
                 }).start();
+            } else if (metodo.equals("GET") && ruta.startsWith("imagen/")) {
+                // Foto de una noticia: solo las de noticias publicadas (o todas para el administrador).
+                String nombre = ruta.substring("imagen/".length());
+                byte[] foto = api.imagenNoticia(nombre);
+                if (foto == null) {
+                    enviar(intercambio, 404, "text/plain; charset=utf-8", "No encontrado".getBytes(StandardCharsets.UTF_8));
+                } else {
+                    String extension = nombre.substring(nombre.lastIndexOf('.') + 1).toLowerCase();
+                    intercambio.getResponseHeaders().set("Cache-Control", "private, max-age=3600");
+                    enviar(intercambio, 200, TIPOS.getOrDefault(extension, "application/octet-stream"), foto);
+                }
             } else if (metodo.equals("GET")) {
                 responder(intercambio, 200, api.consultar(ruta));
             } else {

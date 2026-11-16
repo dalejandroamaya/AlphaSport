@@ -117,7 +117,8 @@ public class ResumenCampeonato {
         for (int g = 0; g < fase.getGrupos().size(); g++) {
             int pos = MotorCampeonato.ids(motor.tablaDeGrupo(indiceFase, g)).indexOf(idEquipo);
             if (pos >= 0) {
-                return pos;
+                // En una liga con divisiones todos los de la Liga A van antes que los de la Liga B, etc.
+                return fase.isDivisiones() ? g * 1000 + pos : pos;
             }
         }
         return 99;

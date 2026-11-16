@@ -7,6 +7,7 @@ import alphasport.model.DirectorTecnico;
 import alphasport.model.Equipo;
 import alphasport.model.Fase;
 import alphasport.model.Formacion;
+import alphasport.model.Gol;
 import alphasport.model.Jugador;
 import alphasport.model.Partido;
 import alphasport.model.Tarjeta;
@@ -14,6 +15,7 @@ import alphasport.model.TipoFase;
 import alphasport.model.TipoFormato;
 import alphasport.service.CampeonatoService;
 import alphasport.service.DetallePartido;
+import alphasport.service.EstadisticasCampeonato;
 import alphasport.service.FilaTabla;
 import alphasport.service.GeneradorFixture;
 import alphasport.service.MotorCampeonato;
@@ -76,7 +78,22 @@ public class Presentador {
                 .map(CriterioDesempate::getDescripcion).collect(Collectors.joining(" › ")) + ".");
         estado.put("llaves", llaves(c, motor));
         estado.put("sanciones", sanciones(c, sanciones));
+        estado.put("estadisticas", estadisticas(c));
         estado.put("campeonFicha", c.isTerminado() ? ficha(resumen.filaDe(c.getIdCampeon())) : null);
+        // Liga con divisiones: un campeon por division (Liga A, Liga B...), cada uno con las cifras de su propia tabla.
+        List<Object> campeones = new ArrayList<>();
+        List<Integer> porDivision = motor.campeonesPorDivision();
+        for (int d = 0; d < porDivision.size(); d++) {
+            int idCampeon = porDivision.get(d);
+            FilaTabla fila = motor.tablaDeGrupo(0, d).stream().filter(f -> f.getIdEquipo() == idCampeon).findFirst().orElse(null);
+            Map<String, Object> ficha = ficha(fila);
+            if (ficha != null) {
+                ficha.put("division", c.getFases().get(0).nombreGrupo(d));
+                ficha.put("pts", fila.getPuntos());
+                campeones.add(ficha);
+            }
+        }
+        estado.put("campeonesDivision", campeones);
         return estado;
     }
 
@@ -89,7 +106,24 @@ public class Presentador {
                         .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList()),
                 "criterios", c.getConfiguracion().getCriterios().stream().map(Enum::name).collect(Collectors.toList()),
                 "equiposActivos", c.getEquiposActivos().size(),
-                "puedeSiguiente", c.getFormato() == TipoFormato.TORNEO_CORTO);
+                "puedeSiguiente", c.getFormato() == TipoFormato.TORNEO_CORTO || c.getFormato() == TipoFormato.LIGA,
+                "textoSiguiente", c.getFormato() == TipoFormato.LIGA ? "Nueva temporada" + (c.tieneDivisiones() ? " (ascensos y descensos)…" : "…")
+                        : "Siguiente torneo corto (Clausura)…",
+                // Sin llaves (formato Liga) la interfaz oculta la seccion «Llaves».
+                "usaLlaves", motor.usaLlaves(),
+                "esLiga", c.getFormato() == TipoFormato.LIGA,
+                "divisiones", divisiones(c), "ascensos", c.getConfiguracion().getAscensos(),
+                "maximoDivisiones", ConfiguracionTorneo.MAXIMO_DIVISIONES);
+    }
+
+    /** [{indice, nombre, equipos}] de cada division; una sola si la liga no tiene divisiones. */
+    private List<Object> divisiones(Campeonato c) {
+        List<Object> lista = new ArrayList<>();
+        int n = c.getFormato() == TipoFormato.LIGA ? c.getConfiguracion().getDivisiones() : 1;
+        for (int d = 0; d < n; d++) {
+            lista.add(mapa("indice", d, "nombre", ConfiguracionTorneo.nombreDivision(d), "equipos", c.equiposDeDivision(d).size()));
+        }
+        return lista;
     }
 
     private Map<String, Object> equipo(Equipo e, Sanciones sanciones) {
@@ -105,6 +139,7 @@ public class Presentador {
         return mapa("id", e.getId(), "nombre", e.getNombreEquipo(), "estadio", e.getEstadio(), "retirado", e.isRetirado(),
                 "dt", dt == null ? null : mapa("nombre", dt.getNombre(), "documento", dt.getDocumento(),
                         "nacionalidad", dt.getNacionalidad()),
+                "division", servicio.getCampeonato().divisionDe(e),
                 "jugadores", jugadores);
     }
 
@@ -118,6 +153,9 @@ public class Presentador {
         m.put("id", p.getId());
         m.put("fase", p.getIndiceFase());
         m.put("grupo", p.getGrupo());
+        // «Grupo B» o «Liga B» (liga con divisiones), listo para mostrar
+        Fase fase = p.getIndiceFase() < c.getFases().size() ? c.getFases().get(p.getIndiceFase()) : null;
+        m.put("grupoNombre", p.getGrupo().isEmpty() || fase == null ? "" : fase.nombreGrupo(p.getGrupo().charAt(0) - 'A'));
         m.put("ronda", p.getRonda());
         m.put("nombreRonda", p.getNombreRonda());
         m.put("pierna", p.getPierna());
@@ -144,12 +182,58 @@ public class Presentador {
         m.put("titularesVisitante", new ArrayList<>(p.getTitularesVisitante()));
         m.put("formacionLocal", p.getFormacionLocal());
         m.put("formacionVisitante", p.getFormacionVisitante());
+        m.put("goles", p.getGoles().stream().map(Presentador::gol).collect(Collectors.toList()));
         m.put("cambios", p.getCambios().stream().map(x -> mapa("equipo", x.getIdEquipo(), "minuto", x.getMinuto(),
                 "sale", x.getIdSale(), "saleNombre", x.getNombreSale(), "saleDorsal", x.getDorsalSale(),
                 "entra", x.getIdEntra(), "entraNombre", x.getNombreEntra(), "entraDorsal", x.getDorsalEntra()))
                 .collect(Collectors.toList()));
         m.put("suspendidos", suspendidos);
         return m;
+    }
+
+    /** JSON de un gol: {equipo, minuto, enContra, autor, autorNombre, autorDorsal, asistente, asistenteNombre, asistenteDorsal}. */
+    static Map<String, Object> gol(Gol g) {
+        return mapa("equipo", g.getIdEquipo(), "minuto", g.getMinuto(), "enContra", g.isEnContra(),
+                "autor", g.getIdAutor(), "autorNombre", g.getNombreAutor(), "autorDorsal", g.getDorsalAutor(),
+                "asistente", g.getIdAsistente(), "asistenteNombre", g.getNombreAsistente(), "asistenteDorsal", g.getDorsalAsistente());
+    }
+
+    /* ---------------------------------------------------------------- estadisticas globales del campeonato */
+
+    /**
+     * {goleadores, asistidores, goles (registro para auditar), golesSinAutor, valla, fairPlay}.
+     * Las estadisticas de un partido NO van aqui: van en el detalle del partido.
+     */
+    private Map<String, Object> estadisticas(Campeonato c) {
+        EstadisticasCampeonato est = servicio.estadisticas();
+        List<Object> goles = new ArrayList<>();
+        for (EstadisticasCampeonato.RegistroGol r : est.getRegistroGoles()) {
+            Partido p = r.partido();
+            Map<String, Object> g = gol(r.gol());
+            g.put("partido", p.getId());
+            g.put("partidoTexto", c.nombreDe(p.getIdLocal()) + " " + p.getGolesLocal() + "-" + p.getGolesVisitante() + " " + c.nombreDe(p.getIdVisitante()));
+            g.put("ronda", p.getNombreRonda());
+            g.put("fecha", p.getFecha());
+            g.put("hora", p.getHora());
+            g.put("equipoNombre", c.nombreDe(r.gol().getIdEquipo()));
+            goles.add(g);
+        }
+        return mapa("goleadores", est.getGoleadores().stream().map(this::filaJugador).collect(Collectors.toList()),
+                "asistidores", est.getAsistidores().stream().map(this::filaJugador).collect(Collectors.toList()),
+                "goles", goles, "golesSinAutor", est.getGolesSinAutor(),
+                "valla", est.getVallaMenosVencida().stream().map(v -> mapa("id", v.fila().getIdEquipo(),
+                        "nombre", v.fila().getEquipo().getNombreEquipo(), "pj", v.fila().getJugados(), "gc", v.fila().getGolesContra(),
+                        "promedio", String.format(java.util.Locale.ROOT, "%.2f", v.promedio()), "invictas", v.vallasInvictas()))
+                        .collect(Collectors.toList()),
+                "fairPlay", est.getFairPlay().stream().map(f -> mapa("id", f.getIdEquipo(), "nombre", f.getEquipo().getNombreEquipo(),
+                        "pj", f.getJugados(), "ta", f.getAmarillas(), "tr", f.getRojas(), "puntos", f.getPuntosFairPlay(),
+                        "promedio", String.format(java.util.Locale.ROOT, "%.2f", f.getPuntosFairPlay() / (double) f.getJugados())))
+                        .collect(Collectors.toList()));
+    }
+
+    private Map<String, Object> filaJugador(EstadisticasCampeonato.FilaJugador f) {
+        return mapa("jugador", f.getIdJugador(), "nombre", f.getNombre(), "dorsal", f.getDorsal(),
+                "equipo", f.getIdEquipo(), "equipoNombre", f.getEquipo(), "goles", f.getGoles(), "asistencias", f.getAsistencias());
     }
 
     private Map<String, Object> tarjeta(Tarjeta t) {
@@ -168,9 +252,20 @@ public class Presentador {
                 tablas.add(tabla(f.getNombre(), corto ? cfg.getClasificadosPlayoff() : 1, 0, motor.tablaDeFase(i)));
             } else if (f.getTipo() == TipoFase.SUIZO) {
                 tablas.add(tabla(f.getNombre(), cfg.getDirectosSuizo(), cfg.getRepechajeSuizo(), motor.tablaDeFase(i)));
+            } else if (f.getTipo() == TipoFase.GRUPOS && f.isDivisiones()) {
+                // Liga con divisiones: verde = asciende (no en la Liga A), rojo = desciende (no en la ultima).
+                int n = f.getGrupos().size();
+                for (int g = 0; g < n; g++) {
+                    List<FilaTabla> filas = motor.tablaDeGrupo(i, g);
+                    int k = Math.max(0, Math.min(cfg.getAscensos(), filas.size() - 1));
+                    Map<String, Object> t = tabla(f.nombreGrupo(g), g > 0 ? k : 0, 0, filas);
+                    t.put("descenso", g < n - 1 ? k : 0);
+                    t.put("division", true);
+                    tablas.add(t);
+                }
             } else if (f.getTipo() == TipoFase.GRUPOS) {
                 for (int g = 0; g < f.getGrupos().size(); g++) {
-                    tablas.add(tabla(f.getNombre() + " - Grupo " + Fase.letraGrupo(g),
+                    tablas.add(tabla(f.getNombre() + " - " + f.nombreGrupo(g),
                             corto ? 1 : cfg.getClasificadosPorGrupo(), 0, motor.tablaDeGrupo(i, g)));
                 }
             }
@@ -180,7 +275,7 @@ public class Presentador {
     }
 
     private Map<String, Object> tabla(String texto, int directos, int repechaje, List<FilaTabla> filas) {
-        return mapa("texto", texto, "directos", directos, "repechaje", repechaje,
+        return mapa("texto", texto, "directos", directos, "repechaje", repechaje, "descenso", 0, "division", false,
                 "filas", filas.stream().map(this::fila).collect(Collectors.toList()));
     }
 
@@ -293,7 +388,7 @@ public class Presentador {
         for (Sanciones.Registro r : sanciones.listar()) {
             Partido p = r.getPartido();
             Tarjeta t = r.getTarjeta();
-            registros.add(mapa("partido", c.nombreDe(p.getIdLocal()) + " vs " + c.nombreDe(p.getIdVisitante()),
+            registros.add(mapa("idPartido", p.getId(), "partido", c.nombreDe(p.getIdLocal()) + " vs " + c.nombreDe(p.getIdVisitante()),
                     "ronda", p.getNombreRonda(), "fecha", p.getFecha(), "hora", p.getHora(),
                     "equipo", c.nombreDe(t.getIdEquipo()), "jugador", t.getNombreJugador(), "dorsal", t.getDorsal(),
                     "tipo", t.isRoja() ? "ROJA" : "AMARILLA", "fechas", t.getFechasSuspension(),
@@ -400,8 +495,9 @@ public class Presentador {
                 jugados > 0 ? String.format("%.2f goles por partido", goles / (double) jugados) : ""));
         List<Object> resultados = new ArrayList<>();
         for (Partido p : c.getPartidos()) {
-            resultados.add(mapa("fase", c.getFases().get(p.getIndiceFase()).getNombre()
-                    + (p.getGrupo().isEmpty() ? "" : " · Grupo " + p.getGrupo()), "ronda", p.getNombreRonda(),
+            Fase faseP = c.getFases().get(p.getIndiceFase());
+            resultados.add(mapa("fase", faseP.getNombre()
+                    + (p.getGrupo().isEmpty() ? "" : " · " + faseP.nombreGrupo(p.getGrupo().charAt(0) - 'A')), "ronda", p.getNombreRonda(),
                     "local", c.nombreDe(p.getIdLocal()), "marcador", p.getMarcador(),
                     "visitante", c.nombreDe(p.getIdVisitante()), "estado", p.getEstado().toString()));
         }
@@ -424,6 +520,26 @@ public class Presentador {
         return mapa("titulo", titulo, "valor", valor, "detalle", detalle);
     }
 
+    /* ---------------------------------------------------------------- noticias */
+
+    /**
+     * {publicadas, pendientes, puedeModerar}. Cada noticia: {id, titulo, cuerpo, autor, deVisitante, fecha,
+     * imagen (nombre del archivo, "" = sin foto), aprobado, comentarios:[{id, autor, texto, fecha}]}.
+     */
+    static Map<String, Object> noticias(List<alphasport.model.Noticia> publicadas, List<alphasport.model.Noticia> pendientes, boolean moderar) {
+        return mapa("publicadas", publicadas.stream().map(Presentador::noticia).collect(Collectors.toList()),
+                "pendientes", pendientes.stream().map(Presentador::noticia).collect(Collectors.toList()),
+                "puedeModerar", moderar);
+    }
+
+    private static Map<String, Object> noticia(alphasport.model.Noticia n) {
+        return mapa("id", n.getId(), "titulo", n.getTitulo(), "cuerpo", n.getCuerpo(), "autor", n.getAutor(),
+                "deVisitante", n.getRolAutor() == alphasport.model.Rol.VISITANTE, "fecha", n.getFecha(),
+                "imagen", n.getImagenRuta(), "aprobado", n.isAprobado(),
+                "comentarios", n.getComentarios().stream().map(c -> mapa("id", c.getId(), "autor", c.getAutor(),
+                        "texto", c.getTexto(), "fecha", c.getFecha())).collect(Collectors.toList()));
+    }
+
     static Map<String, Object> configuracion(ConfiguracionTorneo cfg) {
         return mapa("puntosVictoria", cfg.getPuntosVictoria(), "puntosEmpate", cfg.getPuntosEmpate(),
                 "idaYVuelta", cfg.isIdaYVuelta(), "eliminatoriaIdaYVuelta", cfg.isEliminatoriaIdaYVuelta(),
@@ -433,6 +549,7 @@ public class Presentador {
                 "ventajaDeportiva", cfg.isVentajaDeportiva(), "rondasSuizo", cfg.getRondasSuizo(),
                 "directosSuizo", cfg.getDirectosSuizo(), "repechajeSuizo", cfg.getRepechajeSuizo(),
                 "granFinalConReinicio", cfg.isGranFinalConReinicio(),
+                "divisiones", cfg.getDivisiones(), "ascensos", cfg.getAscensos(),
                 "criterios", cfg.getCriterios().stream().map(Enum::name).collect(Collectors.toList()));
     }
 

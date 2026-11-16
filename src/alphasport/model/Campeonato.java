@@ -72,6 +72,7 @@ public class Campeonato implements Serializable {
             }
             Equipo nuevo = agregarEquipo(viejo.getNombreEquipo());
             nuevo.setEstadio(viejo.getEstadio());
+            nuevo.setDivision(viejo.getDivision());
             DirectorTecnico dt = viejo.getDirectorTecnico();
             if (dt != null) {
                 nuevo.setDirectorTecnico(new DirectorTecnico(dt.getNombre(), dt.getDocumento(), dt.getNacionalidad()));
@@ -82,6 +83,40 @@ public class Campeonato implements Serializable {
                 nuevo.agregarJugador(copia);
             }
         }
+    }
+
+    /* ---------------------------------------------------------------- divisiones (liga A, B, C...) */
+
+    /** true si es una liga con mas de una division. */
+    public boolean tieneDivisiones() {
+        return formato == TipoFormato.LIGA && configuracion.getDivisiones() > 1;
+    }
+
+    /** Division del equipo (si se quitaron divisiones, los que quedaron fuera cuentan en la ultima). */
+    public int divisionDe(Equipo equipo) {
+        return Math.min(equipo.getDivision(), configuracion.getDivisiones() - 1);
+    }
+
+    /** Equipos activos de una division, en orden de registro. */
+    public ArrayList<Equipo> equiposDeDivision(int division) {
+        ArrayList<Equipo> lista = new ArrayList<>();
+        for (Equipo e : getEquiposActivos()) {
+            if (divisionDe(e) == division) {
+                lista.add(e);
+            }
+        }
+        return lista;
+    }
+
+    /** Division con menos equipos (ahi entran los equipos nuevos). */
+    public int divisionConMenosEquipos() {
+        int mejor = 0;
+        for (int d = 1; d < configuracion.getDivisiones(); d++) {
+            if (equiposDeDivision(d).size() < equiposDeDivision(mejor).size()) {
+                mejor = d;
+            }
+        }
+        return mejor;
     }
 
     /**

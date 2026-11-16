@@ -14,7 +14,7 @@ public class AlphaSportApp {
 
     public static void main(String[] args) throws Exception {
         CampeonatoService servicio = Arranque.servicio();
-        ServidorWeb servidor = new ServidorWeb(Arranque.CARPETA_WEB, servicio, new ApiControlador(servicio, new AutenticacionService()));
+        ServidorWeb servidor = new ServidorWeb(Arranque.CARPETA_WEB, servicio, new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias()));
         int puerto = servidor.iniciar(PUERTO);
         String direccion = "http://127.0.0.1:" + puerto + "/";
         Runtime.getRuntime().addShutdownHook(new Thread(servidor::detener));

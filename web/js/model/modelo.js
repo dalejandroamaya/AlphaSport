@@ -66,6 +66,7 @@ function configuracionPorDefecto() {
     clasificadosPlayoff: 8, tipoPlayoff: 'LLAVE', ventajaDeportiva: true,
     rondasSuizo: 8, directosSuizo: 8, repechajeSuizo: 16,
     granFinalConReinicio: true,
+    divisiones: 1, ascensos: 2,   // liga con divisiones (Liga A, B...) y equipos que suben/bajan por temporada
     criterios: ['DIFERENCIA_GOLES', 'GOLES_A_FAVOR', 'ENFRENTAMIENTO_DIRECTO', 'FAIR_PLAY', 'SORTEO']
   };
 }
@@ -99,11 +100,13 @@ const P = {
     if (P.tienePenales(p) && p.pl !== p.pv) return p.pl > p.pv ? p.local : p.visitante;
     return -1;
   },
+  // El XI inicial y la formación NO se borran: son datos de la previa (se eligen antes del pitazo).
   reiniciar(p) {
-    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [], titularesLocal: [], titularesVisitante: [] });
+    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [], goles: [] });
   },
   tarjetas: p => p.tarjetas || [], // partidos guardados antes de las tarjetas por jugador
   cambios: p => p.cambios || [],   // partidos guardados antes de registrar cambios
+  goles: p => p.goles || [],       // partidos guardados antes de registrar goles por jugador
   // guarda las tarjetas por jugador y actualiza los totales por equipo (juego limpio)
   // (p puede ser el partido o la copia de sus datos, por eso se pasa el id del local)
   ponerTarjetas(p, tarjetas, idLocal) {
@@ -123,9 +126,10 @@ const P = {
     const { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs } = p;
     const tarjetas = P.tarjetas(p).map(t => Object.assign({}, t));
     const cambios = P.cambios(p).map(x => Object.assign({}, x));
+    const goles = P.goles(p).map(x => Object.assign({}, x));
     const titularesLocal = (p.titularesLocal || []).slice(), titularesVisitante = (p.titularesVisitante || []).slice();
     const formacionLocal = p.formacionLocal || '', formacionVisitante = p.formacionVisitante || '';
-    return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas, cambios, titularesLocal, titularesVisitante, formacionLocal, formacionVisitante };
+    return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas, cambios, goles, titularesLocal, titularesVisitante, formacionLocal, formacionVisitante };
   }
 };
 
