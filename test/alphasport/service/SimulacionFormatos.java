@@ -1,0 +1,621 @@
+package alphasport.service;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Random;
+import alphasport.model.Campeonato;
+import alphasport.model.ConfiguracionTorneo;
+import alphasport.model.CriterioDesempate;
+import alphasport.model.EstadoPartido;
+import alphasport.model.Fase;
+import alphasport.model.Partido;
+import alphasport.model.TipoFormato;
+
+/**
+ * Prueba automatica del motor (no necesita JUnit): juega cientos de
+ * campeonatos con resultados aleatorios en los 6 formatos y revisa que
+ * siempre se llegue a un campeon sin errores. Tambien prueba los
+ * desempates y la edicion de partidos.
+ *
+ * En NetBeans: clic derecho sobre este archivo > Run File (Shift + F6).
+ */
+public class SimulacionFormatos {
+
+    private static final Random azar = new Random(7);
+    private static int fallos = 0;
+
+    public static void main(String[] args) {
+        int[] tamanos = {3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 16, 20, 24, 32, 36};
+        for (TipoFormato formato : TipoFormato.values()) {
+            int completos = 0;
+            int total = 0;
+            for (int n : tamanos) {
+                for (int variante = 0; variante < 6; variante++) {
+                    Campeonato c = new Campeonato("Prueba " + n, formato, configuracion(n, variante));
+                    for (int i = 1; i <= n; i++) {
+                        c.agregarEquipo("Equipo " + i);
+                    }
+                    String resultado = jugar(new MotorCampeonato(c), n);
+                    if (resultado.startsWith("INVALIDO")) {
+                        continue; // esa combinacion de reglas no aplica para n equipos
+                    }
+                    total++;
+                    if (resultado.startsWith("OK")) {
+                        completos++;
+                    } else {
+                        fallos++;
+                        System.out.println("  FALLO " + formato + " n=" + n + " variante=" + variante + ": " + resultado);
+                    }
+                }
+            }
+            System.out.println(formato.getNombre() + ": " + completos + "/" + total + " campeonatos completos");
+        }
+        probarDesempateDirecto();
+        probarEdicion();
+        probarSanciones();
+        probarResumenYPalmares();
+        probarEstadisticas();
+        probarDivisiones();
+        probarWalkoverYCampeones();
+        probarNoticias();
+        probarPreviaYResultado();
+        System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
+    }
+
+    /**
+     * «Gestionar partidos»: la previa (XI, formación, fecha y sede) se guarda en un partido PENDIENTE,
+     * el resultado se registra después con cambios sobre ese mismo XI, y al borrar el resultado la
+     * previa se conserva. Todo a través de ApiControlador, igual que el escritorio y la web.
+     */
+    private static void probarPreviaYResultado() {
+        boolean correcto;
+        try {
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-previa")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-previa")));
+            ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+            cfg.setSorteoAleatorio(false);
+            servicio.crear("Previa", TipoFormato.LIGA, cfg, false);
+            for (int i = 1; i <= 4; i++) {
+                servicio.agregarEquipo("P" + i);
+            }
+            Campeonato c = servicio.getCampeonato();
+            for (alphasport.model.Equipo e : new ArrayList<>(c.getEquipos())) {
+                List<alphasport.model.Jugador> plantilla = new ArrayList<>();
+                for (int d = 1; d <= 14; d++) {
+                    plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + d, "D" + e.getId() + "-" + d, d, "Mediocampista"));
+                }
+                servicio.guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
+            }
+            servicio.avanzar();
+            alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService(),
+                    new NoticiasService(new alphasport.persistence.RepositorioNoticiasEnMemoria()));
+            api.ejecutar("login", java.util.Map.of("usuario", "admin", "clave", "123"));
+            Partido p = c.getPartidos().get(0);
+            java.util.function.Function<Integer, List<Integer>> once = idEq -> c.buscarEquipo(idEq).getJugadores().stream()
+                    .limit(11).map(alphasport.model.Jugador::getId).toList();
+            List<Integer> xiLocal = once.apply(p.getIdLocal()), xiVisitante = once.apply(p.getIdVisitante());
+            // 1) Previa: partido pendiente con XI, formación, fecha, hora y sede.
+            java.util.Map<String, Object> previa = new java.util.HashMap<>(java.util.Map.of("estado", "PENDIENTE",
+                    "titularesLocal", xiLocal, "titularesVisitante", xiVisitante, "formacionLocal", "4-4-2", "formacionVisitante", "4-3-3",
+                    "fecha", "2026-12-05", "hora", "18:00", "sede", "Estadio Norte", "obs", ""));
+            previa.putAll(java.util.Map.of("gl", 0, "gv", 0, "pl", -1, "pv", -1, "tarjetas", List.of(), "cambios", List.of(), "goles", List.of()));
+            api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", previa, "accion", "guardar", "confirmado", false));
+            boolean previaGuardada = !p.isJugado() && p.getTitularesLocal().equals(xiLocal) && p.getTitularesVisitante().equals(xiVisitante)
+                    && p.getFormacionLocal().equals("4-4-2") && p.getSede().equals("Estadio Norte");
+            // 2) Resultado: el cambio usa el XI de la previa (sale un titular, entra un suplente).
+            int sale = xiLocal.get(10);
+            int entra = c.buscarEquipo(p.getIdLocal()).getJugadores().get(12).getId();
+            java.util.Map<String, Object> resultado = new java.util.HashMap<>(previa);
+            resultado.putAll(java.util.Map.of("estado", "JUGADO", "gl", 2, "gv", 1,
+                    "cambios", List.of(java.util.Map.of("equipo", p.getIdLocal(), "minuto", 60, "sale", sale, "entra", entra))));
+            api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", resultado, "accion", "guardar", "confirmado", false));
+            boolean resultadoGuardado = p.isJugado() && p.getGolesLocal() == 2 && p.getCambios().size() == 1
+                    && p.getTitularesLocal().equals(xiLocal);
+            // 3) Borrar el resultado no borra la previa.
+            api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", resultado, "accion", "borrar", "confirmado", false));
+            boolean previaConservada = !p.isJugado() && p.getCambios().isEmpty() && p.getTitularesLocal().equals(xiLocal)
+                    && p.getFormacionVisitante().equals("4-3-3");
+            correcto = previaGuardada && resultadoGuardado && previaConservada;
+            if (!correcto) {
+                System.out.println("  previa=" + previaGuardada + " resultado=" + resultadoGuardado + " conservada=" + previaConservada);
+            }
+        } catch (Exception e) {
+            correcto = false;
+            System.out.println("  ERROR: " + e);
+        }
+        System.out.println("Previa del partido y registro de resultados: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    private static ConfiguracionTorneo configuracion(int n, int variante) {
+        ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+        cfg.setIdaYVuelta(variante % 2 == 1);
+        cfg.setEliminatoriaIdaYVuelta(variante % 3 == 1);
+        cfg.setFinalUnica(variante != 4);
+        cfg.setSorteoAleatorio(variante % 2 == 0);
+        cfg.setGranFinalConReinicio(variante % 2 == 0);
+        cfg.setTipoPlayoff(variante >= 3 ? ConfiguracionTorneo.PLAYOFF_CUADRANGULARES : ConfiguracionTorneo.PLAYOFF_LLAVE);
+        cfg.setClasificadosPlayoff(Math.min(8, n));
+        cfg.setVentajaDeportiva(variante % 2 == 0);
+        cfg.setClasificadosPorGrupo(variante % 3 == 2 ? 3 : 2);
+        cfg.setRondasSuizo(Math.min(8, n - 1));
+        int llave = 2;
+        while (llave * 2 <= n / 2) {
+            llave *= 2;
+        }
+        boolean conRepechaje = llave + llave / 2 <= n;
+        cfg.setDirectosSuizo(conRepechaje ? llave / 2 : Math.min(n, llave));
+        cfg.setRepechajeSuizo(conRepechaje ? llave : 0);
+        return cfg;
+    }
+
+    private static String jugar(MotorCampeonato motor, int n) {
+        Campeonato c = motor.getCampeonato();
+        try {
+            motor.iniciar();
+        } catch (IllegalStateException e) {
+            return "INVALIDO " + e.getMessage();
+        }
+        for (int vuelta = 0; vuelta < 500; vuelta++) {
+            int indice = c.getFases().size() - 1;
+            for (Partido p : c.partidosDeFase(indice)) {
+                if (p.isJugado()) {
+                    continue;
+                }
+                Partido datos = new Partido();
+                datos.copiarDatosDe(p);
+                datos.setEstado(EstadoPartido.JUGADO);
+                datos.setGolesLocal(azar.nextInt(4));
+                datos.setGolesVisitante(azar.nextInt(4));
+                datos.setAmarillasLocal(azar.nextInt(3));
+                if (motor.requierePenales(p, datos.getGolesLocal(), datos.getGolesVisitante())) {
+                    datos.setPenalesLocal(4);
+                    datos.setPenalesVisitante(azar.nextBoolean() ? 3 : 5);
+                }
+                motor.aplicarEdicion(p, datos, false);
+            }
+            // ningun equipo juega dos veces en la misma ronda (la vuelta de una llave no cuenta)
+            HashSet<String> vistos = new HashSet<>();
+            for (Partido p : c.partidosDeFase(indice)) {
+                if (p.getIdLocal() == p.getIdVisitante()) {
+                    return "partido de un equipo contra si mismo";
+                }
+                for (int id : new int[]{p.getIdLocal(), p.getIdVisitante()}) {
+                    if (p.getPierna() != 2 && !vistos.add(p.getGrupo() + "/" + p.getRonda() + "/" + id)) {
+                        return "equipo " + id + " repetido en la ronda " + p.getRonda();
+                    }
+                }
+            }
+            try {
+                motor.avanzar();
+            } catch (IllegalStateException e) {
+                return "ERROR al avanzar: " + e.getMessage();
+            }
+            if (c.isTerminado()) {
+                if (c.getFormato() == TipoFormato.DOBLE_ELIMINACION) {
+                    int partidos = c.getPartidos().size();
+                    if (partidos < 2 * n - 2 || partidos > 2 * n - 1) {
+                        return "doble eliminacion con " + partidos + " partidos para " + n + " equipos";
+                    }
+                }
+                String fases = "";
+                for (Fase f : c.getFases()) {
+                    fases += f.getNombre() + " > ";
+                }
+                return "OK " + fases + c.nombreDe(c.getIdCampeon());
+            }
+        }
+        return "el campeonato no termino";
+    }
+
+    /**
+     * A, B, C y D. C y D empatan a 6 puntos y C le gano a D.
+     * A y B empatan a 3 puntos: B tiene mejor diferencia, pero A le gano a B.
+     * Con "enfrentamiento directo" primero el orden debe ser C D A B.
+     */
+    private static void probarDesempateDirecto() {
+        ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+        cfg.getCriterios().clear();
+        cfg.getCriterios().add(CriterioDesempate.ENFRENTAMIENTO_DIRECTO);
+        cfg.getCriterios().add(CriterioDesempate.DIFERENCIA_GOLES);
+        Campeonato c = new Campeonato("Desempate", TipoFormato.LIGA, cfg);
+        for (String nombre : new String[]{"A", "B", "C", "D"}) {
+            c.agregarEquipo(nombre);
+        }
+        int[][] resultados = {{1, 2, 1, 0}, {2, 3, 3, 0}, {3, 1, 2, 0}, {1, 4, 0, 1}, {2, 4, 0, 1}, {3, 4, 1, 0}};
+        ArrayList<Partido> partidos = new ArrayList<>();
+        for (int[] r : resultados) {
+            Partido p = c.crearPartido(r[0], r[1]);
+            p.setEstado(EstadoPartido.JUGADO);
+            p.setGolesLocal(r[2]);
+            p.setGolesVisitante(r[3]);
+            partidos.add(p);
+        }
+        String orden = "";
+        for (FilaTabla f : new TablaPosiciones(c).calcular(partidos, List.of(1, 2, 3, 4))) {
+            orden += f.getEquipo().getNombreEquipo() + " ";
+        }
+        boolean correcto = orden.trim().equals("C D A B");
+        System.out.println("Desempate por enfrentamiento directo: " + orden + (correcto ? "(correcto)" : "(MAL)"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * Cambiar la fecha de un partido de la fase regular no afecta la
+     * liguilla; cambiar el marcador si, y obliga a regenerarla.
+     */
+    private static void probarEdicion() {
+        ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+        cfg.setClasificadosPlayoff(4);
+        Campeonato c = new Campeonato("Edicion", TipoFormato.TORNEO_CORTO, cfg);
+        c.setSemilla(7); // sorteo fijo: con un sorteo al azar el partido editado a veces no cambia la tabla
+        for (int i = 1; i <= 6; i++) {
+            c.agregarEquipo("E" + i);
+        }
+        MotorCampeonato motor = new MotorCampeonato(c);
+        motor.iniciar();
+        for (Partido p : c.partidosDeFase(0)) {
+            Partido datos = new Partido();
+            datos.copiarDatosDe(p);
+            datos.setEstado(EstadoPartido.JUGADO);
+            datos.setGolesLocal(p.getIdLocal() < p.getIdVisitante() ? 2 : 0);
+            motor.aplicarEdicion(p, datos, false);
+        }
+        motor.avanzar();
+        Partido primero = c.partidosDeFase(0).get(0);
+        Partido datos = new Partido();
+        datos.copiarDatosDe(primero);
+        datos.setFecha("01/01/2027");
+        boolean afectaFecha = motor.afectaRondasPosteriores(primero, datos);
+        datos.setGolesLocal(0);
+        datos.setGolesVisitante(9);
+        boolean afectaMarcador = motor.afectaRondasPosteriores(primero, datos);
+        motor.aplicarEdicion(primero, datos, afectaMarcador);
+        boolean correcto = !afectaFecha && afectaMarcador && c.getFases().size() == 1;
+        System.out.println("Edicion de partidos: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * Copa de 8 equipos: en la clasificacion final el campeon va 1.o y el
+     * finalista 2.o; en una liga el orden es el de la tabla. El palmares de
+     * dos copias del mismo torneo le da 2 titulos al campeon.
+     */
+    private static void probarResumenYPalmares() {
+        boolean correcto = true;
+        for (TipoFormato formato : TipoFormato.values()) {
+            ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+            cfg.setClasificadosPlayoff(4);
+            cfg.setDirectosSuizo(2);
+            cfg.setRepechajeSuizo(4);
+            cfg.setRondasSuizo(4);
+            Campeonato c = new Campeonato("Resumen", formato, cfg);
+            for (int i = 1; i <= 8; i++) {
+                c.agregarEquipo("E" + i);
+            }
+            jugar(new MotorCampeonato(c), 8);
+            ResumenCampeonato resumen = new ResumenCampeonato(c);
+            ArrayList<FilaTabla> clasificacion = resumen.clasificacionFinal();
+            boolean campeonPrimero = c.isTerminado() && clasificacion.get(0).getIdEquipo() == c.getIdCampeon();
+            boolean todos = clasificacion.size() == 8;
+            // el ultimo partido jugado es la final (o gran final): su perdedor debe ir 2.o
+            boolean segundo = true;
+            if (formato != TipoFormato.LIGA) {
+                Partido ultimo = c.getPartidos().get(c.getPartidos().size() - 1);
+                segundo = clasificacion.get(1).getIdEquipo() == ultimo.getRival(c.getIdCampeon());
+            }
+            ArrayList<Palmares.Fila> palmares = Palmares.calcular(List.of(c, c));
+            boolean titulos = palmares.get(0).getTitulos() == 2
+                    && palmares.get(0).getEquipo().equals(c.nombreDe(c.getIdCampeon()));
+            boolean premios = resumen.equipoMasGoleador() != null && resumen.mayorGoleada() != null && !resumen.texto().isEmpty();
+            if (!(campeonPrimero && todos && segundo && titulos && premios)) {
+                System.out.println("  Resumen MAL en " + formato + ": campeon=" + campeonPrimero + " todos=" + todos
+                        + " segundo=" + segundo + " titulos=" + titulos + " premios=" + premios);
+                correcto = false;
+            }
+        }
+        System.out.println("Resumen, premios y palmares: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * Liga de 4 equipos (3 jornadas). Un jugador ve roja con 2 fechas en su
+     * primer partido: queda fuera de los partidos 2 y 3 de su equipo.
+     */
+    private static void probarSanciones() {
+        Campeonato c = new Campeonato("Sanciones", TipoFormato.LIGA, new ConfiguracionTorneo());
+        for (int i = 1; i <= 4; i++) {
+            c.agregarEquipo("E" + i);
+        }
+        alphasport.model.Jugador jugador = new alphasport.model.Jugador("Jugador expulsado", "1", 10, "Delantero");
+        jugador.setId(c.nuevoIdJugador());
+        c.buscarEquipo(1).agregarJugador(jugador);
+        MotorCampeonato motor = new MotorCampeonato(c);
+        motor.iniciar();
+
+        ArrayList<Partido> delEquipo = new ArrayList<>();
+        for (Partido p : c.getPartidos()) {
+            if (p.involucra(1)) {
+                delEquipo.add(p);
+            }
+        }
+        Partido primero = delEquipo.get(0);
+        Partido datos = new Partido();
+        datos.copiarDatosDe(primero);
+        datos.setEstado(EstadoPartido.JUGADO);
+        ArrayList<alphasport.model.Tarjeta> tarjetas = new ArrayList<>();
+        tarjetas.add(new alphasport.model.Tarjeta(1, jugador, alphasport.model.Tarjeta.ROJA, 2));
+        datos.setTarjetas(tarjetas, primero.getIdLocal());
+        boolean contadaBien = primero.getIdLocal() == 1
+                ? datos.getRojasLocal() == 1 && datos.getRojasVisitante() == 0
+                : datos.getRojasVisitante() == 1 && datos.getRojasLocal() == 0;
+        motor.aplicarEdicion(primero, datos, false);
+
+        Sanciones s = new Sanciones(c);
+        boolean fuera2 = s.estaSuspendido(delEquipo.get(1), jugador.getId());
+        boolean fuera3 = s.estaSuspendido(delEquipo.get(2), jugador.getId());
+        int pendientesAntes = s.fechasPendientesDe(jugador.getId());
+        delEquipo.get(1).setEstado(EstadoPartido.JUGADO);
+        int pendientesDespues = s.fechasPendientesDe(jugador.getId());
+        boolean rojaCuenta = new TablaPosiciones(c).calcular(c.getPartidos(), List.of(1, 2, 3, 4)).stream()
+                .anyMatch(f -> f.getIdEquipo() == 1 && f.getRojas() == 1);
+        boolean correcto = fuera2 && fuera3 && pendientesAntes == 2 && pendientesDespues == 1 && rojaCuenta && contadaBien;
+        System.out.println("Tarjetas y suspensiones: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * Goleadores, asistencias, valla y juego limpio: un 2-1 con un autogol. El autogol no
+     * suma al goleador, la asistencia si, y un partido «En juego» todavia no cuenta.
+     */
+    private static void probarEstadisticas() {
+        Campeonato c = new Campeonato("Estadisticas", TipoFormato.LIGA, new ConfiguracionTorneo());
+        for (int i = 1; i <= 4; i++) {
+            c.agregarEquipo("E" + i);
+        }
+        alphasport.model.Jugador nueve = new alphasport.model.Jugador("Nueve", "1", 9, "Delantero centro");
+        alphasport.model.Jugador diez = new alphasport.model.Jugador("Diez", "2", 10, "Mediapunta");
+        alphasport.model.Jugador central = new alphasport.model.Jugador("Central", "3", 4, "Defensa central");
+        nueve.setId(c.nuevoIdJugador());
+        diez.setId(c.nuevoIdJugador());
+        central.setId(c.nuevoIdJugador());
+        c.buscarEquipo(1).agregarJugador(nueve);
+        c.buscarEquipo(1).agregarJugador(diez);
+        c.buscarEquipo(2).agregarJugador(central);
+        MotorCampeonato motor = new MotorCampeonato(c);
+        motor.iniciar();
+        Partido p = c.getPartidos().stream().filter(x -> x.involucra(1) && x.involucra(2)).findFirst().orElseThrow();
+        Partido datos = new Partido();
+        datos.copiarDatosDe(p);
+        datos.setEstado(EstadoPartido.EN_JUEGO);
+        boolean unoEsLocal = p.getIdLocal() == 1;
+        datos.setGolesLocal(unoEsLocal ? 2 : 1);
+        datos.setGolesVisitante(unoEsLocal ? 1 : 2);
+        ArrayList<alphasport.model.Gol> goles = new ArrayList<>();
+        goles.add(new alphasport.model.Gol(1, 10, nueve, false, diez));    // gol de 9 con asistencia de 10
+        goles.add(new alphasport.model.Gol(1, 50, central, true, null));   // autogol del central (equipo 2) a favor del 1
+        goles.add(new alphasport.model.Gol(2, 80, central, false, null));  // gol del central para el 2
+        datos.setGoles(goles);
+        motor.aplicarEdicion(p, datos, false);
+        boolean enJuegoNoCuenta = new EstadisticasCampeonato(c).getGoleadores().isEmpty();
+
+        p.setEstado(EstadoPartido.JUGADO);
+        EstadisticasCampeonato est = new EstadisticasCampeonato(c);
+        List<EstadisticasCampeonato.FilaJugador> goleadores = est.getGoleadores();
+        boolean goleadoresBien = goleadores.size() == 2 && goleadores.stream().allMatch(f -> f.getGoles() == 1)
+                && goleadores.stream().anyMatch(f -> f.getIdJugador() == central.getId() && f.getIdEquipo() == 2);
+        boolean asistenciaBien = est.getAsistidores().size() == 1 && est.getAsistidores().get(0).getIdJugador() == diez.getId();
+        boolean vallaBien = est.getVallaMenosVencida().size() == 2 && est.getGolesSinAutor() == 0
+                && est.getVallaMenosVencida().get(0).fila().getIdEquipo() == 1;
+        boolean copiaBien = copiaConGoles(p);
+        boolean correcto = enJuegoNoCuenta && goleadoresBien && asistenciaBien && vallaBien && copiaBien;
+        System.out.println("Goleadores, asistencias y valla: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /** La copia que usa el editor conserva los goles, y borrar el resultado los quita. */
+    private static boolean copiaConGoles(Partido p) {
+        Partido copia = new Partido();
+        copia.copiarDatosDe(p);
+        boolean conserva = copia.getGoles().size() == 3;
+        copia.reiniciarResultado();
+        return conserva && copia.getGoles().isEmpty() && p.getGoles().size() == 3;
+    }
+
+    /**
+     * Liga con 3 divisiones de 4 equipos: se juega completa, el campeon sale de la
+     * Liga A, no hay llaves y en la siguiente temporada suben y bajan 1 por division.
+     */
+    private static void probarDivisiones() {
+        boolean correcto;
+        try {
+            java.nio.file.Path carpeta = java.nio.file.Files.createTempDirectory("alphasport-prueba");
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(carpeta),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(carpeta));
+            ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+            cfg.setSorteoAleatorio(false);
+            cfg.setDivisiones(2);
+            cfg.setAscensos(1);
+            servicio.crear("Liga por divisiones", TipoFormato.LIGA, cfg, false);
+            servicio.agregarDivision();                       // la liga se expande: Liga C
+            for (int i = 1; i <= 12; i++) {
+                servicio.agregarEquipo("D" + i);              // se reparten: 4 por division
+            }
+            Campeonato c = servicio.getCampeonato();
+            boolean reparto = c.equiposDeDivision(0).size() == 4 && c.equiposDeDivision(1).size() == 4
+                    && c.equiposDeDivision(2).size() == 4;
+            String resultado = jugar(servicio.getMotor(), 12);
+            Fase fase = c.getFases().get(0);
+            boolean campeonDeA = c.equiposDeDivision(0).stream().anyMatch(e -> e.getId() == c.getIdCampeon());
+            boolean sinLlaves = !servicio.getMotor().usaLlaves() && fase.isDivisiones() && fase.getGrupos().size() == 3
+                    && c.getPartidos().size() == 3 * 6 && fase.nombreGrupo(1).equals("Liga B");
+            // ultimo de la A y primero de la B antes de la nueva temporada
+            int ultimoA = servicio.getMotor().tablaDeGrupo(0, 0).get(3).getIdEquipo();
+            int primeroB = servicio.getMotor().tablaDeGrupo(0, 1).get(0).getIdEquipo();
+            String movimientos = servicio.siguienteTemporada("Temporada 2");
+            Campeonato nueva = servicio.getCampeonato();
+            boolean ascenso = nueva.divisionDe(nueva.buscarEquipo(primeroB)) == 0
+                    && nueva.divisionDe(nueva.buscarEquipo(ultimoA)) == 1
+                    && nueva.equiposDeDivision(0).size() == 4 && nueva.equiposDeDivision(2).size() == 4
+                    && !nueva.isIniciado() && movimientos.contains("Suben a la Liga A");
+            boolean otrosConLlaves = new MotorCampeonato(new Campeonato("x", TipoFormato.TORNEO_CORTO, new ConfiguracionTorneo())).usaLlaves();
+            correcto = reparto && resultado.startsWith("OK") && campeonDeA && sinLlaves && ascenso && otrosConLlaves;
+            if (!correcto) {
+                System.out.println("  reparto=" + reparto + " resultado=" + resultado + " campeonDeA=" + campeonDeA
+                        + " sinLlaves=" + sinLlaves + " ascenso=" + ascenso + " " + movimientos);
+            }
+        } catch (Exception e) {
+            correcto = false;
+            System.out.println("  ERROR: " + e);
+        }
+        System.out.println("Liga con divisiones (A, B, C): " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * W.O. desde el editor (que trabaja sobre una copia sin ids): gana el local y gana el visitante,
+     * cada uno con sus 3 goles y sus 3 puntos. Y en una liga con divisiones hay un campeon por division.
+     */
+    private static void probarWalkoverYCampeones() {
+        boolean correcto;
+        try {
+            java.nio.file.Path carpeta = java.nio.file.Files.createTempDirectory("alphasport-wo");
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(carpeta),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(carpeta));
+            ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+            cfg.setSorteoAleatorio(false);
+            cfg.setDivisiones(3);
+            servicio.crear("W.O. y campeones", TipoFormato.LIGA, cfg, false);
+            for (int i = 1; i <= 9; i++) {
+                servicio.agregarEquipo("W" + i);
+            }
+            servicio.avanzar();
+            Campeonato c = servicio.getCampeonato();
+            Partido p1 = c.getPartidos().get(0), p2 = c.getPartidos().get(1);
+            Partido copia1 = new Partido();
+            copia1.copiarDatosDe(p1);                               // igual que el editor
+            servicio.darWalkover(p1.getId(), copia1, p1.getIdLocal(), false);
+            Partido copia2 = new Partido();
+            copia2.copiarDatosDe(p2);
+            servicio.darWalkover(p2.getId(), copia2, p2.getIdVisitante(), false);
+            boolean ganaLocal = p1.getGolesLocal() == 3 && p1.getGolesVisitante() == 0 && p1.getGanador() == p1.getIdLocal();
+            boolean ganaVisitante = p2.getGolesVisitante() == 3 && p2.getGolesLocal() == 0 && p2.getGanador() == p2.getIdVisitante();
+            boolean puntos = servicio.getMotor().tablaDeGrupo(0, p1.getGrupo().charAt(0) - 'A').stream()
+                    .anyMatch(f -> f.getIdEquipo() == p1.getIdLocal() && f.getPuntos() == 3);
+            for (Partido p : c.getPartidos()) {                    // se juegan los partidos que faltan
+                if (!p.isJugado()) {
+                    Partido datos = new Partido();
+                    datos.copiarDatosDe(p);
+                    datos.setEstado(EstadoPartido.JUGADO);
+                    datos.setGolesLocal(azar.nextInt(4));
+                    datos.setGolesVisitante(azar.nextInt(4));
+                    servicio.getMotor().aplicarEdicion(p, datos, false);
+                }
+            }
+            String resultado = servicio.avanzar().contains("Campeones:") ? "OK" : "sin campeones por division";
+            List<Integer> campeones = servicio.getMotor().campeonesPorDivision();
+            boolean unoPorDivision = campeones.size() == 3 && campeones.get(0) == c.getIdCampeon()
+                    && c.equiposDeDivision(1).stream().anyMatch(e -> e.getId() == campeones.get(1))
+                    && c.equiposDeDivision(2).stream().anyMatch(e -> e.getId() == campeones.get(2))
+                    && servicio.getMotor().describirEstado().contains("Liga C:");
+            correcto = ganaLocal && ganaVisitante && puntos && resultado.startsWith("OK") && unoPorDivision;
+            if (!correcto) {
+                System.out.println("  ganaLocal=" + ganaLocal + " ganaVisitante=" + ganaVisitante + " puntos=" + puntos
+                        + " resultado=" + resultado + " campeones=" + campeones + " " + servicio.getMotor().describirEstado());
+            }
+        } catch (Exception e) {
+            correcto = false;
+            System.out.println("  ERROR: " + e);
+        }
+        System.out.println("W.O. (local y visitante) y campeon por division: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * Noticias: el visitante propone (queda pendiente) y no puede aprobar; el administrador aprueba;
+     * los comentarios pasan por el filtro (sin censurar palabras inocentes) y no se aceptan archivos
+     * que no son imagenes. Todo a traves de ApiControlador, con los permisos reales.
+     */
+    @SuppressWarnings("unchecked")
+    private static void probarNoticias() {
+        boolean correcto;
+        try {
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-noticias")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-noticias")));
+            NoticiasService noticias = new NoticiasService(new alphasport.persistence.RepositorioNoticiasEnMemoria());
+            alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService(), noticias);
+            String png = "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(
+                    new byte[]{(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10, 0, 0, 0, 0});
+            api.ejecutar("login/visitante", java.util.Map.of());
+            java.util.Map<String, Object> propuesta = api.ejecutar("noticia/proponer", java.util.Map.of(
+                    "titulo", "Golazo en la final", "cuerpo", "Un visitante cuenta el gol del partido.", "autor", "Ana", "imagen", png));
+            java.util.Map<String, Object> vistaVisitante = (java.util.Map<String, Object>) propuesta.get("noticias");
+            boolean pendiente = Boolean.TRUE.equals(propuesta.get("ok")) && ((List<?>) vistaVisitante.get("publicadas")).isEmpty()
+                    && ((List<?>) vistaVisitante.get("pendientes")).isEmpty() && noticias.pendientes().size() == 1
+                    && noticias.pendientes().get(0).tieneImagen();
+            int id = noticias.pendientes().get(0).getId();
+            boolean visitanteNoAprueba;
+            try {
+                api.ejecutar("noticia/aprobar", java.util.Map.of("id", id));
+                visitanteNoAprueba = false;
+            } catch (ReglaNegocioException e) {
+                visitanteNoAprueba = e.getCodigo().equals("PERMISO");
+            }
+            boolean imagenOculta = api.imagenNoticia(noticias.pendientes().get(0).getImagenRuta()) == null;
+            api.ejecutar("login", java.util.Map.of("usuario", "admin", "clave", "123"));
+            boolean adminVePendiente = ((List<?>) ((java.util.Map<String, Object>) api.consultar("noticias").get("noticias")).get("pendientes")).size() == 1;
+            api.ejecutar("noticia/aprobar", java.util.Map.of("id", id));
+            api.ejecutar("noticia/guardar", java.util.Map.of("titulo", "Comunicado oficial", "cuerpo", "La fecha 3 se juega el sábado."));
+            boolean publicadas = noticias.publicadas().size() == 2 && noticias.pendientes().isEmpty()
+                    && noticias.publicadas().stream().allMatch(alphasport.model.Noticia::isAprobado);
+            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("noticia/comentar", java.util.Map.of("id", id, "autor", "Pedro",
+                    "texto", "Que IDIOTAAA el arbitro, un hp. La pera del juez y el calculo bien."));
+            String guardado = noticias.buscar(id).getComentarios().get(0).getTexto();
+            boolean filtrado = guardado.equals("Que *** el arbitro, un ***. La pera del juez y el calculo bien.")
+                    && FiltroPalabras.sanear("1d10t4 y m@lparidos").equals("*** y ***");
+            boolean rechazaFalsa;
+            try {
+                api.ejecutar("noticia/proponer", java.util.Map.of("titulo", "Otra noticia", "cuerpo", "Texto suficiente para pasar.",
+                        "imagen", "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString("no soy foto".getBytes())));
+                rechazaFalsa = false;
+            } catch (ReglaNegocioException e) {
+                rechazaFalsa = true;
+            }
+            correcto = pendiente && visitanteNoAprueba && imagenOculta && adminVePendiente && publicadas && filtrado && rechazaFalsa;
+            if (!correcto) {
+                System.out.println("  pendiente=" + pendiente + " visitanteNoAprueba=" + visitanteNoAprueba + " imagenOculta=" + imagenOculta
+                        + " adminVePendiente=" + adminVePendiente + " publicadas=" + publicadas + " filtrado=" + filtrado + " («" + guardado + "»)"
+                        + " rechazaFalsa=" + rechazaFalsa);
+            }
+        } catch (Exception e) {
+            correcto = false;
+            System.out.println("  ERROR: " + e);
+        }
+        System.out.println("Noticias, moderacion y filtro de comentarios: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+}

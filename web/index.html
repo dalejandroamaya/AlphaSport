@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#05080f">
+  <title>AlphaSport · Gestor de campeonatos</title>
+  <link rel="icon" href="img/logo.png" type="image/png">
+  <script>try { if (localStorage.getItem('alphasport.tema') === 'claro') document.documentElement.dataset.tema = 'claro'; } catch (e) {}</script>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <div class="fondo-estadio" aria-hidden="true"><span class="foco izq"></span><span class="foco der"></span></div>
+
+  <section id="login" class="login" hidden>
+    <button class="btn fantasma icono tema-login" data-tema-alternar aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
+    <form id="formLogin" class="login-tarjeta vidrio">
+      <img class="logo-login" src="img/logo-texto.png" alt="AlphaSport">
+      <p class="login-lema">Gestión profesional de campeonatos de fútbol</p>
+      <label class="campo">Usuario<input id="loginUsuario" autocomplete="username" required autofocus></label>
+      <label class="campo">Contraseña<input id="loginClave" type="password" autocomplete="current-password" required></label>
+      <p id="loginError" class="error" role="alert" hidden>Usuario o contraseña incorrectos.</p>
+      <button class="btn primario ancho" type="submit">Entrar al estadio</button>
+      <button class="btn fantasma ancho" type="button" id="btnVisitante">Entrar como visitante (solo lectura)</button>
+    </form>
+    <p class="credito-foto"><span class="noche">Foto: <a href="https://unsplash.com/photos/an-empty-stadium-with-a-soccer-field-at-night-pitDMdAjynU" target="_blank" rel="noopener">Josemar Duarte · Unsplash</a></span><span class="dia">Foto: <a href="https://unsplash.com/photos/green-and-brown-football-stadium-under-blue-sky-during-daytime-wbdrpnbn_DE" target="_blank" rel="noopener">Miguel Ramírez · Unsplash</a></span></p>
+  </section>
+
+  <div id="app" class="app" hidden>
+    <aside class="barra-lateral vidrio">
+      <div class="marca-lateral"><img src="img/logo.png" alt=""><span>Alpha<b>Sport</b></span><small>Gestor de campeonatos</small></div>
+      <nav class="navegacion" aria-label="Secciones">
+        <button data-vista="equipos" class="activa"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg><span>Equipos</span></button>
+        <button data-vista="partidos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span id="navPartidos">Partidos</span></button>
+        <button data-vista="posiciones"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Posiciones</span></button>
+        <button data-vista="llaves"><svg viewBox="0 0 24 24"><path d="M3 4h5v6H3M3 14h5v6H3M8 7h4v10H8M12 12h5M17 9h4v6h-4"/></svg><span>Llaves</span></button>
+        <button data-vista="sanciones"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="9" height="13" rx="1.5"/><rect x="10" y="7" width="9" height="13" rx="1.5"/></svg><span>Estadísticas</span></button>
+        <button data-vista="noticias"><svg viewBox="0 0 24 24"><path d="M4 5h13v14H6a2 2 0 0 1-2-2V5ZM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4"/></svg><span>Noticias</span></button>
+        <button data-vista="reglas"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7"/></svg><span>Reglas</span></button>
+      </nav>
+      <div class="lateral-pie">
+        <span id="chipRol" class="chip chip-rol"></span>
+        <button id="btnHistorial" class="btn fantasma ancho"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z"/></svg>Historial</button>
+        <button class="btn fantasma ancho boton-tema" data-tema-alternar><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>Modo claro / oscuro</button>
+        <span id="chipModo" class="chip modo"></span>
+      </div>
+    </aside>
+
+    <main class="principal">
+      <header class="marcador-principal vidrio">
+        <img class="logo-movil" src="img/logo.png" alt="AlphaSport">
+        <div class="marcador-info">
+          <h1 id="titulo">AlphaSport</h1>
+          <div class="chips"><span id="sobreEstado" class="chip chip-estado">En curso</span><span id="chipFormato" class="chip"></span><span id="chipEquipos" class="chip"></span><span id="chipLectura" class="chip chip-lectura" hidden>Visitante · solo lectura</span></div>
+          <p id="estado" class="estado-vivo"></p>
+        </div>
+        <div class="marcador-acciones">
+          <button id="btnAvanzar" class="btn primario grande" data-solo-admin>Iniciar campeonato</button>
+          <button id="btnCampeon" class="btn dorado" hidden>Ver campeón</button>
+          <button class="btn fantasma icono tema-movil" data-tema-alternar aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
+          <div class="menu">
+            <button id="btnMenu" class="btn fantasma" aria-haspopup="menu" aria-expanded="false" aria-controls="menuArchivo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Archivo</button>
+            <div id="menuArchivo" class="menu-lista vidrio" role="menu" aria-labelledby="btnMenu" hidden>
+              <button role="menuitem" tabindex="-1" data-accion="nuevo" data-solo-admin>Nuevo campeonato…</button>
+              <button role="menuitem" tabindex="-1" data-accion="siguiente" id="menuSiguiente" data-solo-admin>Siguiente torneo corto (Clausura)…</button>
+              <button role="menuitem" tabindex="-1" data-accion="cambiarFormato" data-solo-admin>Cambiar formato del campeonato…</button>
+              <button role="menuitem" tabindex="-1" data-accion="cancelar" class="opcion-peligro" data-solo-admin>Cancelar campeonato…</button>
+              <hr role="separator" data-solo-admin>
+              <button role="menuitem" tabindex="-1" data-accion="exportar">Descargar respaldo</button>
+              <button role="menuitem" tabindex="-1" data-accion="importar" data-solo-admin>Abrir respaldo…</button>
+              <button role="menuitem" tabindex="-1" data-accion="historialTxt">Exportar historial (.txt)</button>
+              <button role="menuitem" tabindex="-1" data-accion="historial">Historial de campeonatos</button>
+              <hr role="separator">
+              <button role="menuitem" tabindex="-1" data-accion="salir">Cerrar sesión</button>
+              <button role="menuitem" tabindex="-1" data-accion="cerrar" id="menuCerrar">Cerrar programa</button>
+            </div>
+          </div>
+        </div>
+        <input id="archivoImportar" type="file" hidden>
+      </header>
+
+      <section id="vista-equipos" class="vista">
+        <div class="cabecera-vista">
+          <div><h2>Equipos</h2><p id="ayudaEquipos" class="sutil"></p></div>
+          <form id="formRapido" class="fila-form" data-solo-admin>
+            <input id="nombreRapido" placeholder="Nombre del equipo" maxlength="60">
+            <button class="btn">Agregar</button>
+            <button type="button" id="btnEquipoCompleto" class="btn fantasma">+ Con plantilla</button>
+            <button type="button" id="btnDatosPrueba" class="btn fantasma" title="Crear equipos inventados con plantilla completa a partir de una semilla"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 4 3.5 2.6-1.3 4.1H9.8L8.5 9.6 12 7Z"/></svg>Datos de prueba</button>
+          </form>
+        </div>
+        <div id="barraDivisiones" class="barra-divisiones vidrio" hidden></div>
+        <div id="gridEquipos" class="grid-equipos"></div>
+      </section>
+
+      <section id="vista-partidos" class="vista" hidden>
+        <div class="cabecera-vista">
+          <div><h2 id="tituloPartidos">Partidos</h2><p id="ayudaPartidos" class="sutil">Calendario y resultados.</p></div>
+          <div class="filtros">
+            <button type="button" id="btnRapido" data-solo-admin class="btn mini fantasma" aria-pressed="false" title="Escribir los marcadores directamente en la lista"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>Carga rápida</button>
+            <select id="filtroFase" aria-label="Fase"></select>
+            <select id="filtroEstado" aria-label="Estado">
+              <option value="todos">Todos los estados</option><option value="pendientes">Pendientes</option>
+              <option value="jugados">Jugados</option><option value="aplazados">Aplazados / suspendidos</option>
+            </select>
+            <select id="filtroEquipo" aria-label="Equipo"></select>
+          </div>
+        </div>
+        <!-- Administrador: la gestión del partido en dos pasos (como Noticias) -->
+        <div id="pestanasPartidos" class="pestanas-mini pestanas-noticias" role="tablist" aria-label="Gestionar partidos" hidden>
+          <button type="button" role="tab" id="tabPrevia" data-pp="previa" aria-controls="listaPartidos">Previa del partido <span id="cuentaPrevia" class="contador">0</span></button>
+          <button type="button" role="tab" id="tabResultados" data-pp="resultados" aria-controls="listaPartidos">Registrar resultados</button>
+        </div>
+        <p id="ayudaPestanaPartidos" class="sutil pequeno" hidden></p>
+        <div id="listaPartidos"></div>
+      </section>
+
+      <section id="vista-posiciones" class="vista" hidden>
+        <div class="cabecera-vista">
+          <h2>Tabla de posiciones</h2>
+          <div class="filtros">
+            <button type="button" id="btnColumnas" class="btn mini fantasma columnas-tabla" aria-pressed="false">Ver todas las columnas</button>
+            <select id="selectorTabla" aria-label="Tabla"></select>
+          </div>
+        </div>
+        <div class="tabla-envoltura vidrio">
+          <table id="tablaPos" class="tabla posiciones">
+            <caption class="solo-lector">Tabla de posiciones</caption>
+            <thead><tr><th scope="col" class="num"><abbr title="Posición">#</abbr></th><th scope="col">Equipo</th>
+              <th scope="col" class="num"><abbr title="Partidos jugados">PJ</abbr></th><th scope="col" class="num extra"><abbr title="Ganados">G</abbr></th>
+              <th scope="col" class="num extra"><abbr title="Empatados">E</abbr></th><th scope="col" class="num extra"><abbr title="Perdidos">P</abbr></th>
+              <th scope="col" class="num extra"><abbr title="Goles a favor">GF</abbr></th><th scope="col" class="num extra"><abbr title="Goles en contra">GC</abbr></th>
+              <th scope="col" class="num"><abbr title="Diferencia de goles">DG</abbr></th><th scope="col" class="num extra"><abbr title="Tarjetas amarillas">TA</abbr></th>
+              <th scope="col" class="num extra"><abbr title="Tarjetas rojas">TR</abbr></th><th scope="col" class="num"><abbr title="Puntos">Pts</abbr></th></tr></thead>
+            <tbody id="tablaPosiciones"></tbody>
+          </table>
+        </div>
+        <p id="leyendaPosiciones" class="sutil pequeno"></p>
+      </section>
+
+      <section id="vista-llaves" class="vista" hidden>
+        <div class="cabecera-vista"><h2>Llaves</h2></div>
+        <div id="contenedorLlaves"></div>
+      </section>
+
+      <section id="vista-sanciones" class="vista" hidden>
+        <div class="cabecera-vista">
+          <div><h2>Estadísticas del campeonato</h2><p id="ayudaEstadisticas" class="sutil"></p></div>
+          <div class="pestanas-mini" role="tablist" aria-label="Estadísticas del campeonato">
+            <button type="button" role="tab" data-est="goleadores" class="activa" aria-selected="true">Goleadores</button>
+            <button type="button" role="tab" data-est="asistencias" aria-selected="false">Asistencias</button>
+            <button type="button" role="tab" data-est="valla" aria-selected="false">Valla menos vencida</button>
+            <button type="button" role="tab" data-est="juegoLimpio" aria-selected="false">Juego limpio</button>
+          </div>
+        </div>
+
+        <div id="est-goleadores" class="panel-estadistica" role="tabpanel">
+          <div class="tabla-envoltura vidrio">
+            <table class="tabla">
+              <thead><tr><th scope="col" class="num">#</th><th scope="col">Jugador</th><th scope="col">Equipo</th><th scope="col" class="num">Goles</th><th scope="col" class="num"><abbr title="Asistencias">Asist.</abbr></th></tr></thead>
+              <tbody id="tablaGoleadores"></tbody>
+            </table>
+          </div>
+          <p id="golesSinAutor" class="sutil pequeno"></p>
+          <h3 class="titulo-registro" data-solo-admin>Registro de goles</h3>
+          <div class="tabla-envoltura vidrio" data-solo-admin>
+            <table class="tabla apilable">
+              <thead><tr><th scope="col">Partido</th><th scope="col" class="num">Min.</th><th scope="col">Equipo</th><th scope="col">Gol</th><th scope="col">Asistencia</th><th scope="col"><span class="solo-lector">Acción</span></th></tr></thead>
+              <tbody id="tablaRegistroGoles"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="est-asistencias" class="panel-estadistica" role="tabpanel" hidden>
+          <div class="tabla-envoltura vidrio">
+            <table class="tabla">
+              <thead><tr><th scope="col" class="num">#</th><th scope="col">Jugador</th><th scope="col">Equipo</th><th scope="col" class="num">Asistencias</th><th scope="col" class="num">Goles</th></tr></thead>
+              <tbody id="tablaAsistencias"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="est-valla" class="panel-estadistica" role="tabpanel" hidden>
+          <div class="tabla-envoltura vidrio">
+            <table class="tabla">
+              <thead><tr><th scope="col" class="num">#</th><th scope="col">Equipo</th><th scope="col" class="num"><abbr title="Partidos jugados">PJ</abbr></th><th scope="col" class="num">Goles recibidos</th><th scope="col" class="num">Por partido</th><th scope="col" class="num">Vallas invictas</th></tr></thead>
+              <tbody id="tablaValla"></tbody>
+            </table>
+          </div>
+          <p class="sutil pequeno">Orden: menos goles recibidos por partido; luego menos goles en total y más vallas invictas.</p>
+        </div>
+
+        <div id="est-juegoLimpio" class="panel-estadistica" role="tabpanel" hidden>
+          <div class="tabla-envoltura vidrio">
+            <table class="tabla">
+              <thead><tr><th scope="col" class="num">#</th><th scope="col">Equipo</th><th scope="col" class="num"><abbr title="Partidos jugados">PJ</abbr></th><th scope="col" class="num">Amarillas</th><th scope="col" class="num">Rojas</th><th scope="col" class="num">Puntos</th><th scope="col" class="num">Por partido</th></tr></thead>
+              <tbody id="tablaFairPlay"></tbody>
+            </table>
+          </div>
+          <p class="sutil pequeno">Amarilla = 1 punto, roja = 3. Gana el que tenga menos puntos por partido.</p>
+          <div class="cabecera-vista sub-cabecera">
+            <div><h2>Tarjetas y sanciones</h2><p id="resumenSanciones" class="sutil"></p></div>
+            <select id="filtroSanciones" aria-label="Filtro">
+              <option value="todas">Todas las tarjetas</option><option value="rojas">Solo rojas</option><option value="pendientes">Suspensiones vigentes</option>
+            </select>
+          </div>
+          <div class="tabla-envoltura vidrio">
+            <table class="tabla apilable">
+              <thead><tr><th scope="col">Partido</th><th scope="col">Fecha</th><th scope="col">Equipo</th><th scope="col">Jugador</th><th scope="col">Tarjeta</th><th scope="col" class="num">Fechas</th><th scope="col">Estado</th><th scope="col"><span class="solo-lector">Acción</span></th></tr></thead>
+              <tbody id="tablaSanciones"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="vista-noticias" class="vista" hidden>
+        <div class="cabecera-vista">
+          <div><h2>Noticias</h2><p id="ayudaNoticias" class="sutil"></p></div>
+          <button type="button" id="btnNuevaNoticia" class="btn primario"></button>
+        </div>
+        <!-- Administrador: dos pestañas para no mezclar lo que espera moderación con lo publicado -->
+        <div id="pestanasNoticias" class="pestanas-mini pestanas-noticias" role="tablist" aria-label="Noticias del administrador" hidden>
+          <button type="button" role="tab" id="tabPendientes" data-nt="pendientes" aria-controls="panelPendientes">Pendientes por aprobar <span id="cuentaPendientes" class="contador">0</span></button>
+          <button type="button" role="tab" id="tabPublicadas" data-nt="publicadas" aria-controls="panelPublicadas">Publicadas y oficiales <span id="cuentaPublicadas" class="contador">0</span></button>
+        </div>
+        <section id="panelPendientes" class="panel-noticias" role="tabpanel" aria-labelledby="tabPendientes" hidden>
+          <p class="sutil pequeno">Aportes enviados por los visitantes. Nadie los ve hasta que usted los apruebe.</p>
+          <div id="listaPendientes" class="lista-noticias"></div>
+        </section>
+        <section id="panelPublicadas" class="panel-noticias" role="tabpanel" aria-labelledby="tabPublicadas">
+          <p id="ayudaPublicadas" class="sutil pequeno" hidden>Lo que ven los visitantes: las noticias oficiales y los aportes ya aprobados.</p>
+          <div id="listaNoticias" class="lista-noticias"></div>
+        </section>
+      </section>
+
+      <section id="vista-reglas" class="vista" hidden>
+        <div class="cabecera-vista"><h2>Reglas del campeonato</h2></div>
+        <div class="dos-columnas">
+          <article class="tarjeta vidrio">
+            <h3 id="reglasFormato"></h3>
+            <p id="reglasDescripcion" class="sutil"></p>
+            <ul id="reglasLista" class="lista-reglas"></ul>
+          </article>
+          <article class="tarjeta vidrio">
+            <h3>Criterios de desempate</h3>
+            <p class="sutil">Se aplican en este orden cuando dos equipos empatan en puntos.</p>
+            <div id="criteriosReglas"></div>
+            <button id="btnAplicarCriterios" class="btn" data-solo-admin>Aplicar criterios</button>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="dlgMensaje" class="dialogo pequeno-dlg">
+    <h3 id="msgTitulo"></h3>
+    <div id="msgTexto" class="msg-texto"></div>
+    <div class="acciones"><button id="msgNo" class="btn fantasma">Cancelar</button><button id="msgSi" class="btn primario">Aceptar</button></div>
+  </dialog>
+
+  <dialog id="dlgEquipo" class="dialogo">
+    <form id="formEquipo">
+      <h3 id="eqTitulo">Equipo</h3>
+      <div class="rejilla-2">
+        <label class="campo">Nombre del equipo<input id="eqNombre" maxlength="60" required></label>
+        <label class="campo">Estadio / cancha<input id="eqEstadio" maxlength="60"></label>
+      </div>
+      <fieldset class="grupo"><legend>Director técnico</legend>
+        <div class="rejilla-3">
+          <label class="campo">Nombre<input id="dtNombre" maxlength="60"></label>
+          <label class="campo">Documento<input id="dtDocumento" maxlength="20"></label>
+          <label class="campo">Nacionalidad<input id="dtNacionalidad" maxlength="30"></label>
+        </div>
+      </fieldset>
+      <fieldset class="grupo"><legend>Plantilla</legend>
+        <div class="fila-jugador">
+          <label class="campo">Dorsal<input id="jgDorsal" type="number" min="1" max="99"></label>
+          <label class="campo">Nombre<input id="jgNombre" maxlength="60"></label>
+          <label class="campo">Documento<input id="jgDocumento" maxlength="20"></label>
+          <label class="campo">Posición<select id="jgPosicion"></select></label>
+          <button type="button" id="jgAgregar" class="btn">Agregar</button>
+        </div>
+        <p id="jgError" class="error" role="alert" hidden></p>
+        <div class="tabla-envoltura"><table class="tabla compacta">
+          <thead><tr><th class="num">#</th><th>Jugador</th><th>Documento</th><th>Posición</th><th>Tarjetas</th><th></th></tr></thead>
+          <tbody id="tablaJugadores"></tbody>
+        </table></div>
+      </fieldset>
+      <p id="eqError" class="error" role="alert" hidden></p>
+      <div class="acciones"><button type="button" id="eqCancelar" class="btn fantasma">Cancelar</button><button class="btn primario">Guardar equipo</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgPartido" class="dialogo" aria-labelledby="ptContexto">
+    <form id="formPartido">
+      <h3 id="ptContexto"></h3>
+      <div class="marcador-partido">
+        <span id="ptLocal" class="equipo-nombre"></span>
+        <div id="ptLed" class="goles-led"><input id="ptGL" type="number" min="0" inputmode="numeric" placeholder="–" aria-label="Goles local" aria-describedby="ptError"><span>:</span><input id="ptGV" type="number" min="0" inputmode="numeric" placeholder="–" aria-label="Goles visitante" aria-describedby="ptError"></div>
+        <span id="ptVs" class="vs" hidden>VS</span>
+        <span id="ptVisitante" class="equipo-nombre"></span>
+      </div>
+      <p id="ptAyudaPrevia" class="sutil pequeno" hidden>Lo que guarde aquí lo ve el visitante en la previa del partido y queda listo en «Registrar resultados» para anotar goles, tarjetas y cambios.</p>
+      <div id="ptFilaEstado" class="rejilla-2">
+        <!-- Las opciones dependen del paso: la previa (pendiente / aplazado / suspendido) o el resultado (jugado / en juego) -->
+        <label class="campo">Estado<select id="ptEstado"></select></label>
+        <div id="ptPenales" class="penales">
+          <label class="check"><input type="checkbox" id="ptHayPenales"> Se definió por penales</label>
+          <div class="goles-led mini"><input id="ptPL" type="number" min="0" aria-label="Penales local"><span>:</span><input id="ptPV" type="number" min="0" aria-label="Penales visitante"></div>
+        </div>
+      </div>
+      <!-- ===== Previa del partido: lo que se define antes del pitazo ===== -->
+      <fieldset id="ptProgramacion" class="grupo"><legend>Fecha, hora y sede</legend>
+        <div class="rejilla-4">
+          <label class="campo">Fecha<input id="ptFecha" type="date"></label>
+          <label class="campo">Hora<input id="ptHora" type="time"></label>
+          <label class="campo">Sede / estadio<input id="ptSede" maxlength="60"></label>
+          <label class="campo">Observaciones<input id="ptObs" maxlength="120"></label>
+        </div>
+      </fieldset>
+      <!-- Registrar resultados: la alineación de la previa queda resumida (y plegada si está completa) -->
+      <div id="ptResumenPrevia" class="resumen-previa">
+        <div><b>Alineación de la previa</b><p id="ptResumenTexto" class="sutil pequeno"></p><p id="ptSinXI" class="advertencia pequeno" hidden>Para registrar cambios hace falta el XI inicial de los dos equipos. Defínalo en la «Previa del partido» o aquí mismo.</p></div>
+        <button type="button" id="ptPlegar" class="btn mini fantasma" aria-controls="ptAlineacion" aria-expanded="false">Corregir alineación</button>
+      </div>
+      <div id="ptAlineacion">
+      <fieldset id="ptFormacion" class="grupo"><legend>Formación táctica</legend>
+        <div class="rejilla-2">
+          <label class="campo"><span id="fmLocalNombre"></span><select id="fmLocal"></select></label>
+          <label class="campo"><span id="fmVisitanteNombre"></span><select id="fmVisitante"></select></label>
+        </div>
+        <p class="sutil pequeno">El detalle del partido ubica el XI en la cancha según esta formación.</p>
+      </fieldset>
+      <fieldset id="ptXI" class="grupo"><legend>XI inicial</legend>
+        <p class="sutil pequeno">Marque los 11 jugadores que inician el partido en cada equipo. Los demás quedan como suplentes y son los únicos que pueden entrar en un cambio.</p>
+        <div id="xiEquipos" class="xi-equipos"></div>
+      </fieldset>
+      </div>
+      <!-- ===== Registrar resultados: lo que pasó en el juego ===== -->
+      <fieldset id="ptGoles" class="grupo"><legend>Goles</legend>
+        <div class="fila-gol">
+          <label class="campo">Equipo<select id="glEquipo"></select></label>
+          <label class="campo campo-minuto">Minuto<input id="glMinuto" type="number" min="1" max="130" inputmode="numeric" placeholder="–"></label>
+          <label class="check check-campo"><input type="checkbox" id="glEnContra"> En contra (autogol)</label>
+          <label class="campo">Autor<select id="glAutor"></select></label>
+          <label class="campo">Asistencia<select id="glAsistente"></select></label>
+          <button type="button" id="glAgregar" class="btn">Agregar gol</button>
+        </div>
+        <ul id="glLista" class="lista-tarjetas lista-goles"></ul>
+        <p class="sutil pequeno">Registrar quién marcó alimenta las tablas de goleadores y asistencias. No puede haber más goles registrados que en el marcador.</p>
+      </fieldset>
+      <fieldset id="ptTarjetas" class="grupo"><legend>Tarjetas por jugador</legend>
+        <div class="fila-tarjeta">
+          <label class="campo">Equipo<select id="tjEquipo"></select></label>
+          <label class="campo">Jugador<select id="tjJugador"></select></label>
+          <label class="campo">Tarjeta<select id="tjTipo"><option value="AMARILLA">Amarilla</option><option value="ROJA">Roja</option></select></label>
+          <label class="campo campo-minuto">Minuto<input id="tjMinuto" type="number" min="1" max="130" inputmode="numeric" placeholder="–"></label>
+          <label id="tjFilaFechas" class="campo">Fechas fuera<input id="tjFechas" type="number" min="1" max="20" value="1"></label>
+          <button type="button" id="tjAgregar" class="btn">Agregar</button>
+        </div>
+        <ul id="tjLista" class="lista-tarjetas"></ul>
+        <p id="tjSuspendidos" class="sutil pequeno"></p>
+      </fieldset>
+      <fieldset id="ptCambios" class="grupo"><legend>Cambios</legend>
+        <div class="fila-cambio">
+          <label class="campo">Equipo<select id="cbEquipo"></select></label>
+          <label class="campo campo-minuto">Minuto<input id="cbMinuto" type="number" min="1" max="130" inputmode="numeric" placeholder="66"></label>
+          <label class="campo">Sale<select id="cbSale"></select></label>
+          <label class="campo">Entra<select id="cbEntra"></select></label>
+          <button type="button" id="cbAgregar" class="btn">Agregar cambio</button>
+        </div>
+        <ul id="cbLista" class="lista-tarjetas lista-cambios"></ul>
+        <p class="sutil pequeno">El minuto se conserva para anotar seguido varios cambios hechos al mismo tiempo.</p>
+      </fieldset>
+      <p id="ptError" class="error" role="alert" hidden></p>
+      <div class="acciones-izq acciones-secundarias">
+        <button type="button" id="ptVerDetalle" class="btn mini fantasma">Ver detalle</button>
+        <button type="button" id="ptWoLocal" class="btn mini fantasma">W.O. gana local</button>
+        <button type="button" id="ptWoVisitante" class="btn mini fantasma">W.O. gana visitante</button>
+        <button type="button" id="ptBorrar" class="btn mini peligro">Borrar resultado</button>
+      </div>
+      <div class="acciones"><button type="button" id="ptCancelar" class="btn fantasma">Cancelar</button><button id="ptGuardar" class="btn primario">Guardar</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgDetalle" class="dialogo ancho-dlg dlg-detalle" aria-labelledby="dpContexto">
+    <div class="cabecera-dlg">
+      <h3 id="dpContexto"></h3>
+      <button type="button" id="dpX" class="btn fantasma mini" aria-label="Cerrar">✕</button>
+    </div>
+    <div id="dpCabecera"></div>
+    <div class="pestanas-mini detalle-pestanas" role="tablist" aria-label="Detalle del partido">
+      <button type="button" role="tab" data-dp="resumen" class="activa" aria-selected="true">Resumen</button>
+      <button type="button" role="tab" data-dp="caraACara" aria-selected="false">Cara a cara</button>
+      <button type="button" role="tab" data-dp="racha" aria-selected="false">Racha</button>
+      <button type="button" role="tab" data-dp="alineaciones" aria-selected="false">Alineaciones</button>
+    </div>
+    <div id="dpPanel" class="detalle-panel" role="tabpanel"></div>
+    <div class="acciones"><button type="button" id="dpEditar" class="btn fantasma" data-solo-admin>Editar partido</button><button type="button" id="dpCerrar" class="btn primario">Cerrar</button></div>
+  </dialog>
+
+  <dialog id="dlgNoticia" class="dialogo" aria-labelledby="ntTitulo">
+    <form id="formNoticia">
+      <h3 id="ntTitulo">Nueva noticia</h3>
+      <label class="campo">Título<input id="ntTituloNoticia" maxlength="120" required placeholder="Ej.: Los Pumas ganan el clásico en el último minuto"></label>
+      <label class="campo">Texto<textarea id="ntCuerpo" rows="7" maxlength="4000" required placeholder="Texto de la noticia"></textarea></label>
+      <label class="campo" id="ntFilaAutor">Su nombre<input id="ntAutor" maxlength="40" placeholder="Opcional"></label>
+      <p id="ntAvisoPropuesta" class="sutil pequeno">Su noticia no se publica de inmediato: el administrador la revisa y la aprueba o la rechaza.</p>
+      <fieldset class="grupo"><legend>Foto (opcional)</legend>
+        <div class="noticia-foto-editor">
+          <img id="ntVista" alt="Vista previa de la foto" hidden>
+          <span id="ntSinFoto" class="sutil">Sin foto</span>
+          <div class="acciones-izq">
+            <label class="btn fantasma" for="ntArchivo">Elegir foto…</label>
+            <input id="ntArchivo" type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="solo-lector">
+            <button type="button" id="ntQuitarFoto" class="btn mini fantasma">Quitar foto</button>
+          </div>
+        </div>
+      </fieldset>
+      <p id="ntError" class="error" role="alert" hidden></p>
+      <div class="acciones"><button type="button" id="ntCancelar" class="btn fantasma">Cancelar</button><button id="ntGuardar" class="btn primario">Publicar</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgSemilla" class="dialogo pequeno-dlg" aria-labelledby="smTitulo">
+    <form id="formSemilla">
+      <h3 id="smTitulo">Datos de prueba</h3>
+      <p class="sutil">Crea equipos inventados con director técnico, estadio y plantilla completa de 20 jugadores (nombre, documento, dorsal y posición). La misma semilla genera siempre los mismos datos.</p>
+      <div class="rejilla-2">
+        <label class="campo">Semilla<span class="con-boton"><input id="smSemilla" type="number" min="0" max="999999999" required><button type="button" id="smOtra" class="btn mini fantasma" title="Otra semilla al azar">Otra</button></span></label>
+        <label class="campo">Equipos nuevos<input id="smCantidad" type="number" min="0" max="32" value="8"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="smCompletar" checked> Completar también la plantilla de los equipos que no tienen jugadores</label>
+      <p id="smAviso" class="sutil pequeno"></p>
+      <p id="smError" class="error" role="alert" hidden></p>
+      <div class="acciones"><button type="button" id="smCancelar" class="btn fantasma">Cancelar</button><button class="btn primario">Cargar datos</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgNuevo" class="dialogo ancho-dlg">
+    <form id="formNuevo">
+      <h3 id="nvTitulo">Nuevo campeonato</h3>
+      <label class="campo">Nombre del campeonato<input id="nvNombre" maxlength="80" placeholder="Ej.: Copa Universitaria 2026" required></label>
+      <p id="lblFormato" class="etiqueta-campo">Formato de competencia</p>
+      <div id="tarjetasFormato" class="tarjetas-formato" role="radiogroup" aria-labelledby="lblFormato"></div>
+      <fieldset class="grupo"><legend>Reglas del formato</legend>
+        <div class="rejilla-3">
+          <label class="campo" data-para="LIGA GRUPOS_Y_ELIMINATORIA TORNEO_CORTO SUIZO">Puntos por victoria<input id="nvVictoria" type="number" min="0" max="10"></label>
+          <label class="campo" data-para="LIGA GRUPOS_Y_ELIMINATORIA TORNEO_CORTO SUIZO">Puntos por empate<input id="nvEmpate" type="number" min="0" max="10"></label>
+          <label class="campo" data-para="GRUPOS_Y_ELIMINATORIA">Equipos por grupo<input id="nvTamGrupo" type="number" min="3" max="8"></label>
+          <label class="campo" data-para="GRUPOS_Y_ELIMINATORIA">Clasificados por grupo<input id="nvClasGrupo" type="number" min="1" max="4"></label>
+          <label class="campo" data-para="TORNEO_CORTO">Clasificados a la liguilla<input id="nvClasPlayoff" type="number" min="2" max="16"></label>
+          <label class="campo" data-para="TORNEO_CORTO">Tipo de liguilla<select id="nvTipoPlayoff"><option value="LLAVE">Llave de eliminación</option><option value="CUADRANGULARES">Cuadrangulares</option></select></label>
+          <label class="campo" data-para="SUIZO">Rondas del suizo<input id="nvRondas" type="number" min="1" max="20"></label>
+          <label class="campo" data-para="SUIZO">Clasificados directos<input id="nvDirectos" type="number" min="0" max="32"></label>
+          <label class="campo" data-para="SUIZO">Equipos al repechaje<input id="nvRepechaje" type="number" min="0" max="32"></label>
+          <label class="campo" data-para="LIGA">Divisiones (Liga A, B…)<input id="nvDivisiones" type="number" min="1" max="6"></label>
+          <label class="campo" data-para="LIGA">Ascensos y descensos por temporada<input id="nvAscensos" type="number" min="0" max="10"></label>
+        </div>
+        <div class="checks">
+          <label class="check" data-para="LIGA GRUPOS_Y_ELIMINATORIA TORNEO_CORTO"><input type="checkbox" id="nvIdaVuelta"> Liga / grupos a ida y vuelta</label>
+          <label class="check" data-para="ELIMINACION_DIRECTA GRUPOS_Y_ELIMINATORIA TORNEO_CORTO SUIZO"><input type="checkbox" id="nvElimIdaVuelta"> Eliminatorias a ida y vuelta</label>
+          <label class="check" id="filaFinalUnica" data-para="ELIMINACION_DIRECTA GRUPOS_Y_ELIMINATORIA TORNEO_CORTO SUIZO"><input type="checkbox" id="nvFinalUnica"> Final a partido único</label>
+          <label class="check" data-para="TORNEO_CORTO"><input type="checkbox" id="nvVentaja"> Ventaja deportiva para el mejor de la fase regular</label>
+          <label class="check" data-para="DOBLE_ELIMINACION"><input type="checkbox" id="nvReinicio"> Gran final con reinicio</label>
+          <label class="check"><input type="checkbox" id="nvSorteo"> Sorteo aleatorio (si no, por orden de registro)</label>
+          <label class="check" id="filaMismosEquipos"><input type="checkbox" id="nvMismosEquipos"> <span id="textoMismosEquipos"></span></label>
+        </div>
+      </fieldset>
+      <fieldset class="grupo"><legend>Criterios de desempate (en orden)</legend><div id="criteriosNuevo"></div></fieldset>
+      <div class="acciones"><button type="button" id="nvCancelar" class="btn fantasma">Cancelar</button><button id="nvCrear" class="btn primario">Crear campeonato</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgHistorial" class="dialogo ancho-dlg">
+    <div class="cabecera-dlg">
+      <h3>Historial de campeonatos</h3>
+      <div class="pestanas-mini"><button data-hs="campeonatos" class="activa">Campeonatos</button><button data-hs="palmares">Palmarés histórico</button></div>
+      <button id="hsCerrar" class="btn fantasma mini" aria-label="Cerrar">✕</button>
+    </div>
+    <div id="hs-campeonatos" class="historial">
+      <div class="historial-lista">
+        <p id="hsVacio" class="sutil pequeno"></p>
+        <ul id="hsLista"></ul>
+      </div>
+      <div id="hsDetalle" class="historial-detalle">
+        <div id="hsPodio" class="podio"></div>
+        <div id="hsPremios" class="premios"></div>
+        <div class="pestanas-mini"><button data-hsd="clasificacion" class="activa">Clasificación</button><button data-hsd="resultados">Resultados</button><button data-hsd="tarjetas">Tarjetas</button></div>
+        <div class="tabla-envoltura"><table class="tabla compacta"><thead id="hsCabecera"></thead><tbody id="hsCuerpo"></tbody></table></div>
+        <div class="acciones"><button id="hsEliminar" class="btn peligro mini" data-solo-admin>Eliminar del historial</button><button id="hsDescargar" class="btn mini">Descargar premios (.txt)</button></div>
+      </div>
+    </div>
+    <div id="hs-palmares" hidden>
+      <div class="tabla-envoltura"><table class="tabla compacta">
+        <thead><tr><th>Equipo</th><th class="num"><abbr title="Títulos (campeón)">Tít.</abbr></th><th class="num"><abbr title="Subcampeonatos">2.º</abbr></th><th class="num">Podios</th><th class="num">Torneos</th><th class="num">PJ</th><th class="num">G</th><th class="num">E</th><th class="num">P</th><th class="num">GF</th><th class="num">GC</th><th class="num">Pts</th></tr></thead>
+        <tbody id="hsPalmares"></tbody>
+      </table></div>
+    </div>
+  </dialog>
+
+  <dialog id="dlgCampeon" class="dialogo dlg-campeon" aria-labelledby="cpNombre">
+    <div id="cpConfeti" class="confeti" aria-hidden="true"></div>
+    <div class="campeon-escena" aria-hidden="true">
+      <div class="campeon-rayos"></div>
+      <img class="campeon-trofeo" src="img/trofeo.svg" alt="">
+    </div>
+    <h2 id="cpNombre"></h2>
+    <p id="cpTorneo" class="campeon-torneo"></p>
+    <p id="cpDt" class="campeon-dt"></p>
+    <ul class="campeon-numeros">
+      <li><b id="cpPj"></b><span>Jugados</span></li>
+      <li><b id="cpG"></b><span>Ganados</span></li>
+      <li><b id="cpE"></b><span>Empates</span></li>
+      <li><b id="cpP"></b><span>Perdidos</span></li>
+      <li><b id="cpGf"></b><span>A favor</span></li>
+      <li><b id="cpGc"></b><span>En contra</span></li>
+    </ul>
+    <div id="cpDivisiones" class="campeon-divisiones" hidden></div>
+    <div class="acciones">
+      <button type="button" id="cpTabla" class="btn fantasma">Ver la tabla final</button>
+      <button type="button" id="cpCerrar" class="btn dorado">Celebrar y cerrar</button>
+    </div>
+  </dialog>
+
+  <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
+
+  <script src="js/model/modelo.js"></script>
+  <script src="js/persistence/almacen.js"></script>
+  <script src="js/service/motor.js"></script>
+  <script src="js/service/datosPrueba.js"></script>
+  <script src="js/service/detalle.js"></script>
+  <script src="js/service/estadisticas.js"></script>
+  <script src="js/service/noticias.js"></script>
+  <script src="js/service/servicioLocal.js"></script>
+  <script src="js/service/servicioRemoto.js"></script>
+  <script src="js/ui/app.js"></script>
+</body>
+</html>
