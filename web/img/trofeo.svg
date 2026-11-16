@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140" role="img" aria-label="Trofeo">
+  <defs>
+    <linearGradient id="oro" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff0b8"/>
+      <stop offset=".35" stop-color="#f6c453"/>
+      <stop offset=".75" stop-color="#d9a02a"/>
+      <stop offset="1" stop-color="#9c6a0c"/>
+    </linearGradient>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a3443"/>
+      <stop offset="1" stop-color="#121821"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 26H17c-4.5 0-7 3.4-7 7.5C10 50 22 60 35 62" fill="none" stroke="url(#oro)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M88 26h15c4.5 0 7 3.4 7 7.5C110 50 98 60 85 62" fill="none" stroke="url(#oro)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M28 12h64v30c0 26-14 43-32 45-18-2-32-19-32-45z" fill="url(#oro)"/>
+  <path d="M36 18v22c0 16 6 28 14 34" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="4" stroke-linecap="round"/>
+  <polygon points="60,32 63.5,41.2 73.3,41.7 65.7,47.9 68.2,57.4 60,52 51.8,57.4 54.3,47.9 46.7,41.7 56.5,41.2" fill="#fff6d6" opacity=".9"/>
+  <rect x="53" y="86" width="14" height="16" fill="url(#oro)"/>
+  <rect x="42" y="100" width="36" height="7" rx="2" fill="url(#oro)"/>
+  <path d="M34 107h52l6 23H28z" fill="url(#base)"/>
+  <rect x="46" y="113" width="28" height="9" rx="1.5" fill="url(#oro)" opacity=".9"/>
+</svg>
