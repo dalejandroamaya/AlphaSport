@@ -19,7 +19,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -1477,14 +1476,7 @@ public class Aplicacion extends Application {
     private static String unir(List<Object> nombres) {
         return nombres.isEmpty() ? "—" : String.join(", ", nombres.stream().map(String::valueOf).toList());
     }
-
-    /* ---------------------------------------------------------------- estadisticas globales del campeonato */
-
-    /**
-     * Estadísticas de TODO el campeonato: goleadores, asistencias, valla menos vencida y juego limpio.
-     * Las estadísticas de un partido (goles, cambios, tarjetas minuto a minuto) están en su detalle.
-     * Administrador: los registros de goles y tarjetas abren el editor para corregir. Visitante: solo lectura.
-     */
+    
     private Node vistaEstadisticas() {
         Map<String, Object> est = m(E, "estadisticas");
         String ayuda = puedeEditar()
