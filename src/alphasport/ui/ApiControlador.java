@@ -58,8 +58,11 @@ public class ApiControlador {
     /** Rutas de ejecutar() que no exigen ser administrador. Todo lo demas si (lista blanca). */
     private static final Set<String> RUTAS_PUBLICAS = Set.of("login", "login/visitante", "logout");
 
-    /** Lo unico que un visitante puede crear: proponer noticias (quedan pendientes) y comentar. */
-    private static final Set<String> RUTAS_VISITANTE = Set.of("noticia/proponer", "noticia/comentar");
+    /**
+     * Lo unico que un visitante puede crear: proponer noticias (quedan pendientes), comentar y, [REQ-07],
+     * calificar a los jugadores de un partido terminado.
+     */
+    private static final Set<String> RUTAS_VISITANTE = Set.of("noticia/proponer", "noticia/comentar", "calificacion/votar");
 
     public Usuario getUsuarioActual() {
         return usuarioActual;
@@ -92,8 +95,13 @@ public class ApiControlador {
         if (!ruta.equals("catalogo") && !ruta.equals("sesion")) {
             exigirSesion(); // consultar es solo lectura: basta con haber iniciado sesion
         }
-        if (ruta.startsWith("partido/")) { // detalle tipo Flashscore: partido/{id}
-            return presentador.detallePartido(servicio.detallePartido(entero(ruta.substring("partido/".length()))));
+        if (ruta.startsWith("partido/")) {
+            // Detalle tipo Flashscore: partido/{id} o partido/{id}/{dispositivo}. El dispositivo (anonimo) solo
+            // sirve para mostrar en las calificaciones [REQ-07] lo que ya voto este navegador o equipo.
+            String[] partes = ruta.substring("partido/".length()).split("/");
+            int id = entero(partes[0]);
+            String dispositivo = partes.length > 1 ? partes[1] : null;
+            return presentador.detallePartido(servicio.detallePartido(id), servicio.calificaciones(id, dispositivo));
         }
         return switch (ruta) {
             case "catalogo" -> presentador.catalogo();
@@ -115,6 +123,9 @@ public class ApiControlador {
             Map<String, Object> r = respuesta(ejecutarNoticia(ruta, cuerpo));
             r.put("noticias", noticiasJson());
             return r;
+        }
+        if (ruta.equals("calificacion/votar")) {
+            return votar(cuerpo);
         }
         String mensaje = null;
         switch (ruta) {
@@ -146,6 +157,25 @@ public class ApiControlador {
             default -> throw new ReglaNegocioException("Ruta desconocida: " + ruta);
         }
         return respuesta(mensaje);
+    }
+
+    /* ---------------------------------------------------------------- [REQ-07] calificaciones */
+
+    /**
+     * Voto del publico: {partido, jugador, valor (1 a 10), dispositivo}. Solo votan los visitantes: el
+     * administrador ya influye en la nota del sistema al registrar goles y tarjetas. Devuelve las
+     * calificaciones actualizadas para redibujar la pestaña sin pedir todo el detalle.
+     */
+    private Map<String, Object> votar(Map<String, Object> cuerpo) throws Exception {
+        if (usuarioActual.puedeEditar()) {
+            throw new ReglaNegocioException("PERMISO", "Las calificaciones del público son de los visitantes: el administrador no vota.");
+        }
+        int idPartido = entero(cuerpo.get("partido"));
+        String dispositivo = texto(cuerpo, "dispositivo");
+        Map<String, Object> r = respuesta("¡Gracias! Su calificación quedó registrada.");
+        r.put("calificaciones", Presentador.calificaciones(
+                servicio.votarJugador(idPartido, entero(cuerpo.get("jugador")), entero(cuerpo.get("valor")), dispositivo)));
+        return r;
     }
 
     /* ---------------------------------------------------------------- noticias y comentarios */
