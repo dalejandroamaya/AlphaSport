@@ -1206,7 +1206,6 @@ class Dialogos {
                 }
             }
             cbSale.getSelectionModel().select(iSale);
-            int sale = puedenSalir.isEmpty() ? -1 : n(puedenSalir.get(iSale), "id");
             puedenEntrar.clear();
             // Entra: solo suplentes que todavía no han entrado.
             plantilla.stream().filter(j -> listo && !xi.contains(n(j, "id")) && !entraron.contains(n(j, "id")) && !salieron.contains(n(j, "id")))
