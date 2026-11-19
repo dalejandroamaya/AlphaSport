@@ -42,7 +42,6 @@ public class Partido implements Serializable {
     private ArrayList<Gol> goles = new ArrayList<>();                 // goles por jugador (null en archivos anteriores)
     private ArrayList<Integer> titularesLocal = new ArrayList<>();     // ids del XI inicial
     private ArrayList<Integer> titularesVisitante = new ArrayList<>();
-    // Formacion tactica elegida por cada entrenador ("4-4-2"...). null en archivos anteriores = sin definir.
     private String formacionLocal;
     private String formacionVisitante;
 
@@ -50,6 +49,10 @@ public class Partido implements Serializable {
     private String hora = "";
     private String sede = "";
     private String observaciones = "";
+
+   
+    private long finalizadoEn;
+    private ArrayList<VotoJugador> votos = new ArrayList<>();
 
     public Partido() {
     }
@@ -117,6 +120,8 @@ public class Partido implements Serializable {
         getCambios().clear();
         getGoles().clear();
         // El XI inicial y la formacion NO se borran: son datos de la previa (se eligen antes del pitazo).
+        finalizadoEn = 0;
+        getVotos().clear();
     }
 
     /**
@@ -153,6 +158,11 @@ public class Partido implements Serializable {
         hora = otro.hora;
         sede = otro.sede;
         observaciones = otro.observaciones;
+        finalizadoEn = otro.finalizadoEn;
+        votos = new ArrayList<>();
+        for (VotoJugador v : otro.getVotos()) {
+            votos.add(v.copia());
+        }
     }
 
     public String getMarcador() {
@@ -353,9 +363,9 @@ public class Partido implements Serializable {
         this.cambios = cambios;
     }
 
-    /** Goles por jugador. Puede haber menos que el marcador (goles sin autor registrado), nunca mas. */
+   
     public ArrayList<Gol> getGoles() {
-        if (goles == null) { // archivos guardados antes de existir los goles por jugador
+        if (goles == null) { 
             goles = new ArrayList<>();
         }
         return goles;
@@ -449,6 +459,23 @@ public class Partido implements Serializable {
 
     public void setObservaciones(String observaciones) {
         this.observaciones = observaciones;
+    }
+
+    
+    public long getFinalizadoEn() {
+        return finalizadoEn;
+    }
+
+    public void setFinalizadoEn(long finalizadoEn) {
+        this.finalizadoEn = finalizadoEn;
+    }
+
+    
+    public ArrayList<VotoJugador> getVotos() {
+        if (votos == null) { 
+            votos = new ArrayList<>();
+        }
+        return votos;
     }
 
     @Override

@@ -1206,7 +1206,6 @@ class Dialogos {
                 }
             }
             cbSale.getSelectionModel().select(iSale);
-            int sale = puedenSalir.isEmpty() ? -1 : n(puedenSalir.get(iSale), "id");
             puedenEntrar.clear();
             // Entra: solo suplentes que todavía no han entrado.
             plantilla.stream().filter(j -> listo && !xi.contains(n(j, "id")) && !entraron.contains(n(j, "id")) && !salieron.contains(n(j, "id")))
@@ -1680,16 +1679,22 @@ class Dialogos {
         }
     }
 
-    /** Detalle de solo lectura: resumen del partido, cara a cara, racha y alineaciones. Lo usan visitante y administrador. */
+    /**
+     * Detalle del partido: resumen, calificaciones [REQ-07], cara a cara, racha y alineaciones. Lo usan
+     * visitante y administrador; solo el visitante puede votar (con el id anónimo de este equipo).
+     */
     void detallePartido(Map<String, Object> p) {
         Node vista;
         try {
-            Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id"));
+            String dispositivo = Dispositivo.id();
+            Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id") + "/" + dispositivo);
             if (detalle == null || m(detalle, "partido") == null) {
                 mensaje("Detalle del partido", "Todavía no hay información de este partido.");
                 return;
             }
-            vista = VistaDetallePartido.construir(detalle);
+            VistaCalificaciones.Votante votante = (jugador, valor) -> app.ejecutar("calificacion/votar",
+                    mapa("partido", n(p, "id"), "jugador", jugador, "valor", valor, "dispositivo", dispositivo));
+            vista = VistaDetallePartido.construir(detalle, !app.puedeEditar(), votante);
         } catch (RuntimeException e) {
             // Nunca se deja una ventana a medio armar: se avisa y la aplicación sigue respondiendo.
             mensaje("No se pudo abrir el partido", e.getMessage() == null ? "Todavía no hay información de este partido." : e.getMessage());

@@ -473,6 +473,7 @@ function crearServicioLocal() {
       throw new ErrorRegla('Este cambio modifica quién clasifica o avanza.\nLas rondas y fases generadas después de este partido se borrarán y tendrá que volver a pulsar «Avanzar» para generarlas de nuevo.\n\n¿Desea continuar?', 'CONFIRMAR');
     }
     m.aplicarEdicion(p, datos, afecta);
+    Calificaciones.marcarFinal(p, Date.now()); // [REQ-07] abre (o descarta) la votación de 24 horas
   }
 
   /* ---------------------------------------------------------------- sesión y permisos (igual que ApiControlador) */
@@ -637,14 +638,29 @@ function crearServicioLocal() {
     'noticia/guardar': d => { noticias.publicar(d); return d.id == null ? 'Noticia publicada.' : 'Noticia guardada.'; },
     'noticia/aprobar': d => { noticias.aprobar(d.id); return 'Noticia aprobada: ya aparece en el feed.'; },
     'noticia/eliminar': d => { noticias.eliminar(d.id); return d.rechazo ? 'Propuesta rechazada.' : 'Noticia eliminada.'; },
-    'comentario/eliminar': d => { noticias.eliminarComentario(d.noticia, d.id); return 'Comentario eliminado.'; }
+    'comentario/eliminar': d => { noticias.eliminarComentario(d.noticia, d.id); return 'Comentario eliminado.'; },
+    // [REQ-07] Voto del público: solo los visitantes (el administrador ya influye en la nota del sistema).
+    'calificacion/votar': d => {
+      exigir();
+      if (ROLES[usuario.rol].puedeEditar) {
+        throw new ErrorRegla('Las calificaciones del público son de los visitantes: el administrador no vota.', 'PERMISO');
+      }
+      const p = c.partidos.find(x => x.id === d.partido);
+      if (!p) throw new ErrorRegla('El partido no existe.');
+      const ahora = Date.now();
+      Calificaciones.votar(c, p, d.jugador, d.valor, d.dispositivo, ahora, ErrorRegla);
+      ultimasCalificaciones = Calificaciones.calcular(c, p, ahora, d.dispositivo);
+      return '¡Gracias! Su calificación quedó registrada.';
+    }
   };
+  /** Calificaciones después del último voto (se devuelven en la respuesta para redibujar la pestaña). */
+  let ultimasCalificaciones = null;
 
   /* ---------------------------------------------------------------- noticias */
 
   const noticias = crearNoticiasLocal(ErrorRegla);
-  /** Lo único que un visitante puede crear: proponer noticias (quedan pendientes) y comentar. */
-  const RUTAS_VISITANTE = new Set(['noticia/proponer', 'noticia/comentar']);
+  /** Lo único que un visitante puede crear: proponer noticias (quedan pendientes), comentar y [REQ-07] calificar jugadores. */
+  const RUTAS_VISITANTE = new Set(['noticia/proponer', 'noticia/comentar', 'calificacion/votar']);
 
   /** Mismo JSON que Presentador.noticias en Java. «imagen» es la foto como data URL ('' = sin foto). */
   function noticiasJson() {
@@ -687,7 +703,7 @@ function crearServicioLocal() {
     },
     /** En la web sola la foto ya es una «data URL»: se usa tal cual. */
     urlImagen: imagen => imagen || '',
-    /** Detalle tipo Flashscore de un partido (mismo JSON que GET /api/partido/{id}). */
+    /** Detalle tipo Flashscore de un partido (mismo JSON que GET /api/partido/{id}/{dispositivo}). */
     async detalle(id) {
       try {
         exigirSesion();
@@ -695,7 +711,8 @@ function crearServicioLocal() {
         const p = c.partidos.find(x => x.id === id);
         if (!p) throw new ErrorRegla('El partido no existe.');
         const anteriores = Almacen.historial.listar().filter(x => x.datos && FORMATOS[x.datos.formato]).map(x => x.datos);
-        return Object.assign({ ok: true, partido: partido(p) }, DetallePartido.calcular(c, anteriores, p));
+        return Object.assign({ ok: true, partido: partido(p) }, DetallePartido.calcular(c, anteriores, p),
+          { calificaciones: Calificaciones.calcular(c, p, Date.now(), Almacen.dispositivo()) });
       } catch (e) {
         return fallo(e);
       }
@@ -710,6 +727,10 @@ function crearServicioLocal() {
         if (ruta === 'logout') return { ok: true };
         if (ruta.startsWith('noticia/') || ruta.startsWith('comentario/')) {
           return { ok: true, mensaje, estado: estado(), sesion: sesion(), noticias: noticiasJson() };
+        }
+        if (ruta === 'calificacion/votar') {
+          guardar();
+          return { ok: true, mensaje, estado: estado(), sesion: sesion(), calificaciones: ultimasCalificaciones };
         }
         if (c && !RUTAS_PUBLICAS.has(ruta)) guardar();
         return { ok: true, mensaje, estado: estado(), sesion: sesion() };

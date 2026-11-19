@@ -7,6 +7,8 @@ const Almacen = (() => {
   const CLAVE_HISTORIAL = 'alphasport.historial';
   const CLAVE_SESION = 'alphasport.usuario';
   const CLAVE_NOTICIAS = 'alphasport.noticias';
+  const CLAVE_DISPOSITIVO = 'alphasport.dispositivo';
+  let dispositivo = null;
 
   const leer = (clave, defecto) => {
     try {
@@ -41,6 +43,20 @@ const Almacen = (() => {
       cargar: () => { const s = leer(CLAVE_SESION, null); return s && typeof s === 'object' && s.rol ? s : null; },
       guardar: s => { try { localStorage.setItem(CLAVE_SESION, JSON.stringify(s)); } catch (e) { /* sin almacenamiento */ } },
       eliminar: () => { try { localStorage.removeItem(CLAVE_SESION); } catch (e) { /* sin almacenamiento */ } }
+    },
+    /**
+     * [REQ-07] Identificador anónimo de este navegador para las votaciones del público: se crea al azar la
+     * primera vez y se recuerda. Evita votar dos veces al mismo jugador en el mismo partido. No es un dato personal.
+     */
+    dispositivo() {
+      if (dispositivo) return dispositivo;
+      try { dispositivo = localStorage.getItem(CLAVE_DISPOSITIVO); } catch (e) { /* sin almacenamiento */ }
+      if (!dispositivo || !/^[A-Za-z0-9-]{8,64}$/.test(dispositivo)) {
+        dispositivo = (crypto.randomUUID ? crypto.randomUUID()
+          : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''));
+        try { localStorage.setItem(CLAVE_DISPOSITIVO, dispositivo); } catch (e) { /* vale mientras la página esté abierta */ }
+      }
+      return dispositivo;
     },
     historial: {
       listar: () => leer(CLAVE_HISTORIAL, []),

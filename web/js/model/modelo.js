@@ -101,9 +101,11 @@ const P = {
     return -1;
   },
   // El XI inicial y la formación NO se borran: son datos de la previa (se eligen antes del pitazo).
+  // [REQ-07] Sin resultado no hay partido terminado: la votación (finalizadoEn) y sus votos se descartan.
   reiniciar(p) {
-    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [], goles: [] });
+    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [], goles: [], finalizadoEn: 0, votos: [] });
   },
+  votos: p => p.votos || [],       // [REQ-07] partidos guardados antes de las calificaciones
   tarjetas: p => p.tarjetas || [], // partidos guardados antes de las tarjetas por jugador
   cambios: p => p.cambios || [],   // partidos guardados antes de registrar cambios
   goles: p => p.goles || [],       // partidos guardados antes de registrar goles por jugador

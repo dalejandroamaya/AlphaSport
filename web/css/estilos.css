@@ -637,6 +637,45 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 .detalle-fila-marcador span.ganador { color: var(--cesped); }
 .detalle-fila-marcador b { font-family: var(--titulos); font-weight: 800; min-width: 3.4rem; text-align: center; font-variant-numeric: tabular-nums; }
 .detalle-columnas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; align-items: start; }
+/* [REQ-07] Calificaciones: estado de la votación, MVP y una fila por jugador con su nota */
+.calificacion-estado { margin: 0; padding: .65rem .9rem; border-radius: var(--radio-sm); border: 1px solid var(--borde); font-weight: 600; }
+.calificacion-abierta { color: var(--cesped); background: var(--cesped-suave); border-color: rgba(46, 229, 152, .36); }
+.calificacion-cerrada { color: var(--sutil); background: rgba(255, 255, 255, .04); }
+.calificacion-gracias { margin: 0; color: var(--cesped); font-weight: 600; }
+.tarjeta-mvp {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .9rem; padding: .9rem 1.1rem;
+  border-color: rgba(247, 199, 90, .6); background: linear-gradient(to right, rgba(247, 199, 90, .2), transparent 60%), var(--vidrio);
+}
+.tarjeta-mvp > div { display: grid; gap: .1rem; min-width: 0; }
+.mvp-estrella { color: var(--oro); font-size: 1.9rem; line-height: 1; }
+.mvp-titulo { color: var(--oro-texto); font-size: .78rem; font-weight: 600; }
+.mvp-nombre { font-family: var(--titulos); font-size: 1.15rem; overflow-wrap: anywhere; }
+.calificacion-columna { display: grid; gap: .55rem; min-width: 0; }
+.calificacion-columna p { margin: .2rem 0 0; }
+.lista-calificaciones { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; }
+.fila-calificacion {
+  display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto auto; align-items: center; gap: .6rem;
+  padding: .5rem .7rem; border-radius: var(--radio-sm); border: 1px solid var(--borde); background: rgba(255, 255, 255, .03);
+}
+.fila-calificacion.fila-mvp { border-color: rgba(247, 199, 90, .65); background: rgba(247, 199, 90, .08); }
+.calificacion-dorsal { font-family: var(--titulos); color: var(--sutil); text-align: center; }
+.calificacion-textos { display: grid; gap: .05rem; min-width: 0; }
+.calificacion-nombre { font-weight: 600; overflow-wrap: anywhere; }
+.chip-portero, .chip-mvp { padding: 0 .45rem; font-size: .7rem; vertical-align: middle; }
+.chip-portero { color: var(--cian); }
+.chip-mvp { color: var(--oro-texto); border-color: rgba(247, 199, 90, .6); }
+.chip-voto { color: var(--cesped); border-color: rgba(46, 229, 152, .36); white-space: nowrap; }
+.voto-control { display: inline-flex; gap: .35rem; align-items: center; }
+.voto-control select { width: 4.6rem; padding: .3rem .4rem; }
+/* La nota: el número siempre va escrito; verde alta, neutra media, rojo baja */
+.nota { min-width: 3.1rem; padding: .3rem .55rem; border-radius: 10px; text-align: center; font-family: var(--titulos); font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.nota-alta { color: #05080f; background: var(--cesped); }
+.nota-media { background: rgba(255, 255, 255, .1); }
+.nota-baja { color: #05080f; background: var(--rojo); }
+.nota-mvp { color: #2a1900; background: var(--oro); font-size: 1.4rem; }
+[data-tema="claro"] .nota-alta, [data-tema="claro"] .nota-baja { color: #fff; }
+[data-tema="claro"] .nota-media { background: rgba(11, 23, 38, .08); }
+[data-tema="claro"] .fila-calificacion { background: rgba(255, 255, 255, .6); }
 .detalle-racha { display: grid; gap: .7rem; min-width: 0; }
 .detalle-racha p { margin: 0; }
 .racha-cuadros { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
@@ -891,6 +930,9 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
   .detalle-cifras { gap: .5rem; }
   .detalle-cifra b { font-size: 1.6rem; }
   .detalle-columnas, .detalle-alineaciones { grid-template-columns: 1fr; }
+  /* Calificaciones en el teléfono: el selector de voto baja a su propia línea */
+  .fila-calificacion { grid-template-columns: 2rem minmax(0, 1fr) auto; }
+  .fila-calificacion .voto-control, .fila-calificacion .chip-voto { grid-column: 2 / -1; grid-row: 2; justify-self: start; }
   .detalle-fila-marcador { gap: .4rem; font-size: .9rem; }
   .ficha-cancha { width: 64px; }
   .ficha-dorsal { width: 28px; height: 28px; font-size: .8rem; }

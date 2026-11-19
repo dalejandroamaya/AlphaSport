@@ -60,7 +60,178 @@ public class SimulacionFormatos {
         probarWalkoverYCampeones();
         probarNoticias();
         probarPreviaYResultado();
+        probarCalificaciones();
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
+    }
+
+    /** Reloj que la prueba puede adelantar (para la ventana de 24 horas de la votacion). */
+    private static final class RelojPrueba extends java.time.Clock {
+        long ahora = 1_800_000_000_000L;
+
+        @Override
+        public java.time.ZoneId getZone() {
+            return java.time.ZoneOffset.UTC;
+        }
+
+        @Override
+        public java.time.Clock withZone(java.time.ZoneId zona) {
+            return this;
+        }
+
+        @Override
+        public java.time.Instant instant() {
+            return java.time.Instant.ofEpochMilli(ahora);
+        }
+
+        @Override
+        public long millis() {
+            return ahora;
+        }
+    }
+
+    /**
+     * [REQ-07] Calificaciones: nota del sistema (base, goles, asistencias, tarjetas, valla invicta y goles
+     * recibidos del portero), limites 1.0 y 10.0, votos del publico solo dentro de 24 horas y una vez por
+     * dispositivo, nota final hibrida redondeada a 1 decimal, MVP, y que borrar el resultado descarte la votacion.
+     */
+    private static void probarCalificaciones() {
+        boolean correcto;
+        try {
+            // Reglas sueltas y limites.
+            List<String> d = new ArrayList<>();
+            boolean reglas = CalculadoraCalificaciones.notaSistema(false, 0, 0, 0, 0, 0, d) == 6.0
+                    && CalculadoraCalificaciones.notaSistema(false, 2, 1, 1, 0, 0, d) == 8.0     // 6 + 2 + 0.5 - 0.5
+                    && CalculadoraCalificaciones.notaSistema(true, 0, 0, 0, 0, 0, d) == 7.5      // valla invicta
+                    && CalculadoraCalificaciones.notaSistema(true, 0, 0, 0, 0, 3, d) == 5.1      // 6 - 0.9
+                    && CalculadoraCalificaciones.notaSistema(false, 0, 0, 0, 3, 0, d) == 1.0     // 6 - 6 -> minimo 1.0
+                    && CalculadoraCalificaciones.notaSistema(false, 6, 0, 0, 0, 0, d) == 10.0    // 6 + 6 -> maximo 10.0
+                    && CalculadoraCalificaciones.redondear((7.0 + 9.5) / 2) == 8.3;             // 8.25 -> 8.3
+
+            RelojPrueba reloj = new RelojPrueba();
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-notas")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-notas")), reloj);
+            ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+            cfg.setSorteoAleatorio(false);
+            servicio.crear("Notas", TipoFormato.LIGA, cfg, false);
+            for (int i = 1; i <= 4; i++) {
+                servicio.agregarEquipo("N" + i);
+            }
+            Campeonato c = servicio.getCampeonato();
+            for (alphasport.model.Equipo e : new ArrayList<>(c.getEquipos())) {
+                List<alphasport.model.Jugador> plantilla = new ArrayList<>();
+                for (int dorsal = 1; dorsal <= 14; dorsal++) {
+                    plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, "C" + e.getId() + "-" + dorsal,
+                            dorsal, dorsal == 1 ? "Portero" : "Mediocampista central"));
+                }
+                servicio.guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
+            }
+            servicio.avanzar();
+            Partido p = c.getPartidos().get(0);
+            List<alphasport.model.Jugador> loc = c.buscarEquipo(p.getIdLocal()).getJugadores();
+            List<alphasport.model.Jugador> vis = c.buscarEquipo(p.getIdVisitante()).getJugadores();
+            // Local 2-0: el #9 marca los dos (el #8 asiste en uno), amarilla al #4, roja al #5.
+            Partido datos = new Partido();
+            datos.copiarDatosDe(p);
+            datos.setEstado(EstadoPartido.JUGADO);
+            datos.setGolesLocal(2);
+            datos.setGolesVisitante(0);
+            datos.setTitulares(new ArrayList<>(loc.subList(0, 11).stream().map(alphasport.model.Jugador::getId).toList()),
+                    new ArrayList<>(vis.subList(0, 11).stream().map(alphasport.model.Jugador::getId).toList()));
+            datos.setGoles(new ArrayList<>(List.of(new alphasport.model.Gol(p.getIdLocal(), 20, loc.get(8), false, loc.get(7)),
+                    new alphasport.model.Gol(p.getIdLocal(), 70, loc.get(8), false, null))));
+            datos.setTarjetas(new ArrayList<>(List.of(new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(3), alphasport.model.Tarjeta.AMARILLA, 0),
+                    new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(4), alphasport.model.Tarjeta.ROJA, 1))), p.getIdLocal());
+            servicio.guardarPartido(p.getId(), datos, false);
+            long cierre = reloj.ahora;
+            CalificacionesPartido n = servicio.calificaciones(p.getId(), null);
+            java.util.function.BiFunction<List<CalificacionesPartido.Calificacion>, Integer, CalificacionesPartido.Calificacion> de =
+                    (lista, dorsal) -> lista.stream().filter(x -> x.dorsal() == dorsal).findFirst().orElseThrow();
+            boolean sistema = p.getFinalizadoEn() == cierre && n.votacion() == CalificacionesPartido.Votacion.ABIERTA
+                    && n.local().size() == 11 && n.visitante().size() == 11
+                    && de.apply(n.local(), 1).notaSistema() == 7.5        // portero, valla invicta
+                    && de.apply(n.local(), 9).notaSistema() == 8.0        // 6 + 2 goles
+                    && de.apply(n.local(), 8).notaSistema() == 6.5        // asistencia
+                    && de.apply(n.local(), 4).notaSistema() == 5.5        // amarilla
+                    && de.apply(n.local(), 5).notaSistema() == 4.0        // roja
+                    && de.apply(n.visitante(), 1).notaSistema() == 5.4    // portero: 2 goles recibidos
+                    && n.idMvp() == loc.get(8).getId();                   // el #9 (8.0) supera al portero (7.5)
+            if (!sistema) {
+                System.out.println("  cierre=" + (p.getFinalizadoEn() == cierre) + " votacion=" + n.votacion() + " local="
+                        + n.local().stream().map(x -> x.dorsal() + ":" + x.notaSistema()).toList() + " visitante="
+                        + n.visitante().stream().map(x -> x.dorsal() + ":" + x.notaSistema()).toList() + " mvp=" + n.idMvp());
+            }
+
+            // Votos: el #1 local recibe 10 y 9 desde dos dispositivos -> (7.5 + 9.5) / 2 = 8.5 y pasa a ser el MVP.
+            int portero = loc.get(0).getId();
+            servicio.votarJugador(p.getId(), portero, 10, "dispositivo-A1");
+            boolean repetido;
+            try {
+                servicio.votarJugador(p.getId(), portero, 3, "dispositivo-A1");
+                repetido = false;
+            } catch (ReglaNegocioException e) {
+                repetido = true; // mismo dispositivo, mismo jugador, mismo partido
+            }
+            CalificacionesPartido conVotos = servicio.votarJugador(p.getId(), portero, 9, "dispositivo-B2");
+            CalificacionesPartido.Calificacion arquero = de.apply(conVotos.local(), 1);
+            boolean hibrida = repetido && arquero.votos() == 2 && arquero.promedioPublico() == 9.5 && arquero.notaFinal() == 8.5
+                    && conVotos.idMvp() == portero && de.apply(conVotos.local(), 9).notaFinal() == 8.0 // sin votos = sistema
+                    && de.apply(servicio.calificaciones(p.getId(), "dispositivo-A1").local(), 1).miVoto() == 10;
+
+            // Valores fuera de rango y jugadores que no jugaron.
+            boolean rango = rechaza(() -> servicio.votarJugador(p.getId(), portero, 11, "dispositivo-C3"))
+                    && rechaza(() -> servicio.votarJugador(p.getId(), portero, 0, "dispositivo-C3"))
+                    && rechaza(() -> servicio.votarJugador(p.getId(), loc.get(13).getId(), 7, "dispositivo-C3")); // suplente sin jugar
+
+            // Pasadas las 24 horas la votacion se cierra y la nota queda como estaba.
+            reloj.ahora = cierre + CalculadoraCalificaciones.VENTANA_VOTACION_MS + 1;
+            CalificacionesPartido cerrada = servicio.calificaciones(p.getId(), null);
+            boolean ventana = rechaza(() -> servicio.votarJugador(p.getId(), loc.get(8).getId(), 8, "dispositivo-C3"))
+                    && cerrada.votacion() == CalificacionesPartido.Votacion.CERRADA && de.apply(cerrada.local(), 1).notaFinal() == 8.5;
+
+            // Corregir el resultado conserva la hora de cierre y los votos; borrarlo los descarta.
+            Partido correccion = new Partido();
+            correccion.copiarDatosDe(p);
+            correccion.setGolesLocal(3);
+            servicio.guardarPartido(p.getId(), correccion, false);
+            boolean conserva = p.getFinalizadoEn() == cierre && p.getVotos().size() == 2;
+            Partido borrado = new Partido();
+            borrado.copiarDatosDe(p);
+            borrado.reiniciarResultado();
+            servicio.guardarPartido(p.getId(), borrado, false);
+            boolean descarta = p.getFinalizadoEn() == 0 && p.getVotos().isEmpty()
+                    && servicio.calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.SIN_RESULTADO;
+
+            correcto = reglas && sistema && hibrida && rango && ventana && conserva && descarta;
+            if (!correcto) {
+                System.out.println("  reglas=" + reglas + " sistema=" + sistema + " hibrida=" + hibrida + " rango=" + rango
+                        + " ventana=" + ventana + " conserva=" + conserva + " descarta=" + descarta);
+            }
+        } catch (Exception e) {
+            correcto = false;
+            System.out.println("  ERROR: " + e);
+            e.printStackTrace();
+        }
+        System.out.println("Calificaciones de jugadores (sistema, público y MVP): " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    private interface Accion {
+        void correr() throws Exception;
+    }
+
+    /** true si la accion lanza una ReglaNegocioException (la regla se cumplio). */
+    private static boolean rechaza(Accion accion) {
+        try {
+            accion.correr();
+            return false;
+        } catch (ReglaNegocioException e) {
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**

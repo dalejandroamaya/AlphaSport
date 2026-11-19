@@ -11,6 +11,7 @@ import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.RepositorioCampeonato;
 import alphasport.persistence.RepositorioHistorial;
 import alphasport.persistence.Serializacion;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -25,12 +26,19 @@ public class CampeonatoService {
 
     private final RepositorioCampeonato repositorio;
     private final RepositorioHistorial historial;
+    /** [REQ-07] Reloj para la hora de cierre de los partidos y la ventana de votacion (las pruebas lo adelantan). */
+    private final Clock reloj;
     private Campeonato campeonato;
     private MotorCampeonato motor;
 
     public CampeonatoService(RepositorioCampeonato repositorio, RepositorioHistorial historial) {
+        this(repositorio, historial, Clock.systemDefaultZone());
+    }
+
+    public CampeonatoService(RepositorioCampeonato repositorio, RepositorioHistorial historial, Clock reloj) {
         this.repositorio = repositorio;
         this.historial = historial;
+        this.reloj = reloj;
     }
 
     public void cargarGuardado() {
@@ -397,7 +405,39 @@ public class CampeonatoService {
                     + "«Avanzar» para generarlas de nuevo.\n\n¿Desea continuar?");
         }
         motor.aplicarEdicion(partido, datos, afecta);
+        marcarFinal(partido);
         guardar();
+    }
+
+    /**
+     * [REQ-07] La primera vez que el partido queda JUGADO se guarda la hora de cierre: abre la votacion
+     * de 24 horas. Corregir despues el resultado no la mueve; si deja de estar jugado, se descarta
+     * junto con los votos.
+     */
+    private void marcarFinal(Partido partido) {
+        if (partido.isJugado()) {
+            if (partido.getFinalizadoEn() <= 0) {
+                partido.setFinalizadoEn(reloj.millis());
+            }
+        } else {
+            partido.setFinalizadoEn(0);
+            partido.getVotos().clear();
+        }
+    }
+
+    /** [REQ-07] Calificaciones de un partido; {@code dispositivo} sirve para mostrar el voto propio (puede ser null). */
+    public CalificacionesPartido calificaciones(int idPartido, String dispositivo) {
+        exigirCampeonato();
+        return CalculadoraCalificaciones.calcular(campeonato, buscarPartido(idPartido), reloj.millis(), dispositivo);
+    }
+
+    /** [REQ-07] Voto de un visitante (1 a 10) a un jugador; las reglas estan en CalculadoraCalificaciones.votar. */
+    public CalificacionesPartido votarJugador(int idPartido, int idJugador, int valor, String dispositivo) throws PersistenciaException {
+        exigirCampeonato();
+        Partido partido = buscarPartido(idPartido);
+        CalculadoraCalificaciones.votar(campeonato, partido, idJugador, valor, dispositivo, reloj.millis());
+        guardar();
+        return calificaciones(idPartido, dispositivo);
     }
 
     public void darWalkover(int idPartido, Partido datos, int idGanador, boolean confirmado) throws PersistenciaException {

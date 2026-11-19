@@ -578,3 +578,32 @@
 .pestanas-noticias .tab-header-area { -fx-padding: 0 0 4 0; }
 .pestanas-noticias .tab.pestana-con-pendientes .tab-label { -fx-text-fill: -ambar; -fx-font-family: "Onest SemiBold"; }
 .pestanas-noticias .tab.pestana-con-pendientes:selected .tab-label { -fx-text-fill: -texto; }
+
+/* [REQ-07] Calificaciones de jugadores: estado de la votación, MVP y filas con su nota */
+.calificacion-estado { -fx-padding: 10 14; -fx-background-radius: 14; -fx-border-radius: 14; -fx-font-family: "Onest SemiBold"; }
+.calificacion-abierta { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(46, 229, 152, 0.36); }
+.calificacion-cerrada { -fx-text-fill: -sutil; -fx-background-color: rgba(255, 255, 255, 0.05); -fx-border-color: -borde; }
+.calificacion-gracias { -fx-text-fill: -cesped; -fx-font-family: "Onest SemiBold"; }
+.tarjeta-mvp {
+    -fx-padding: 14 18;
+    -fx-border-color: rgba(247, 199, 90, 0.6);
+    -fx-background-color: rgba(247, 199, 90, 0.55), linear-gradient(to right, rgba(247, 199, 90, 0.2), -vidrio 60%);
+    -fx-background-insets: 0, 2 0 0 0;
+}
+.mvp-estrella { -fx-text-fill: -oro; -fx-font-size: 30px; }
+.mvp-titulo { -fx-text-fill: -oro-texto; -fx-font-family: "Onest SemiBold"; -fx-font-size: 12px; }
+.fila-calificacion { -fx-padding: 8 10; -fx-background-radius: 14; -fx-border-radius: 14; -fx-border-color: -borde; -fx-background-color: rgba(255, 255, 255, 0.03); }
+.raiz.claro .fila-calificacion { -fx-background-color: rgba(255, 255, 255, 0.6); }
+.fila-calificacion.fila-mvp { -fx-border-color: rgba(247, 199, 90, 0.65); -fx-background-color: rgba(247, 199, 90, 0.08); }
+.calificacion-dorsal { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-text-fill: -sutil; }
+/* La nota: pastilla con el número; verde alta, neutra media, rojo baja (el número siempre va escrito) */
+.nota { -fx-min-width: 52; -fx-alignment: center; -fx-padding: 5 10; -fx-background-radius: 10; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 17px; }
+.nota-alta { -fx-text-fill: #05080f; -fx-background-color: -cesped; }
+.nota-media { -fx-text-fill: -texto; -fx-background-color: rgba(255, 255, 255, 0.1); }
+.raiz.claro .nota-media { -fx-background-color: rgba(11, 23, 38, 0.08); }
+.nota-baja { -fx-text-fill: #05080f; -fx-background-color: -rojo; }
+.raiz.claro .nota-baja, .raiz.claro .nota-alta { -fx-text-fill: white; }
+.nota-mvp { -fx-text-fill: #2a1900; -fx-background-color: -oro; -fx-font-size: 22px; }
+.chip-portero { -fx-text-fill: -cian; -fx-padding: 1 8; -fx-font-size: 11px; }
+.chip-mvp { -fx-text-fill: -oro-texto; -fx-border-color: rgba(247, 199, 90, 0.6); -fx-padding: 1 8; -fx-font-size: 11px; }
+.chip-voto { -fx-text-fill: -cesped; -fx-border-color: rgba(46, 229, 152, 0.36); }

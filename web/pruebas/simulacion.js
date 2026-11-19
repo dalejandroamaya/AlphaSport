@@ -144,5 +144,47 @@ for (const formato of Object.keys(M.FORMATOS)) {
   if (!ok) fallos++;
 }
 
+// [REQ-07] Calificaciones: mismas reglas y mismos números que SimulacionFormatos.probarCalificaciones en Java.
+if (typeof Calificaciones !== 'undefined') {
+  class ErrorRegla extends Error {}
+  const rechaza = f => { try { f(); return false; } catch (e) { return e instanceof ErrorRegla; } };
+  const d = [];
+  const reglas = Calificaciones.notaSistema(false, 0, 0, 0, 0, 0, d) === 6 && Calificaciones.notaSistema(false, 2, 1, 1, 0, 0, d) === 8
+    && Calificaciones.notaSistema(true, 0, 0, 0, 0, 0, d) === 7.5 && Calificaciones.notaSistema(true, 0, 0, 0, 0, 3, d) === 5.1
+    && Calificaciones.notaSistema(false, 0, 0, 0, 3, 0, d) === 1 && Calificaciones.notaSistema(false, 6, 0, 0, 0, 0, d) === 10
+    && Calificaciones.redondear((7 + 9.5) / 2) === 8.3 && Calificaciones.redondear(8.45) === 8.5;
+  const plantilla = base => Array.from({ length: 14 }, (_, k) => ({ id: base + k + 1, nombre: 'J' + (k + 1), dorsal: k + 1, posicion: k === 0 ? 'Portero' : 'Mediocampista central' }));
+  const c = { equipos: [{ id: 1, nombre: 'A', jugadores: plantilla(100) }, { id: 2, nombre: 'B', jugadores: plantilla(200) }] };
+  const ahora = 1800000000000;
+  const p = {
+    id: 1, local: 1, visitante: 2, estado: 'JUGADO', gl: 2, gv: 0, obs: '', finalizadoEn: ahora,
+    titularesLocal: c.equipos[0].jugadores.slice(0, 11).map(j => j.id), titularesVisitante: c.equipos[1].jugadores.slice(0, 11).map(j => j.id),
+    goles: [{ equipo: 1, enContra: false, autor: 109, asistente: 108 }, { equipo: 1, enContra: false, autor: 109, asistente: 0 }],
+    tarjetas: [{ equipo: 1, jugador: 104, tipo: 'AMARILLA' }, { equipo: 1, jugador: 105, tipo: 'ROJA' }], cambios: []
+  };
+  const de = (lista, dorsal) => lista.find(x => x.dorsal === dorsal);
+  const n = Calificaciones.calcular(c, p, ahora + 1000, null);
+  const sistema = n.votacion === 'ABIERTA' && n.local.length === 11 && de(n.local, 1).notaSistema === 7.5 && de(n.local, 9).notaSistema === 8
+    && de(n.local, 8).notaSistema === 6.5 && de(n.local, 4).notaSistema === 5.5 && de(n.local, 5).notaSistema === 4
+    && de(n.visitante, 1).notaSistema === 5.4 && n.mvp === 109;
+  Calificaciones.votar(c, p, 101, 10, 'dispositivo-A1', ahora + 2000, ErrorRegla);
+  const repetido = rechaza(() => Calificaciones.votar(c, p, 101, 3, 'dispositivo-A1', ahora + 3000, ErrorRegla));
+  Calificaciones.votar(c, p, 101, 9, 'dispositivo-B2', ahora + 4000, ErrorRegla);
+  const v = Calificaciones.calcular(c, p, ahora + 5000, 'dispositivo-A1');
+  const hibrida = repetido && de(v.local, 1).notaFinal === 8.5 && de(v.local, 1).promedioPublico === 9.5 && v.mvp === 101 && de(v.local, 1).miVoto === 10;
+  const rango = rechaza(() => Calificaciones.votar(c, p, 101, 11, 'dispositivo-C3', ahora, ErrorRegla))
+    && rechaza(() => Calificaciones.votar(c, p, 114, 7, 'dispositivo-C3', ahora, ErrorRegla)); // suplente sin jugar
+  const fuera = ahora + Calificaciones.VENTANA_VOTACION_MS + 1;
+  const ventana = rechaza(() => Calificaciones.votar(c, p, 109, 8, 'dispositivo-C3', fuera, ErrorRegla))
+    && Calificaciones.calcular(c, p, fuera, null).votacion === 'CERRADA';
+  P.reiniciar(p);
+  Calificaciones.marcarFinal(p, fuera);
+  const descarta = p.finalizadoEn === 0 && p.votos.length === 0 && Calificaciones.calcular(c, p, fuera, null).votacion === 'SIN_RESULTADO';
+  const ok = reglas && sistema && hibrida && rango && ventana && descarta;
+  if (!ok) log(`  reglas=${reglas} sistema=${sistema} hibrida=${hibrida} rango=${rango} ventana=${ventana} descarta=${descarta}`);
+  log('Calificaciones de jugadores (sistema, público y MVP):', ok ? 'correcto' : 'MAL');
+  if (!ok) fallos++;
+}
+
 log(fallos === 0 ? 'TODO BIEN' : 'FALLOS: ' + fallos);
 if (enNode) process.exit(fallos === 0 ? 0 : 1);
