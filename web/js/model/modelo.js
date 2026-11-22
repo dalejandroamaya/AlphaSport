@@ -101,9 +101,10 @@ const P = {
     return -1;
   },
   // El XI inicial y la formación NO se borran: son datos de la previa (se eligen antes del pitazo).
-  // [REQ-07] Sin resultado no hay partido terminado: la votación (finalizadoEn) y sus votos se descartan.
+  // [REQ-07] Sin resultado no hay partido terminado: la votación (finalizadoEn) y sus votos se descartan. Las horas
+  // que dura la votación se conservan: se deciden antes de jugar.
   reiniciar(p) {
-    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [], goles: [], finalizadoEn: 0, votos: [] });
+    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [], goles: [], finalizadoEn: 0, votacionCerradaEn: 0, votos: [] });
   },
   votos: p => p.votos || [],       // [REQ-07] partidos guardados antes de las calificaciones
   tarjetas: p => p.tarjetas || [], // partidos guardados antes de las tarjetas por jugador
@@ -131,7 +132,11 @@ const P = {
     const goles = P.goles(p).map(x => Object.assign({}, x));
     const titularesLocal = (p.titularesLocal || []).slice(), titularesVisitante = (p.titularesVisitante || []).slice();
     const formacionLocal = p.formacionLocal || '', formacionVisitante = p.formacionVisitante || '';
-    return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas, cambios, goles, titularesLocal, titularesVisitante, formacionLocal, formacionVisitante };
+    // La votación también se copia (como Partido.copiarDatosDe en Java): si se cancela el cambio, no se pierden los votos.
+    const finalizadoEn = p.finalizadoEn || 0, horasVotacion = p.horasVotacion || 0, votacionCerradaEn = p.votacionCerradaEn || 0;
+    const votos = P.votos(p).map(x => Object.assign({}, x));
+    return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas, cambios, goles, titularesLocal, titularesVisitante, formacionLocal, formacionVisitante,
+      finalizadoEn, horasVotacion, votacionCerradaEn, votos };
   }
 };
 
