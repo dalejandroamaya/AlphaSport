@@ -1598,8 +1598,10 @@ function dibujarDetalle() {
     calificaciones: () => calificacionesHtml(d.calificaciones, p),
     caraACara: () => caraACaraHtml(d.caraACara, p),
     racha: () => rachaHtml(d.racha, p),
-    alineaciones: () => alineacionesCanchaHtml(d.alineaciones, p)
+    alineaciones: () => alineacionesHtml(d.alineaciones, p)
   };
+  // En «Alineaciones» el marcador se hace más bajo: así la cancha completa cabe sin desplazarse.
+  $('dlgDetalle').classList.toggle('con-cancha', detallePestana === 'alineaciones');
   $('dpPanel').innerHTML = (pestanas[detallePestana] || pestanas.resumen)();
 }
 
@@ -1739,65 +1741,6 @@ async function votarJugador(idJugador) {
     avisoCalificacion = { texto: r.error, error: true };
   }
   dibujarDetalle();
-}
-
-/** «Juan Carlos Pérez» -> «J. Pérez», para que quepa sobre la cancha. */
-function apellido(nombre) {
-  const partes = String(nombre).trim().split(/\s+/);
-  return partes.length < 2 ? nombre : partes[0].charAt(0) + '. ' + partes[partes.length - 1];
-}
-
-/**
- * Cancha vertical: el visitante arriba (ataca hacia abajo) y el local abajo. El portero
- * junto a su arco y la última línea cerca del medio campo (igual que en el escritorio).
- */
-function alineacionesCanchaHtml(a, p) {
-  const cambios = p.cambios || [];
-  const fichas = (al, arriba) => {
-    const lineas = al.lineas, ultima = Math.max(1, lineas.length - 1), arco = 0.93, frente = 0.55;
-    return lineas.map((linea, i) => {
-      const y = arco - (arco - frente) * i / ultima;
-      return linea.map((j, k) => {
-        const x = (k + 1) / (linea.length + 1);
-        const izq = ((arriba ? 1 - x : x) * 100).toFixed(2), arr = ((arriba ? 1 - y : y) * 100).toFixed(2);
-        // Si salió en un cambio, el minuto va debajo del nombre.
-        const salio = j && cambios.find(x => x.sale === j.id);
-        const titulo = j ? `#${j.dorsal} ${j.nombre} · ${j.posicion || ''}${salio ? ` · salió en el minuto ${salio.minuto}` : ''}` : 'Por confirmar';
-        const dorsal = `<span class="ficha-dorsal ${arriba ? 'ficha-visitante' : 'ficha-local'}">${j ? j.dorsal : '?'}</span>`;
-        // Con jugador: su foto tipo cédula (o «NN») con el dorsal encima. El administrador la toca para cambiarla.
-        const foto = !j ? dorsal : puedeEditar()
-          ? `<button type="button" class="ficha-foto ${arriba ? 'ficha-visitante' : 'ficha-local'}" data-foto-equipo="${arriba ? p.visitante : p.local}" data-foto-jugador="${j.id}"
-              title="${j.foto ? 'Cambiar o quitar la foto' : 'Subir la foto'} de ${esc(j.nombre)}">${fotoCedulaHtml(j.foto, j.nombre)}${dorsal}</button>`
-          : `<span class="ficha-foto ${arriba ? 'ficha-visitante' : 'ficha-local'}">${fotoCedulaHtml(j.foto, j.nombre)}${dorsal}</span>`;
-        return `<div class="ficha-cancha${j ? ' con-foto' : ''}" style="left:${izq}%;top:${arr}%" title="${esc(titulo)}">
-            ${foto}
-            ${j ? `<span class="ficha-nombre">${esc(apellido(j.nombre))}</span>` : ''}
-            ${salio ? `<span class="ficha-sale" aria-hidden="true">↓ ${minutoTexto(salio.minuto)}</span>` : ''}
-            <span class="solo-lector">${esc(titulo)}</span></div>`;
-      }).join('');
-    }).join('');
-  };
-  // Rótulo del equipo: formación, estado de la alineación y los cambios (quién entró por quién).
-  const rotulo = (equipo, al, donde, idEquipo) => {
-    const delEquipo = cambios.filter(x => x.equipo === idEquipo);
-    return `<div class="detalle-rotulo vidrio">
-      <span class="sutil pequeno">${donde}</span><b>${esc(equipo)}</b>
-      <span class="chip">Formación ${esc(al.formacion)}${al.formacionElegida ? '' : ' (por defecto)'}</span>
-      <span class="sutil pequeno">${al.confirmada ? 'Alineación confirmada' : 'Alineación por confirmar'}</span>
-      ${delEquipo.length ? `<span class="sutil pequeno">Cambios</span><ol class="rotulo-cambios">${delEquipo.map(x => `<li><b class="entra-txt">${minutoTexto(x.minuto)}</b>
-        <span><span>Entra #${x.entraDorsal} ${esc(x.entraNombre)}</span><small class="sale-txt">Sale #${x.saleDorsal} ${esc(x.saleNombre)}</small></span></li>`).join('')}</ol>` : ''}</div>`;
-  };
-  const nota = !a.local.confirmada || !a.visitante.confirmada
-    ? '<p class="sutil pequeno">Las casillas con «?» son puestos por confirmar: el XI inicial se registra al abrir el partido.</p>' : '';
-  return `<div class="detalle-alineaciones">
-      <div class="cancha" role="group" aria-label="Alineaciones sobre la cancha: ${esc(p.visitanteNombre)} arriba y ${esc(p.localNombre)} abajo">
-        <span class="cancha-medio"></span><span class="cancha-circulo"></span>
-        <span class="cancha-area arriba"></span><span class="cancha-area abajo"></span>
-        <span class="cancha-chica arriba"></span><span class="cancha-chica abajo"></span>
-        ${fichas(a.visitante, true)}${fichas(a.local, false)}
-      </div>
-      <div class="detalle-lado">${rotulo(p.visitanteNombre, a.visitante, 'Arriba', p.visitante)}${rotulo(p.localNombre, a.local, 'Abajo', p.local)}${nota}</div>
-    </div>`;
 }
 
 /* ---------------------------------------------------------------- noticias */
