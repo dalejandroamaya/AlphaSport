@@ -22,25 +22,11 @@ import javafx.scene.layout.VBox;
 /**
  * Detalle de partido: cabecera con el marcador y pestañas «Resumen»,
  * «Calificaciones» [REQ-07], «Cara a cara», «Racha» y «Alineaciones». Dibuja el JSON que
- * entrega ApiControlador.consultar("partido/{id}"); no calcula nada. Lo único que se puede
- * hacer aquí es votar en «Calificaciones» (visitante, dentro de las 24 horas).
+ * entrega ApiControlador.consultar("partido/{id}"); no calcula nada.
  */
 final class VistaDetallePartido {
 
     private VistaDetallePartido() {
-    }
-
-    /** Solo lectura (sin votar). */
-    static Node construir(Map<String, Object> detalle) {
-        return construir(detalle, false, null);
-    }
-
-    /**
-     * @param puedeVotar true para el visitante: ve el selector 1–10 mientras la votación está abierta
-     * @param votante    registra el voto en la API (null = solo lectura)
-     */
-    static Node construir(Map<String, Object> detalle, boolean puedeVotar, VistaCalificaciones.Votante votante) {
-        return construir(detalle, puedeVotar, votante, null);
     }
 
     /**
@@ -53,12 +39,15 @@ final class VistaDetallePartido {
         void escudo(Node ancla, int idEquipo);
     }
 
-    /** @param edicion null = las fotos y escudos solo se ven (visitante) */
-    static Node construir(Map<String, Object> detalle, boolean puedeVotar, VistaCalificaciones.Votante votante, Edicion edicion) {
+    /**
+     * @param edicion       null = las fotos y escudos solo se ven (visitante)
+     * @param irAVotaciones lleva al visitante a la sección «Votaciones»; null = no se ofrece (administrador)
+     */
+    static Node construir(Map<String, Object> detalle, Edicion edicion, Runnable irAVotaciones) {
         Map<String, Object> p = m(detalle, "partido");
         TabPane pestanas = new TabPane(
                 new Tab("Resumen", resumen(p)),
-                new Tab("Calificaciones", VistaCalificaciones.construir(m(detalle, "calificaciones"), p, puedeVotar, votante)),
+                new Tab("Calificaciones", VistaCalificaciones.construir(m(detalle, "calificaciones"), p, irAVotaciones)),
                 new Tab("Cara a cara", caraACara(m(detalle, "caraACara"), p)),
                 new Tab("Racha", racha(m(detalle, "racha"), p)),
                 new Tab("Alineaciones", VistaAlineaciones.construir(m(detalle, "alineaciones"), p, edicion)));

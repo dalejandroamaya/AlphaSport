@@ -1753,11 +1753,12 @@ class Dialogos {
 
     /**
      * Detalle del partido: resumen, calificaciones [REQ-07], cara a cara, racha y alineaciones. Lo usan
-     * visitante y administrador; solo el visitante puede votar (con el id anónimo de este equipo).
+     * visitante y administrador. No se vota aquí: «Ir a votar» lleva al visitante a «Votaciones».
      */
     void detallePartido(Map<String, Object> p) {
         StackPane contenedor = new StackPane();
         int[] pestana = {0};
+        boolean[] votar = {false}; // «Ir a votar»: la sección se abre cuando esta ventana ya se cerró
         java.util.function.BooleanSupplier[] armar = new java.util.function.BooleanSupplier[1];
         // El administrador toca la foto de un jugador o un escudo; al guardarse, el detalle se vuelve a dibujar ahí mismo.
         VistaDetallePartido.Edicion edicion = !app.puedeEditar() ? null : new VistaDetallePartido.Edicion() {
@@ -1775,15 +1776,15 @@ class Dialogos {
             }
         };
         try {
-            String dispositivo = Dispositivo.id();
-            VistaCalificaciones.Votante votante = (jugador, valor) -> app.ejecutar("calificacion/votar",
-                    mapa("partido", n(p, "id"), "jugador", jugador, "valor", valor, "dispositivo", dispositivo));
             armar[0] = () -> {
-                Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id") + "/" + dispositivo);
+                Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id"));
                 if (detalle == null || m(detalle, "partido") == null) {
                     return false;
                 }
-                Node vista = VistaDetallePartido.construir(detalle, !app.puedeEditar(), votante, edicion);
+                Node vista = VistaDetallePartido.construir(detalle, edicion, app.puedeEditar() ? null : () -> {
+                    votar[0] = true;
+                    contenedor.getScene().getWindow().hide();
+                });
                 if (vista.lookup(".detalle-pestanas") instanceof javafx.scene.control.TabPane pestanas) {
                     pestanas.getSelectionModel().select(pestana[0]);
                     pestanas.getSelectionModel().selectedIndexProperty().addListener((o, a, ahora) -> pestana[0] = ahora.intValue());
@@ -1813,6 +1814,9 @@ class Dialogos {
             pestanas.requestFocus();
         }
         v.showAndWait();
+        if (votar[0]) {
+            app.mostrarVista("votaciones");
+        }
     }
 
     void datosPrueba() {
