@@ -128,7 +128,7 @@ Al tocar un partido, el visitante ve un detalle de solo lectura con cuatro pesta
 | Resumen | Cifras por equipo (goles, cambios, amarillas, rojas) y la línea de tiempo con goles, cambios y tarjetas | Sale del JSON del partido (`goles`, `cambios`, `tarjetas`); no se calcula nada nuevo |
 | Cara a cara | Victorias de cada uno, empates y los últimos 10 enfrentamientos | Partidos jugados **antes** de este, del campeonato actual y del historial. Los equipos se cruzan por nombre. |
 | Racha | Últimos 5 resultados de cada equipo: 🟩 V, 🟨 E, 🟥 D | Mismo origen; el más reciente a la izquierda |
-| Alineaciones | Cancha con el XI de cada equipo según su formación, el minuto en que salió cada titular y la lista de cambios | Portero atrás; el resto por posición (defensa → medio → ataque) y lado (izquierda → derecha). Sin XI: casillas «?». Sin formación: 4-4-2 «por defecto». Reutiliza el XI inicial y los cambios que registra el administrador: no hay una segunda lista de alineaciones. |
+| Alineaciones | Cancha **horizontal** (local a la izquierda, visitante a la derecha) con la foto, el dorsal y el nombre del XI según la formación. Se ajusta a la ventana para verse completa. Debajo: formación, estado, cuerpo técnico, cambios y suplentes (`VistaAlineaciones` / `cancha.js`) | Portero atrás; el resto por posición (defensa → medio → ataque) y lado (izquierda → derecha). Sin XI: casillas «?». Sin formación: 4-4-2 «por defecto». Reutiliza el XI inicial y los cambios que registra el administrador: no hay una segunda lista de alineaciones. |
 
 | Capa | Java | Web sola |
 |---|---|---|
@@ -223,28 +223,29 @@ Para el administrador, la sección **Partidos** se llama **Gestionar partidos** 
 
 ## [REQ-07] Calificación de jugadores por partido (sistema + público)
 
-Pestaña **Calificaciones** en el detalle de un partido terminado (la ven los dos roles). Cada jugador que jugó —titular, ingresado de cambio o con un gol, asistencia o tarjeta registrados— tiene una nota de 1.0 a 10.0:
+Pestaña **Calificaciones** en el detalle de un partido terminado (la ven los dos roles): solo la **nota final** de cada jugador y el MVP. El visitante vota en su sección **Votaciones**, que lista los partidos con la votación abierta. Cada jugador que jugó —titular, ingresado de cambio o con un gol, asistencia o tarjeta registrados— tiene una nota de 1.0 a 10.0:
 
 | Parte | Regla |
 |---|---|
 | **Nota del sistema** | 6.0 por jugar; gol +1.0, asistencia +0.5, amarilla −0.5, roja −2.0. Portero: +1.5 con la valla invicta y −0.3 por cada gol recibido. Siempre entre 1.0 y 10.0. El autogol no suma |
-| **Voto del público** | Solo visitantes, del 1 al 10, durante las **24 horas** siguientes a la hora en que el partido quedó «Jugado» (`Partido.finalizadoEn`). Un voto por jugador desde cada dispositivo |
+| **Voto del público** | Solo visitantes, del 1 al 10, mientras la votación está abierta. Un voto por jugador desde cada dispositivo. Se envían varios a la vez: todos o ninguno |
+| **Tiempo de votación** | Se abre cuando el partido queda «Jugado» (`Partido.finalizadoEn`) y dura las horas que programe el administrador en el editor del partido: 12, 24, 48 u otro valor de 1 a 720 (24 si no elige). «Cerrar votación ahora» la cierra antes; elegir otro tiempo la reabre, si el nuevo cierre es futuro |
 | **Nota final** | Sin votos = la del sistema. Con votos = (sistema + promedio del público) / 2, redondeada a 1 decimal (mitad hacia arriba: 8.25 → 8.3) |
 | **MVP** | La nota final más alta. Empates: más goles, más asistencias, mejor nota del sistema, titular, local y dorsal más bajo |
 
-- **Todo en memoria, dentro del partido:** `Partido` guarda `finalizadoEn` y la lista de `VotoJugador` (jugador, valor, dispositivo, fecha). Se guardan con el campeonato (`campeonato.dat` / navegador) y se van con él, así los votos de un campeonato nunca se mezclan con otro. Los archivos anteriores siguen abriendo: sus partidos jugados quedan como «sin registro» (solo nota del sistema).
-- **La nota se calcula al consultar** (`CalculadoraCalificaciones.calcular()`): si el administrador corrige un gol o una tarjeta, la nota cambia sola. El resultado, `CalificacionesPartido`, es un `record` de solo lectura: no es un modelo porque nunca se guarda (igual que `DetallePartido` y `EstadisticasCampeonato`). Así cada clase tiene una sola responsabilidad: la calculadora tiene las reglas y el record, el resultado. Corregir el resultado conserva la hora de cierre y los votos; borrarlo (volver a pendiente) los descarta. Un W.O. no tiene calificaciones.
-- **Dispositivo:** identificador anónimo al azar (no es un dato personal). Web: `Almacen.dispositivo()` en el navegador. Escritorio: `Dispositivo.id()` en las preferencias del usuario de Windows. Viaja en `GET /api/partido/{id}/{dispositivo}` (para mostrar «Su voto») y en `calificacion/votar`.
-- **Permisos:** `calificacion/votar` está en `RUTAS_VISITANTE`; además el administrador recibe `PERMISO` («el administrador no vota»): ya influye en la nota del sistema al registrar goles y tarjetas.
+- **Todo en memoria, dentro del partido:** `Partido` guarda `finalizadoEn`, `horasVotacion`, `votacionCerradaEn` y la lista de `VotoJugador` (jugador, valor, dispositivo, fecha). Se guardan con el campeonato (`campeonato.dat` / navegador) y se van con él, así los votos de un campeonato nunca se mezclan con otro. Los archivos anteriores siguen abriendo: sus partidos jugados quedan como «sin registro» (solo nota del sistema).
+- **La nota se calcula al consultar** (`CalculadoraCalificaciones.calcular()`): si el administrador corrige un gol o una tarjeta, la nota cambia sola. El resultado, `CalificacionesPartido`, es un `record` de solo lectura: no es un modelo porque nunca se guarda (igual que `DetallePartido` y `EstadisticasCampeonato`). Así cada clase tiene una sola responsabilidad: la calculadora tiene las reglas y el record, el resultado. Corregir el resultado conserva la hora del final y los votos; borrarlo (volver a pendiente) los descarta, pero no las horas programadas. Un W.O. no tiene calificaciones.
+- **Dispositivo:** identificador anónimo al azar (no es un dato personal). Web: `Almacen.dispositivo()` en el navegador. Escritorio: `Dispositivo.id()` en las preferencias del usuario de Windows. Viaja en `GET /api/votaciones/{dispositivo}` (para mostrar «Su voto») y en `calificacion/votar`.
+- **Permisos:** `calificacion/votar` está en `RUTAS_VISITANTE`; además el administrador recibe `PERMISO` («el administrador no vota»): ya influye en la nota del sistema al registrar goles y tarjetas. `votacion/cerrar` y las horas (`partido`, campo `horasVotacion`) son solo del administrador. La sección «Votaciones» es solo del visitante (`VISTAS_SOLO_VISITANTE`).
 
 | Capa | Java | Web sola |
 |---|---|---|
-| model | **Nuevo** `VotoJugador`; `Partido.finalizadoEn` y `getVotos()` | `P.votos()` y `P.reiniciar()` en `modelo.js` |
+| model | `VotoJugador`; `Partido`: `finalizadoEn`, `horasVotacion`, `votacionCerradaEn` y `getVotos()` | `P.votos()`, `P.datos()` y `P.reiniciar()` en `modelo.js` |
 | persistence | (sin cambios: va dentro del campeonato) | `Almacen.dispositivo()` en `almacen.js` |
-| service | **Nuevos** `CalculadoraCalificaciones` (reglas: nota, ventana de 24 h, votar, MVP) y `CalificacionesPartido` (record con el resultado); `CampeonatoService.calificaciones()`, `votarJugador()` y la hora de cierre en `guardarPartido()` (con `Clock` para las pruebas) | **Nuevo** `calificaciones.js` (mismas reglas y JSON); `servicioLocal.js`: ruta `calificacion/votar` y `calificaciones` en el detalle |
-| ui · API | `ApiControlador` (ruta y permisos, `partido/{id}/{dispositivo}`), `Presentador.calificaciones()` | `servicioRemoto.js` (envía el dispositivo) |
-| ui · pantallas | **Nuevos** `VistaCalificaciones` y `Dispositivo`; `VistaDetallePartido` (pestaña) y `Dialogos.detallePartido()` (votar); `escritorio.css` | `index.html` (pestaña y script), `app.js` (`calificacionesHtml()`, `votarJugador()`), `estilos.css` |
-| pruebas | `SimulacionFormatos.probarCalificaciones()` | `web/pruebas/simulacion.js` |
+| service | `ReglasVotacion` (tiempo, cierre y votos), `CalculadoraCalificaciones` (nota y MVP) y `CalificacionesPartido` (record con el resultado); `CampeonatoService`: `calificaciones()`, `votarJugadores()`, `votacionesAbiertas()`, `programarVotacion()`, `cerrarVotacion()` (con `Clock` para las pruebas) | `reglasVotacion.js` y `calificaciones.js` (mismas reglas y JSON); `servicioLocal.js`: rutas `calificacion/votar` y `votacion/cerrar`, y `votaciones()` |
+| ui · API | `ApiControlador` (rutas y permisos), `Presentador`: `calificaciones()`, `votaciones()` y `votacion` en cada partido | `servicioRemoto.js` (envía el dispositivo) |
+| ui · pantallas | `VistaVotaciones` (visitante), `EditorVotacion` (administrador), `VistaCalificaciones` (nota final), `TiempoVotacion` (textos) y `Dispositivo` | `votaciones.js` (las tres pantallas) |
+| pruebas | `SimulacionFormatos.probarCalificaciones()` y `probarPreviaYResultado()` (por la API) | `web/pruebas/simulacion.js` |
 
 ### Cómo agregar algo nuevo sin romper nada
 
