@@ -74,15 +74,18 @@ import javafx.util.Duration;
  */
 public class Aplicacion extends Application {
 
-    static final String[] VISTAS = {"equipos", "partidos", "posiciones", "llaves", "sanciones", "noticias", "reglas"};
+    static final String[] VISTAS = {"equipos", "partidos", "votaciones", "posiciones", "llaves", "sanciones", "noticias", "reglas"};
     /** Vistas que el visitante no ve (no le aportan: son de gestión). */
     static final java.util.Set<String> VISTAS_SOLO_ADMIN = java.util.Set.of("equipos", "reglas");
+    /** Vistas que solo ve el visitante: el administrador no vota [REQ-07]. */
+    static final java.util.Set<String> VISTAS_SOLO_VISITANTE = java.util.Set.of("votaciones");
     /** Vista con la que entra el visitante. */
     static final String VISTA_INICIAL_VISITANTE = "partidos";
-    static final String[] NOMBRES_VISTAS = {"Equipos", "Partidos", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas"};
+    static final String[] NOMBRES_VISTAS = {"Equipos", "Partidos", "Votaciones", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas"};
     static final String[] ICONOS_VISTAS = {
         "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z",
         "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM3 10h18M8 3v4M16 3v4",
+        "M12 3l2.7 5.8 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3.1 1.2-6.2L3 9.6l6.3-.8Z",
         "M4 20V10M10 20V4M16 20v-7M22 20H2",
         "M3 4h5v6H3M3 14h5v6H3M8 7h4v10H8M12 12h5M17 9h4v6h-4",
         "M6.5 4h6a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 5 15.5v-10A1.5 1.5 0 0 1 6.5 4ZM15 7h3a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6a1.5 1.5 0 0 1-1.5-1.5V18",
@@ -131,6 +134,7 @@ public class Aplicacion extends Application {
     private int pestanaEstadisticas; // pestaña elegida en Estadísticas (se conserva al redibujar)
     private String pestanaNoticias;  // «pendientes» o «publicadas» (null = se elige al entrar)
     private String pestanaPartidos = "previa"; // «previa» o «resultados» en Gestionar partidos
+    private VistaVotaciones votaciones = new VistaVotaciones(this); // [REQ-07] recuerda las notas sin enviar
 
     @Override
     public void start(Stage stage) {
@@ -324,7 +328,7 @@ public class Aplicacion extends Application {
         if (vista.equals("llaves") && !usaLlaves()) {
             return false;
         }
-        return puedeEditar() || !VISTAS_SOLO_ADMIN.contains(vista);
+        return puedeEditar() ? !VISTAS_SOLO_VISITANTE.contains(vista) : !VISTAS_SOLO_ADMIN.contains(vista);
     }
 
     /** Oculta (y saca del layout) los controles de edicion cuando el usuario es visitante. */
@@ -457,6 +461,7 @@ public class Aplicacion extends Application {
 
     void mostrarPrincipal() {
         E = api.consultar("estado");
+        votaciones = new VistaVotaciones(this); // otra sesión: sin las notas a medio elegir de la anterior
         ImageView logo = new ImageView(imagen("logo.png"));
         logo.setFitWidth(150);
         logo.setPreserveRatio(true);
@@ -474,8 +479,8 @@ public class Aplicacion extends Application {
         }
         for (int i = 0; i < VISTAS.length; i++) {
             String clave = VISTAS[i];
-            if (!puedeEditar() && VISTAS_SOLO_ADMIN.contains(clave)) {
-                continue; // el visitante no ve Equipos ni Reglas
+            if ((puedeEditar() ? VISTAS_SOLO_VISITANTE : VISTAS_SOLO_ADMIN).contains(clave)) {
+                continue; // el visitante no ve Equipos ni Reglas; el administrador no ve Votaciones
             }
             SVGPath icono = new SVGPath();
             icono.setContent(ICONOS_VISTAS[i]);
@@ -790,6 +795,12 @@ public class Aplicacion extends Application {
             botonLlaves.setVisible(puedeVer("llaves"));
             botonLlaves.setManaged(puedeVer("llaves"));
         }
+        // «Votaciones (2)»: cuántos partidos puede votar el visitante ahora.
+        ToggleButton botonVotaciones = navegacion.get("votaciones");
+        if (botonVotaciones != null) {
+            long abiertas = l(E, "partidos").stream().filter(TiempoVotacion::abierta).count();
+            botonVotaciones.setText(abiertas == 0 ? "Votaciones" : "Votaciones (" + abiertas + ")");
+        }
         mostrarVista(vista);
     }
 
@@ -824,6 +835,7 @@ public class Aplicacion extends Application {
         }
         Node nodo = switch (nombre) {
             case "partidos" -> vistaPartidos();
+            case "votaciones" -> vistaVotaciones();
             case "posiciones" -> vistaPosiciones();
             case "llaves" -> vistaLlaves();
             case "sanciones" -> vistaEstadisticas();
@@ -1181,6 +1193,13 @@ public class Aplicacion extends Application {
         pestanas.getSelectionModel().selectedItemProperty().addListener((o, antes, ahora) ->
                 pestanaPartidos = ahora == tabPrevia ? "previa" : "resultados");
         caja.getChildren().add(pestanas);
+        return caja;
+    }
+
+    /** [REQ-07] Solo visitante: califica a los jugadores de los partidos con la votación abierta. */
+    private Node vistaVotaciones() {
+        VBox caja = seccion("Votaciones", "Califique del 1 al 10 a los jugadores de los partidos terminados antes de que cierre la votación.");
+        caja.getChildren().add(votaciones.dibujar());
         return caja;
     }
 
