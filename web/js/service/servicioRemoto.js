@@ -27,10 +27,12 @@ function crearServicioRemoto() {
     sesion: () => pedir('sesion'),
     estado: () => pedir('estado'),
     historial: () => pedir('historial'),
-    detalle: id => pedir('partido/' + id),
+    // [REQ-07] El id anónimo del navegador permite mostrar en las calificaciones lo que ya votó.
+    detalle: id => pedir('partido/' + id + '/' + encodeURIComponent(Almacen.dispositivo())),
     noticias: () => pedir('noticias'),
     /** Con el programa Java la foto es un archivo de datos/imagenes/ que se sirve en /api/imagen/{nombre}. */
     urlImagen: imagen => (imagen ? '/api/imagen/' + encodeURIComponent(imagen) : ''),
+    urlFoto: foto => (foto ? '/api/foto/' + encodeURIComponent(foto) : ''),
     ejecutar: (ruta, cuerpo = {}) => pedir(ruta, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
     }),

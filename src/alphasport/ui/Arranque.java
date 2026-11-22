@@ -1,9 +1,11 @@
 package alphasport.ui;
 
 import alphasport.persistence.ArchivoRepositorioCampeonato;
+import alphasport.persistence.ArchivoRepositorioFotos;
 import alphasport.persistence.ArchivoRepositorioHistorial;
 import alphasport.persistence.ArchivoRepositorioNoticias;
 import alphasport.service.CampeonatoService;
+import alphasport.service.FotosService;
 import alphasport.service.NoticiasService;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,6 +37,7 @@ public final class Arranque {
         }
         CampeonatoService servicio = new CampeonatoService(
                 new ArchivoRepositorioCampeonato(CARPETA_DATOS), new ArchivoRepositorioHistorial(CARPETA_DATOS));
+        servicio.usarFotos(new FotosService(new ArchivoRepositorioFotos(CARPETA_DATOS)));
         servicio.cargarGuardado();
         return servicio;
     }

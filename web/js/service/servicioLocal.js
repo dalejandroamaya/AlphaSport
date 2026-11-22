@@ -185,9 +185,10 @@ function crearServicioLocal() {
       },
       equipos: c.equipos.map(e => ({
         id: e.id, nombre: e.nombre, estadio: e.estadio || '', retirado: !!e.retirado, division: divisionDe(c, e),
+        escudo: e.escudo || '',
         dt: e.dt ? Object.assign({}, e.dt) : null,
         jugadores: e.jugadores.map(j => ({
-          id: j.id || 0, nombre: j.nombre, documento: j.documento || '', dorsal: j.dorsal, posicion: j.posicion,
+          id: j.id || 0, nombre: j.nombre, documento: j.documento || '', dorsal: j.dorsal, posicion: j.posicion, foto: j.foto || '',
           amarillas: j.id ? m.contarTarjetas(j.id, 'AMARILLA') : 0, rojas: j.id ? m.contarTarjetas(j.id, 'ROJA') : 0,
           pendientes: j.id ? m.fechasPendientesDe(j.id) : 0
         }))
@@ -291,7 +292,27 @@ function crearServicioLocal() {
     equipo.estadio = String(d.estadio || '').trim();
     equipo.dt = d.dt && String(d.dt.nombre || '').trim()
       ? { nombre: d.dt.nombre.trim(), documento: String(d.dt.documento || '').trim(), nacionalidad: String(d.dt.nacionalidad || '').trim() } : null;
-    equipo.jugadores = d.jugadores.map(j => ({ id: j.id || m.nuevoIdJugador(), nombre: j.nombre.trim(), documento: String(j.documento || '').trim(), dorsal: j.dorsal, posicion: j.posicion }));
+    equipo.jugadores = d.jugadores.map(j => ({
+      id: j.id || m.nuevoIdJugador(), nombre: j.nombre.trim(), documento: String(j.documento || '').trim(), dorsal: j.dorsal,
+      posicion: j.posicion, foto: fotoValida(j.foto, 'jugador')
+    }));
+    if ('escudo' in d) equipo.escudo = fotoValida(d.escudo, 'escudo');
+  }
+
+  /*
+   * Fotos de jugadores (tipo cédula) y escudos. En la web sola la interfaz ya las recorta
+   * (240x320 JPG y 256x256 PNG) y se guardan dentro del campeonato como «data URL».
+   * Aquí solo se revisa que sean una imagen de ese tamaño razonable; lo demás queda sin foto.
+   */
+  const MAXIMO_FOTO = 400 * 1024; // caracteres de la data URL (las ya recortadas pesan ~20 KB)
+  function fotoValida(valor, tipo) {
+    const v = String(valor || '');
+    if (!v) return '';
+    if (!/^data:image\/(jpeg|png);base64,[A-Za-z0-9+\/=]+$/.test(v)) {
+      throw new ErrorRegla(tipo === 'escudo' ? 'El escudo no tiene un formato válido.' : 'La foto no tiene un formato válido.');
+    }
+    if (v.length > MAXIMO_FOTO) throw new ErrorRegla('La foto es muy pesada.');
+    return v;
   }
 
   const MINUTO_MAXIMO = 130; // 90 + prórroga + descuento
@@ -473,6 +494,7 @@ function crearServicioLocal() {
       throw new ErrorRegla('Este cambio modifica quién clasifica o avanza.\nLas rondas y fases generadas después de este partido se borrarán y tendrá que volver a pulsar «Avanzar» para generarlas de nuevo.\n\n¿Desea continuar?', 'CONFIRMAR');
     }
     m.aplicarEdicion(p, datos, afecta);
+    Calificaciones.marcarFinal(p, Date.now()); // [REQ-07] abre (o descarta) la votación de 24 horas
   }
 
   /* ---------------------------------------------------------------- sesión y permisos (igual que ApiControlador) */
@@ -604,6 +626,21 @@ function crearServicioLocal() {
       return mensaje;
     },
     semilla: d => cargarDatosPrueba(d),
+    'jugador/foto': d => {
+      exigir();
+      const e = m.equipo(d.equipo);
+      const j = e && e.jugadores.find(x => x.id === d.jugador);
+      if (!j) throw new ErrorRegla('Ese jugador ya no está en la plantilla.');
+      j.foto = fotoValida(d.imagen, 'jugador');
+      return j.foto ? `Foto de ${j.nombre} actualizada.` : `Foto de ${j.nombre} eliminada.`;
+    },
+    'equipo/escudo': d => {
+      exigir();
+      const e = m.equipo(d.id);
+      if (!e) throw new ErrorRegla('El equipo no existe.');
+      e.escudo = fotoValida(d.imagen, 'escudo');
+      return e.escudo ? `Escudo de ${e.nombre} actualizado.` : `Escudo de ${e.nombre} eliminado.`;
+    },
     'equipo/rapido': d => {
       exigir();
       exigirNoIniciado();
@@ -637,14 +674,29 @@ function crearServicioLocal() {
     'noticia/guardar': d => { noticias.publicar(d); return d.id == null ? 'Noticia publicada.' : 'Noticia guardada.'; },
     'noticia/aprobar': d => { noticias.aprobar(d.id); return 'Noticia aprobada: ya aparece en el feed.'; },
     'noticia/eliminar': d => { noticias.eliminar(d.id); return d.rechazo ? 'Propuesta rechazada.' : 'Noticia eliminada.'; },
-    'comentario/eliminar': d => { noticias.eliminarComentario(d.noticia, d.id); return 'Comentario eliminado.'; }
+    'comentario/eliminar': d => { noticias.eliminarComentario(d.noticia, d.id); return 'Comentario eliminado.'; },
+    // [REQ-07] Voto del público: solo los visitantes (el administrador ya influye en la nota del sistema).
+    'calificacion/votar': d => {
+      exigir();
+      if (ROLES[usuario.rol].puedeEditar) {
+        throw new ErrorRegla('Las calificaciones del público son de los visitantes: el administrador no vota.', 'PERMISO');
+      }
+      const p = c.partidos.find(x => x.id === d.partido);
+      if (!p) throw new ErrorRegla('El partido no existe.');
+      const ahora = Date.now();
+      Calificaciones.votar(c, p, d.jugador, d.valor, d.dispositivo, ahora, ErrorRegla);
+      ultimasCalificaciones = Calificaciones.calcular(c, p, ahora, d.dispositivo);
+      return '¡Gracias! Su calificación quedó registrada.';
+    }
   };
+  /** Calificaciones después del último voto (se devuelven en la respuesta para redibujar la pestaña). */
+  let ultimasCalificaciones = null;
 
   /* ---------------------------------------------------------------- noticias */
 
   const noticias = crearNoticiasLocal(ErrorRegla);
-  /** Lo único que un visitante puede crear: proponer noticias (quedan pendientes) y comentar. */
-  const RUTAS_VISITANTE = new Set(['noticia/proponer', 'noticia/comentar']);
+  /** Lo único que un visitante puede crear: proponer noticias (quedan pendientes), comentar y [REQ-07] calificar jugadores. */
+  const RUTAS_VISITANTE = new Set(['noticia/proponer', 'noticia/comentar', 'calificacion/votar']);
 
   /** Mismo JSON que Presentador.noticias en Java. «imagen» es la foto como data URL ('' = sin foto). */
   function noticiasJson() {
@@ -687,7 +739,8 @@ function crearServicioLocal() {
     },
     /** En la web sola la foto ya es una «data URL»: se usa tal cual. */
     urlImagen: imagen => imagen || '',
-    /** Detalle tipo Flashscore de un partido (mismo JSON que GET /api/partido/{id}). */
+    urlFoto: foto => foto || '',
+    /** Detalle tipo Flashscore de un partido (mismo JSON que GET /api/partido/{id}/{dispositivo}). */
     async detalle(id) {
       try {
         exigirSesion();
@@ -695,7 +748,8 @@ function crearServicioLocal() {
         const p = c.partidos.find(x => x.id === id);
         if (!p) throw new ErrorRegla('El partido no existe.');
         const anteriores = Almacen.historial.listar().filter(x => x.datos && FORMATOS[x.datos.formato]).map(x => x.datos);
-        return Object.assign({ ok: true, partido: partido(p) }, DetallePartido.calcular(c, anteriores, p));
+        return Object.assign({ ok: true, partido: partido(p) }, DetallePartido.calcular(c, anteriores, p),
+          { calificaciones: Calificaciones.calcular(c, p, Date.now(), Almacen.dispositivo()) });
       } catch (e) {
         return fallo(e);
       }
@@ -711,7 +765,20 @@ function crearServicioLocal() {
         if (ruta.startsWith('noticia/') || ruta.startsWith('comentario/')) {
           return { ok: true, mensaje, estado: estado(), sesion: sesion(), noticias: noticiasJson() };
         }
-        if (c && !RUTAS_PUBLICAS.has(ruta)) guardar();
+        if (ruta === 'calificacion/votar') {
+          guardar();
+          return { ok: true, mensaje, estado: estado(), sesion: sesion(), calificaciones: ultimasCalificaciones };
+        }
+        if (c && !RUTAS_PUBLICAS.has(ruta)) {
+          try {
+            guardar();
+          } catch (e) {
+            const anterior = Almacen.campeonato.cargar();
+            if (anterior) usar(anterior);
+            throw new ErrorRegla('El navegador no tiene más espacio para guardar (las fotos ocupan espacio). '
+              + 'No se guardó este cambio: quite algunas fotos o use el programa Java, que las guarda en archivos.');
+          }
+        }
         return { ok: true, mensaje, estado: estado(), sesion: sesion() };
       } catch (e) {
         return fallo(e);

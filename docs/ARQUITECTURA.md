@@ -116,7 +116,7 @@ classDiagram
 
 - `model.Rol` dice qué puede hacer cada rol (`puedeEditar()`); `model.Usuario` es quien inició sesión.
 - `service.AutenticacionService` valida las cuentas (hoy en memoria; en la Fase 3 se cambia por un repositorio).
-- **La regla real está en `ui.ApiControlador`**: guarda `usuarioActual` y, antes de ejecutar cualquier acción, llama a `exigirAdministrador()`. Solo `login`, `login/visitante` y `logout` son públicas (lista blanca). `ServidorWeb` protege aparte el respaldo y el cierre del programa.
+- **La regla real está en `ui.ApiControlador`**: guarda `usuarioActual` y, antes de ejecutar cualquier acción, llama a `exigirAdministrador()`. Solo `login`, `login/visitante` y `logout` son públicas (lista blanca). Con sesión, el visitante solo puede proponer noticias, comentar y calificar jugadores (`RUTAS_VISITANTE`). `ServidorWeb` protege aparte el respaldo y el cierre del programa.
 - Las interfaces solo **ocultan**: escritorio con `Aplicacion.puedeEditar()`, `soloAdmin(...)` y `puedeVer(vista)`; web con el atributo `data-solo-admin` y `puedeVer()` en `app.js`.
 
 ## Detalle de partido (estilo Flashscore)
@@ -220,6 +220,31 @@ Para el administrador, la sección **Partidos** se llama **Gestionar partidos** 
 - **Advertencia de previa sin registrar:** si en «Registrar resultados» se abre un partido sin marcador cuya previa está incompleta (XI o formación de algún equipo, fecha y hora, o sede), primero aparece un aviso que dice qué falta. «Ir a registrar previa» cambia a la pestaña Previa con ese partido abierto; «Continuar de todas formas» abre el resultado (goles y tarjetas usan la plantilla completa; los cambios sí necesitan el XI, que se puede completar ahí mismo). Esc o la X no abren nada. Escritorio: `Aplicacion.abrirResultado()` / `faltantesPrevia()` y `Dialogos.elegir()`; web: `abrirResultado()` / `faltantesPrevia()` y `mensaje(..., { textoNo })`.
 - **El visitante ve la previa** en el detalle del partido (pestaña Alineaciones) apenas se guarda.
 - Escritorio: `Aplicacion.vistaPartidos()` (pestañas), `Dialogos.partido(p, previa)`. Web: pestañas `#pestanasPartidos`, `abrirPartido(id, previa)` en `app.js`. Prueba: `SimulacionFormatos.probarPreviaYResultado()`.
+
+## [REQ-07] Calificación de jugadores por partido (sistema + público)
+
+Pestaña **Calificaciones** en el detalle de un partido terminado (la ven los dos roles). Cada jugador que jugó —titular, ingresado de cambio o con un gol, asistencia o tarjeta registrados— tiene una nota de 1.0 a 10.0:
+
+| Parte | Regla |
+|---|---|
+| **Nota del sistema** | 6.0 por jugar; gol +1.0, asistencia +0.5, amarilla −0.5, roja −2.0. Portero: +1.5 con la valla invicta y −0.3 por cada gol recibido. Siempre entre 1.0 y 10.0. El autogol no suma |
+| **Voto del público** | Solo visitantes, del 1 al 10, durante las **24 horas** siguientes a la hora en que el partido quedó «Jugado» (`Partido.finalizadoEn`). Un voto por jugador desde cada dispositivo |
+| **Nota final** | Sin votos = la del sistema. Con votos = (sistema + promedio del público) / 2, redondeada a 1 decimal (mitad hacia arriba: 8.25 → 8.3) |
+| **MVP** | La nota final más alta. Empates: más goles, más asistencias, mejor nota del sistema, titular, local y dorsal más bajo |
+
+- **Todo en memoria, dentro del partido:** `Partido` guarda `finalizadoEn` y la lista de `VotoJugador` (jugador, valor, dispositivo, fecha). Se guardan con el campeonato (`campeonato.dat` / navegador) y se van con él, así los votos de un campeonato nunca se mezclan con otro. Los archivos anteriores siguen abriendo: sus partidos jugados quedan como «sin registro» (solo nota del sistema).
+- **La nota se calcula al consultar** (`CalculadoraCalificaciones.calcular()`): si el administrador corrige un gol o una tarjeta, la nota cambia sola. El resultado, `CalificacionesPartido`, es un `record` de solo lectura: no es un modelo porque nunca se guarda (igual que `DetallePartido` y `EstadisticasCampeonato`). Así cada clase tiene una sola responsabilidad: la calculadora tiene las reglas y el record, el resultado. Corregir el resultado conserva la hora de cierre y los votos; borrarlo (volver a pendiente) los descarta. Un W.O. no tiene calificaciones.
+- **Dispositivo:** identificador anónimo al azar (no es un dato personal). Web: `Almacen.dispositivo()` en el navegador. Escritorio: `Dispositivo.id()` en las preferencias del usuario de Windows. Viaja en `GET /api/partido/{id}/{dispositivo}` (para mostrar «Su voto») y en `calificacion/votar`.
+- **Permisos:** `calificacion/votar` está en `RUTAS_VISITANTE`; además el administrador recibe `PERMISO` («el administrador no vota»): ya influye en la nota del sistema al registrar goles y tarjetas.
+
+| Capa | Java | Web sola |
+|---|---|---|
+| model | **Nuevo** `VotoJugador`; `Partido.finalizadoEn` y `getVotos()` | `P.votos()` y `P.reiniciar()` en `modelo.js` |
+| persistence | (sin cambios: va dentro del campeonato) | `Almacen.dispositivo()` en `almacen.js` |
+| service | **Nuevos** `CalculadoraCalificaciones` (reglas: nota, ventana de 24 h, votar, MVP) y `CalificacionesPartido` (record con el resultado); `CampeonatoService.calificaciones()`, `votarJugador()` y la hora de cierre en `guardarPartido()` (con `Clock` para las pruebas) | **Nuevo** `calificaciones.js` (mismas reglas y JSON); `servicioLocal.js`: ruta `calificacion/votar` y `calificaciones` en el detalle |
+| ui · API | `ApiControlador` (ruta y permisos, `partido/{id}/{dispositivo}`), `Presentador.calificaciones()` | `servicioRemoto.js` (envía el dispositivo) |
+| ui · pantallas | **Nuevos** `VistaCalificaciones` y `Dispositivo`; `VistaDetallePartido` (pestaña) y `Dialogos.detallePartido()` (votar); `escritorio.css` | `index.html` (pestaña y script), `app.js` (`calificacionesHtml()`, `votarJugador()`), `estilos.css` |
+| pruebas | `SimulacionFormatos.probarCalificaciones()` | `web/pruebas/simulacion.js` |
 
 ### Cómo agregar algo nuevo sin romper nada
 

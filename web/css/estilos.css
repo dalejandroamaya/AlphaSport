@@ -504,7 +504,7 @@ textarea { width: 100%; padding: .62rem .9rem; border-radius: var(--radio-sm); b
 .rejilla-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .rejilla-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .6rem; }
-.fila-jugador { display: grid; grid-template-columns: 80px 1.4fr 1fr 1fr auto; gap: .6rem; align-items: end; }
+.fila-jugador { display: grid; grid-template-columns: auto 80px 1.4fr 1fr 1fr auto; gap: .6rem; align-items: end; }
 .fila-tarjeta { display: grid; grid-template-columns: 1fr 1.3fr .9fr 88px .7fr auto; gap: .6rem; align-items: end; }
 /* Cambios en dos filas: equipo y minuto arriba; quién sale, quién entra y el botón abajo. */
 .fila-gol { display: grid; gap: .6rem; align-items: end; grid-template-areas: "eq min contra" "autor asist btn"; grid-template-columns: 1fr 1fr auto; }
@@ -637,6 +637,45 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 .detalle-fila-marcador span.ganador { color: var(--cesped); }
 .detalle-fila-marcador b { font-family: var(--titulos); font-weight: 800; min-width: 3.4rem; text-align: center; font-variant-numeric: tabular-nums; }
 .detalle-columnas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; align-items: start; }
+/* [REQ-07] Calificaciones: estado de la votación, MVP y una fila por jugador con su nota */
+.calificacion-estado { margin: 0; padding: .65rem .9rem; border-radius: var(--radio-sm); border: 1px solid var(--borde); font-weight: 600; }
+.calificacion-abierta { color: var(--cesped); background: var(--cesped-suave); border-color: rgba(46, 229, 152, .36); }
+.calificacion-cerrada { color: var(--sutil); background: rgba(255, 255, 255, .04); }
+.calificacion-gracias { margin: 0; color: var(--cesped); font-weight: 600; }
+.tarjeta-mvp {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .9rem; padding: .9rem 1.1rem;
+  border-color: rgba(247, 199, 90, .6); background: linear-gradient(to right, rgba(247, 199, 90, .2), transparent 60%), var(--vidrio);
+}
+.tarjeta-mvp > div { display: grid; gap: .1rem; min-width: 0; }
+.mvp-estrella { color: var(--oro); font-size: 1.9rem; line-height: 1; }
+.mvp-titulo { color: var(--oro-texto); font-size: .78rem; font-weight: 600; }
+.mvp-nombre { font-family: var(--titulos); font-size: 1.15rem; overflow-wrap: anywhere; }
+.calificacion-columna { display: grid; gap: .55rem; min-width: 0; }
+.calificacion-columna p { margin: .2rem 0 0; }
+.lista-calificaciones { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; }
+.fila-calificacion {
+  display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto auto; align-items: center; gap: .6rem;
+  padding: .5rem .7rem; border-radius: var(--radio-sm); border: 1px solid var(--borde); background: rgba(255, 255, 255, .03);
+}
+.fila-calificacion.fila-mvp { border-color: rgba(247, 199, 90, .65); background: rgba(247, 199, 90, .08); }
+.calificacion-dorsal { font-family: var(--titulos); color: var(--sutil); text-align: center; }
+.calificacion-textos { display: grid; gap: .05rem; min-width: 0; }
+.calificacion-nombre { font-weight: 600; overflow-wrap: anywhere; }
+.chip-portero, .chip-mvp { padding: 0 .45rem; font-size: .7rem; vertical-align: middle; }
+.chip-portero { color: var(--cian); }
+.chip-mvp { color: var(--oro-texto); border-color: rgba(247, 199, 90, .6); }
+.chip-voto { color: var(--cesped); border-color: rgba(46, 229, 152, .36); white-space: nowrap; }
+.voto-control { display: inline-flex; gap: .35rem; align-items: center; }
+.voto-control select { width: 4.6rem; padding: .3rem .4rem; }
+/* La nota: el número siempre va escrito; verde alta, neutra media, rojo baja */
+.nota { min-width: 3.1rem; padding: .3rem .55rem; border-radius: 10px; text-align: center; font-family: var(--titulos); font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.nota-alta { color: #05080f; background: var(--cesped); }
+.nota-media { background: rgba(255, 255, 255, .1); }
+.nota-baja { color: #05080f; background: var(--rojo); }
+.nota-mvp { color: #2a1900; background: var(--oro); font-size: 1.4rem; }
+[data-tema="claro"] .nota-alta, [data-tema="claro"] .nota-baja { color: #fff; }
+[data-tema="claro"] .nota-media { background: rgba(11, 23, 38, .08); }
+[data-tema="claro"] .fila-calificacion { background: rgba(255, 255, 255, .6); }
 .detalle-racha { display: grid; gap: .7rem; min-width: 0; }
 .detalle-racha p { margin: 0; }
 .racha-cuadros { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
@@ -878,6 +917,9 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 @media (max-width: 640px) {
   .rejilla-2, .rejilla-3, .rejilla-4, .fila-jugador, .fila-tarjeta { grid-template-columns: 1fr 1fr; }
   .fila-jugador > .btn, .fila-tarjeta > .btn { grid-column: 1 / -1; }
+  .fila-jugador > .foto-boton { grid-column: 1 / -1; justify-self: start; }
+  .eq-cabecera { grid-template-columns: 1fr; justify-items: start; }
+  .ficha-foto .foto-cedula { width: 30px; }
   .fila-cambio { grid-template-columns: 1fr 1fr; }
   .fila-gol { grid-template-areas: "eq eq" "min contra" "autor autor" "asist asist" "btn btn"; grid-template-columns: 1fr 1fr; }
   .xi-equipos { grid-template-columns: 1fr; }
@@ -891,6 +933,9 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
   .detalle-cifras { gap: .5rem; }
   .detalle-cifra b { font-size: 1.6rem; }
   .detalle-columnas, .detalle-alineaciones { grid-template-columns: 1fr; }
+  /* Calificaciones en el teléfono: el selector de voto baja a su propia línea */
+  .fila-calificacion { grid-template-columns: 2rem minmax(0, 1fr) auto; }
+  .fila-calificacion .voto-control, .fila-calificacion .chip-voto { grid-column: 2 / -1; grid-row: 2; justify-self: start; }
   .detalle-fila-marcador { gap: .4rem; font-size: .9rem; }
   .ficha-cancha { width: 64px; }
   .ficha-dorsal { width: 28px; height: 28px; font-size: .8rem; }
@@ -937,4 +982,61 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .vidrio, .dialogo, .barra-lateral { background: var(--vidrio-denso); }
+}
+
+/* ------------------------------------------------------------------ fotos de jugadores (tipo cédula) y escudos */
+/* Toda foto de jugador es vertical 3:4, como una cédula; sin foto se ve la persona «NN». */
+.foto-cedula { display: block; width: 48px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; background: #dfe6ef;
+  border: 1px solid rgba(255, 255, 255, .22); box-shadow: 0 2px 6px rgba(0, 0, 0, .3); flex: none; }
+.foto-cedula.mini { width: 34px; border-radius: 5px; }
+.nn-caja { overflow: hidden; }
+.nn { display: block; width: 100%; height: 100%; }
+.nn-fondo { fill: #2a3a52; }
+.nn-figura { fill: #8fa3bf; }
+.nn-texto { fill: #2a3a52; font-family: var(--titulos); font-weight: 800; font-size: 7.5px; letter-spacing: .04em; }
+[data-tema="claro"] .nn-fondo { fill: #d5dde8; }
+[data-tema="claro"] .nn-figura { fill: #8b9bb2; }
+[data-tema="claro"] .nn-texto { fill: #f2f5f9; }
+
+/* Escudo con imagen: la imagen completa (sin recortar) en el mismo espacio del escudo de iniciales. */
+.escudo.con-imagen { clip-path: none; background: none; text-shadow: none; }
+.escudo.con-imagen img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .35)); }
+.escudo.grande { width: 84px; height: 96px; font-size: 1.8rem; }
+
+/* Fotos y escudos que se tocan para cambiarlos (sin botones extra). */
+.escudo-boton, .foto-boton-fila, .ficha-foto[data-foto-jugador] {
+  padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; border-radius: 10px;
+  transition: transform .2s var(--suave), filter .2s;
+}
+.escudo-boton:hover, .foto-boton-fila:hover, .ficha-foto[data-foto-jugador]:hover { transform: translateY(-2px); filter: brightness(1.12); }
+.escudo-boton:focus-visible, .foto-boton-fila:focus-visible, .ficha-foto[data-foto-jugador]:focus-visible, .foto-boton:focus-visible {
+  outline: 2px solid var(--cian); outline-offset: 3px;
+}
+.foto-boton { display: flex; flex-direction: column; align-items: center; gap: .25rem; padding: .3rem .4rem; border-radius: 12px; cursor: pointer;
+  border: 1px dashed rgba(116, 220, 255, .5); background: rgba(116, 220, 255, .06); color: var(--sutil); font: inherit; font-size: .75rem; }
+.foto-boton:hover { border-color: var(--cian); color: var(--texto); }
+
+/* Diálogo del equipo: el escudo a la izquierda de nombre y estadio. */
+.eq-cabecera { display: grid; grid-template-columns: auto 1fr; gap: 1.1rem; align-items: center; }
+.eq-escudo { display: flex; flex-direction: column; align-items: center; gap: .45rem; }
+
+/* En la cancha: la foto con el dorsal encima, en la esquina. */
+.ficha-foto { position: relative; display: block; }
+.ficha-foto .foto-cedula { width: 38px; border-width: 2px; border-color: currentColor; }
+.ficha-foto.ficha-local { color: #2ee598; background: none; }
+.ficha-foto.ficha-visitante { color: #f7c75a; background: none; }
+.ficha-foto .ficha-dorsal { position: absolute; right: -9px; bottom: -6px; width: 20px; height: 20px; font-size: .66rem; border-width: 1.5px; }
+.ficha-foto.ficha-local .ficha-dorsal { background: #eef4ff; color: #0b1726; border-color: #2ee598; }
+.ficha-foto.ficha-visitante .ficha-dorsal { background: #0b1726; color: #eef4ff; border-color: #f7c75a; }
+.ficha-cancha.con-foto { transform: translate(-50%, -26px); }
+
+/* Menú «Cambiar / Eliminar» junto a la foto o el escudo tocado. */
+.menu-foto { position: fixed; z-index: 1000; display: grid; min-width: 170px; padding: .35rem; border-radius: 14px; background: var(--vidrio-denso);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .45); animation: abrirMenu .22s var(--suave); }
+.menu-foto button { background: none; border: 0; color: var(--texto); font: inherit; text-align: left; padding: .6rem .8rem; border-radius: 10px; cursor: pointer; }
+.menu-foto button:hover, .menu-foto button:focus-visible { background: rgba(255, 255, 255, .08); outline: none; }
+@media (max-width: 640px) {
+  .ficha-foto .foto-cedula { width: 24px; border-width: 1.5px; border-radius: 4px; }
+  .ficha-foto .ficha-dorsal { right: -8px; bottom: -5px; width: 16px; height: 16px; font-size: .56rem; }
+  .ficha-cancha.con-foto { transform: translate(-50%, -18px); gap: 1px; }
 }

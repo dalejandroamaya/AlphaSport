@@ -25,9 +25,10 @@ import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
 
 /**
- * Detalle de partido estilo Flashscore (solo lectura): cabecera con el marcador y
- * pestañas «Cara a cara», «Racha» y «Alineaciones». Dibuja el JSON que entrega
- * ApiControlador.consultar("partido/{id}"); no calcula nada.
+ * Detalle de partido estilo Flashscore: cabecera con el marcador y pestañas «Resumen»,
+ * «Calificaciones» [REQ-07], «Cara a cara», «Racha» y «Alineaciones». Dibuja el JSON que
+ * entrega ApiControlador.consultar("partido/{id}"); no calcula nada. Lo único que se puede
+ * hacer aquí es votar en «Calificaciones» (visitante, dentro de las 24 horas).
  */
 final class VistaDetallePartido {
 
@@ -37,21 +38,46 @@ final class VistaDetallePartido {
     private VistaDetallePartido() {
     }
 
+    /** Solo lectura (sin votar). */
     static Node construir(Map<String, Object> detalle) {
+        return construir(detalle, false, null);
+    }
+
+    /**
+     * @param puedeVotar true para el visitante: ve el selector 1–10 mientras la votación está abierta
+     * @param votante    registra el voto en la API (null = solo lectura)
+     */
+    static Node construir(Map<String, Object> detalle, boolean puedeVotar, VistaCalificaciones.Votante votante) {
+        return construir(detalle, puedeVotar, votante, null);
+    }
+
+    /**
+     * Lo que el administrador puede tocar en el partido para cambiar o eliminar fotos (sin botones
+     * extra): la foto de un jugador en la alineación y el escudo de cada equipo en la cabecera.
+     */
+    interface Edicion {
+        void foto(Node ancla, int idEquipo, Map<String, Object> jugador);
+
+        void escudo(Node ancla, int idEquipo);
+    }
+
+    /** @param edicion null = las fotos y escudos solo se ven (visitante) */
+    static Node construir(Map<String, Object> detalle, boolean puedeVotar, VistaCalificaciones.Votante votante, Edicion edicion) {
         Map<String, Object> p = m(detalle, "partido");
         TabPane pestanas = new TabPane(
                 new Tab("Resumen", resumen(p)),
+                new Tab("Calificaciones", VistaCalificaciones.construir(m(detalle, "calificaciones"), p, puedeVotar, votante)),
                 new Tab("Cara a cara", caraACara(m(detalle, "caraACara"), p)),
                 new Tab("Racha", racha(m(detalle, "racha"), p)),
-                new Tab("Alineaciones", alineaciones(m(detalle, "alineaciones"), p)));
+                new Tab("Alineaciones", alineaciones(m(detalle, "alineaciones"), p, edicion)));
         pestanas.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         pestanas.getStyleClass().add("detalle-pestanas");
-        return new VBox(18, cabecera(p), pestanas);
+        return new VBox(18, cabecera(p, edicion), pestanas);
     }
 
     /* ---------------------------------------------------------------- cabecera */
 
-    private static Node cabecera(Map<String, Object> p) {
+    private static Node cabecera(Map<String, Object> p, Edicion edicion) {
         Label local = etiqueta(s(p, "localNombre"), "detalle-equipo");
         Label visitante = etiqueta(s(p, "visitanteNombre"), "detalle-equipo");
         if (n(p, "ganador") == n(p, "local")) {
@@ -68,8 +94,8 @@ final class VistaDetallePartido {
         centro.getChildren().add(Aplicacion.etiquetaEstado(s(p, "estado")));
         centro.setAlignment(Pos.CENTER);
         centro.setMinWidth(130);
-        VBox izq = new VBox(8, Aplicacion.escudo(mapa(p, "local", "localNombre"), 46), local);
-        VBox der = new VBox(8, Aplicacion.escudo(mapa(p, "visitante", "visitanteNombre"), 46), visitante);
+        VBox izq = new VBox(8, escudoCabecera(p, "local", "localNombre", edicion), local);
+        VBox der = new VBox(8, escudoCabecera(p, "visitante", "visitanteNombre", edicion), visitante);
         izq.setAlignment(Pos.CENTER);
         der.setAlignment(Pos.CENTER);
         HBox.setHgrow(izq, Priority.ALWAYS);
@@ -87,9 +113,18 @@ final class VistaDetallePartido {
         return caja;
     }
 
-    /** Mapa {id, nombre} para dibujar el escudo de un equipo del partido. */
+    /** Mapa {id, nombre, escudo} para dibujar el escudo de un equipo del partido. */
     private static Map<String, Object> mapa(Map<String, Object> p, String id, String nombre) {
-        return Datos.mapa("id", n(p, id), "nombre", s(p, nombre));
+        return Datos.mapa("id", n(p, id), "nombre", s(p, nombre), "escudo", Fotos.escudoDe(n(p, id)));
+    }
+
+    /** El escudo de la cabecera; el administrador lo toca para cambiarlo o eliminarlo. */
+    private static Node escudoCabecera(Map<String, Object> p, String id, String nombre, Edicion edicion) {
+        javafx.scene.layout.StackPane escudo = Aplicacion.escudo(mapa(p, id, nombre), 46);
+        if (edicion != null && n(p, id) > 0) {
+            Fotos.tocable(escudo, "Escudo de " + s(p, nombre) + ": cambiar o eliminar", () -> edicion.escudo(escudo, n(p, id)));
+        }
+        return escudo;
     }
 
     /* ---------------------------------------------------------------- resumen: estadisticas y eventos del partido */
@@ -330,7 +365,7 @@ final class VistaDetallePartido {
     /* ---------------------------------------------------------------- alineaciones */
 
     /** Una cancha vertical: el visitante arriba (ataca hacia abajo) y el local abajo. */
-    private static Node alineaciones(Map<String, Object> a, Map<String, Object> p) {
+    private static Node alineaciones(Map<String, Object> a, Map<String, Object> p, Edicion edicion) {
         Map<String, Object> local = m(a, "local");
         Map<String, Object> visitante = m(a, "visitante");
         Pane cancha = new Pane();
@@ -340,8 +375,8 @@ final class VistaDetallePartido {
         cancha.getStyleClass().add("cancha");
         dibujarLineas(cancha);
         List<Map<String, Object>> cambios = l(p, "cambios");
-        ubicar(cancha, visitante, true, cambios);
-        ubicar(cancha, local, false, cambios);
+        ubicar(cancha, visitante, true, cambios, n(p, "visitante"), edicion);
+        ubicar(cancha, local, false, cambios, n(p, "local"), edicion);
 
         VBox lado = new VBox(14,
                 rotuloEquipo(s(p, "visitanteNombre"), visitante, "Arriba", cambiosDe(cambios, n(p, "visitante"))),
@@ -406,7 +441,8 @@ final class VistaDetallePartido {
      * Coloca las lineas del equipo en su mitad: el portero junto a su arco y la ultima
      * linea cerca del medio campo. El de arriba se refleja para que ataque hacia abajo.
      */
-    private static void ubicar(Pane cancha, Map<String, Object> al, boolean arriba, List<Map<String, Object>> cambios) {
+    private static void ubicar(Pane cancha, Map<String, Object> al, boolean arriba, List<Map<String, Object>> cambios,
+            int idEquipo, Edicion edicion) {
         List<Object> lineas = lista(al, "lineas");
         double arco = 0.93, frente = 0.55; // fraccion de alto (equipo de abajo)
         int ultima = Math.max(1, lineas.size() - 1);
@@ -418,23 +454,47 @@ final class VistaDetallePartido {
                 double x = (k + 1.0) / (linea.size() + 1);
                 @SuppressWarnings("unchecked")
                 Map<String, Object> j = (Map<String, Object>) linea.get(k);
-                Node ficha = ficha(j, arriba, cambios);
+                Node ficha = ficha(j, arriba, cambios, idEquipo, edicion);
                 double fx = (arriba ? 1 - x : x) * ANCHO_CANCHA;
                 double fy = (arriba ? 1 - y : y) * ALTO_CANCHA;
                 ficha.setLayoutX(fx - 45);
-                ficha.setLayoutY(fy - 17);
+                ficha.setLayoutY(fy - (j == null ? 17 : ALTO_FOTO / 2)); // el centro de la foto (o del «?») en su puesto
                 cancha.getChildren().add(ficha);
             }
         }
     }
 
-    private static Node ficha(Map<String, Object> j, boolean visitante, List<Map<String, Object>> cambios) {
+    private static final double ANCHO_FOTO = 38;
+    private static final double ALTO_FOTO = Math.round(ANCHO_FOTO * 4 / 3);
+
+    private static Node ficha(Map<String, Object> j, boolean visitante, List<Map<String, Object>> cambios, int idEquipo, Edicion edicion) {
         Label dorsal = etiqueta(j == null ? "?" : String.valueOf(n(j, "dorsal")), "ficha-dorsal",
                 visitante ? "ficha-visitante" : "ficha-local");
-        dorsal.setMinSize(34, 34);
-        dorsal.setMaxSize(34, 34);
+        double lado = j == null ? 34 : 20;
+        dorsal.setMinSize(lado, lado);
+        dorsal.setMaxSize(lado, lado);
         dorsal.setAlignment(Pos.CENTER);
-        VBox v = new VBox(3, dorsal);
+        VBox v = new VBox(3);
+        if (j == null) {
+            v.getChildren().add(dorsal);
+        } else {
+            // La foto tipo cédula (o «NN») con el borde del color del equipo y el dorsal en la esquina.
+            javafx.scene.layout.StackPane foto = Fotos.cedula(s(j, "foto"), ANCHO_FOTO);
+            javafx.scene.layout.StackPane marco = new javafx.scene.layout.StackPane(foto);
+            marco.getStyleClass().addAll("ficha-foto", visitante ? "ficha-visitante" : "ficha-local");
+            marco.setMaxSize(ANCHO_FOTO + 4, ALTO_FOTO + 4);
+            dorsal.getStyleClass().add("ficha-dorsal-mini");
+            javafx.scene.layout.StackPane conDorsal = new javafx.scene.layout.StackPane(marco, dorsal);
+            javafx.scene.layout.StackPane.setAlignment(dorsal, Pos.BOTTOM_RIGHT);
+            dorsal.setTranslateX(8);
+            dorsal.setTranslateY(6);
+            conDorsal.setMaxSize(ANCHO_FOTO + 4, ALTO_FOTO + 4);
+            if (edicion != null && n(j, "id") > 0) {
+                Fotos.tocable(marco, "Foto de " + s(j, "nombre") + (s(j, "foto").isEmpty() ? ": subir" : ": cambiar o eliminar"),
+                        () -> edicion.foto(marco, idEquipo, j));
+            }
+            v.getChildren().add(conDorsal);
+        }
         if (j != null) { // las casillas por confirmar solo llevan «?»
             Label nombre = etiqueta(apellido(s(j, "nombre")), "ficha-nombre");
             nombre.setMaxWidth(90);

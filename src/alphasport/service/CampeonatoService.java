@@ -9,8 +9,10 @@ import alphasport.model.Partido;
 import alphasport.model.TipoFormato;
 import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.RepositorioCampeonato;
+import alphasport.persistence.RepositorioFotosEnMemoria;
 import alphasport.persistence.RepositorioHistorial;
 import alphasport.persistence.Serializacion;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -25,12 +27,29 @@ public class CampeonatoService {
 
     private final RepositorioCampeonato repositorio;
     private final RepositorioHistorial historial;
+    /** [REQ-07] Reloj para la hora de cierre de los partidos y la ventana de votacion (las pruebas lo adelantan). */
+    private final Clock reloj;
+    /** Fotos de jugadores y escudos (por defecto en memoria; Arranque pone la carpeta datos/imagenes). */
+    private FotosService fotos = new FotosService(new RepositorioFotosEnMemoria());
     private Campeonato campeonato;
     private MotorCampeonato motor;
 
     public CampeonatoService(RepositorioCampeonato repositorio, RepositorioHistorial historial) {
+        this(repositorio, historial, Clock.systemDefaultZone());
+    }
+
+    public CampeonatoService(RepositorioCampeonato repositorio, RepositorioHistorial historial, Clock reloj) {
         this.repositorio = repositorio;
         this.historial = historial;
+        this.reloj = reloj;
+    }
+
+    public void usarFotos(FotosService fotos) {
+        this.fotos = fotos;
+    }
+
+    public FotosService getFotos() {
+        return fotos;
     }
 
     public void cargarGuardado() {
@@ -279,6 +298,16 @@ public class CampeonatoService {
 
     public void guardarEquipo(Integer idEquipo, String nombre, String estadio, DirectorTecnico dt, List<Jugador> jugadores)
             throws PersistenciaException {
+        guardarEquipo(idEquipo, nombre, estadio, dt, jugadores, null);
+    }
+
+    /**
+     * Crea o edita un equipo. La foto de cada jugador y el {@code escudo} pueden ser una foto nueva
+     * (data URL, se normaliza y se guarda), el nombre de la que ya tenia o "" (sin foto).
+     * {@code escudo} null deja el escudo como estaba.
+     */
+    public void guardarEquipo(Integer idEquipo, String nombre, String estadio, DirectorTecnico dt, List<Jugador> jugadores,
+            String escudo) throws PersistenciaException {
         exigirCampeonato();
         String limpio = nombre == null ? "" : nombre.trim();
         if (limpio.isEmpty()) {
@@ -302,9 +331,36 @@ public class CampeonatoService {
             if (j.getId() == 0) {
                 j.setId(campeonato.nuevoIdJugador());
             }
+            j.setFoto(fotos.resolver(j.getFoto(), false));
+        }
+        if (escudo != null) {
+            equipo.setEscudo(fotos.resolver(escudo, true));
         }
         equipo.setJugadores(new ArrayList<>(jugadores));
         guardar();
+    }
+
+    /** Cambia (data URL) o quita ("" o null) la foto tipo cedula de un jugador. */
+    public String cambiarFotoJugador(int idEquipo, int idJugador, String dataUrl) throws PersistenciaException {
+        exigirCampeonato();
+        Jugador j = campeonato.buscarJugador(idEquipo, idJugador);
+        if (j == null) {
+            throw new ReglaNegocioException("Ese jugador ya no está en la plantilla.");
+        }
+        boolean quitar = dataUrl == null || dataUrl.isBlank();
+        j.setFoto(quitar ? "" : fotos.guardarJugador(dataUrl));
+        guardar();
+        return quitar ? "Foto de " + j.getNombre() + " eliminada." : "Foto de " + j.getNombre() + " actualizada.";
+    }
+
+    /** Cambia (data URL) o quita ("" o null) el escudo de un equipo. */
+    public String cambiarEscudo(int idEquipo, String dataUrl) throws PersistenciaException {
+        exigirCampeonato();
+        Equipo e = buscarEquipo(idEquipo);
+        boolean quitar = dataUrl == null || dataUrl.isBlank();
+        e.setEscudo(quitar ? "" : fotos.guardarEscudo(dataUrl));
+        guardar();
+        return quitar ? "Escudo de " + e.getNombreEquipo() + " eliminado." : "Escudo de " + e.getNombreEquipo() + " actualizado.";
     }
 
     /**
@@ -397,7 +453,39 @@ public class CampeonatoService {
                     + "«Avanzar» para generarlas de nuevo.\n\n¿Desea continuar?");
         }
         motor.aplicarEdicion(partido, datos, afecta);
+        marcarFinal(partido);
         guardar();
+    }
+
+    /**
+     * [REQ-07] La primera vez que el partido queda JUGADO se guarda la hora de cierre: abre la votacion
+     * de 24 horas. Corregir despues el resultado no la mueve; si deja de estar jugado, se descarta
+     * junto con los votos.
+     */
+    private void marcarFinal(Partido partido) {
+        if (partido.isJugado()) {
+            if (partido.getFinalizadoEn() <= 0) {
+                partido.setFinalizadoEn(reloj.millis());
+            }
+        } else {
+            partido.setFinalizadoEn(0);
+            partido.getVotos().clear();
+        }
+    }
+
+    /** [REQ-07] Calificaciones de un partido; {@code dispositivo} sirve para mostrar el voto propio (puede ser null). */
+    public CalificacionesPartido calificaciones(int idPartido, String dispositivo) {
+        exigirCampeonato();
+        return CalculadoraCalificaciones.calcular(campeonato, buscarPartido(idPartido), reloj.millis(), dispositivo);
+    }
+
+    /** [REQ-07] Voto de un visitante (1 a 10) a un jugador; las reglas estan en CalculadoraCalificaciones.votar. */
+    public CalificacionesPartido votarJugador(int idPartido, int idJugador, int valor, String dispositivo) throws PersistenciaException {
+        exigirCampeonato();
+        Partido partido = buscarPartido(idPartido);
+        CalculadoraCalificaciones.votar(campeonato, partido, idJugador, valor, dispositivo, reloj.millis());
+        guardar();
+        return calificaciones(idPartido, dispositivo);
     }
 
     public void darWalkover(int idPartido, Partido datos, int idGanador, boolean confirmado) throws PersistenciaException {

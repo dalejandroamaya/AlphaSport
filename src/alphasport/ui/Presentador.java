@@ -13,6 +13,7 @@ import alphasport.model.Partido;
 import alphasport.model.Tarjeta;
 import alphasport.model.TipoFase;
 import alphasport.model.TipoFormato;
+import alphasport.service.CalificacionesPartido;
 import alphasport.service.CampeonatoService;
 import alphasport.service.DetallePartido;
 import alphasport.service.EstadisticasCampeonato;
@@ -131,12 +132,13 @@ public class Presentador {
         List<Object> jugadores = new ArrayList<>();
         for (Jugador j : e.getJugadores()) {
             jugadores.add(mapa("id", j.getId(), "nombre", j.getNombre(), "documento", j.getDocumento(),
-                    "dorsal", j.getDorsal(), "posicion", j.getPosicion(),
+                    "dorsal", j.getDorsal(), "posicion", j.getPosicion(), "foto", j.getFoto(),
                     "amarillas", j.getId() == 0 ? 0 : sanciones.contar(j.getId(), false),
                     "rojas", j.getId() == 0 ? 0 : sanciones.contar(j.getId(), true),
                     "pendientes", j.getId() == 0 ? 0 : sanciones.fechasPendientesDe(j.getId())));
         }
         return mapa("id", e.getId(), "nombre", e.getNombreEquipo(), "estadio", e.getEstadio(), "retirado", e.isRetirado(),
+                "escudo", e.getEscudo(),
                 "dt", dt == null ? null : mapa("nombre", dt.getNombre(), "documento", dt.getDocumento(),
                         "nacionalidad", dt.getNacionalidad()),
                 "division", servicio.getCampeonato().divisionDe(e),
@@ -404,10 +406,10 @@ public class Presentador {
     /* ---------------------------------------------------------------- detalle de partido (Flashscore) */
 
     /**
-     * JSON del detalle: {partido, caraACara:{resumen, partidos}, racha:{local, visitante}, alineaciones:{local, visitante}}.
-     * La racha de cada equipo es una lista de {resultado: V|E|D, rival, marcador, ...}.
+     * JSON del detalle: {partido, caraACara:{resumen, partidos}, racha:{local, visitante}, alineaciones:{local, visitante},
+     * calificaciones}. La racha de cada equipo es una lista de {resultado: V|E|D, rival, marcador, ...}.
      */
-    public Map<String, Object> detallePartido(DetallePartido d) {
+    public Map<String, Object> detallePartido(DetallePartido d, CalificacionesPartido notas) {
         Campeonato c = servicio.getCampeonato();
         DetallePartido.ResumenCaraACara r = d.getResumenCaraACara();
         return mapa("ok", true,
@@ -417,7 +419,27 @@ public class Presentador {
                         "partidos", d.getCaraACara().stream().map(x -> registro(x, null)).collect(Collectors.toList())),
                 "racha", mapa("local", d.getRachaLocal().stream().map(x -> registro(x, d.getLocal())).collect(Collectors.toList()),
                         "visitante", d.getRachaVisitante().stream().map(x -> registro(x, d.getVisitante())).collect(Collectors.toList())),
-                "alineaciones", mapa("local", alineacion(d.getAlineacionLocal()), "visitante", alineacion(d.getAlineacionVisitante())));
+                "alineaciones", mapa("local", alineacion(d.getAlineacionLocal()), "visitante", alineacion(d.getAlineacionVisitante())),
+                "calificaciones", calificaciones(notas));
+    }
+
+    /**
+     * [REQ-07] JSON de las calificaciones: {votacion: SIN_RESULTADO|ABIERTA|CERRADA|SIN_REGISTRO, cierraEn (ms),
+     * disponible, motivo, mvp (id del jugador), local: [...], visitante: [...]}. Cada jugador lleva su nota del
+     * sistema (con el desglose), los votos del publico, el promedio, la nota final y su propio voto (miVoto, 0 = no voto).
+     */
+    public static Map<String, Object> calificaciones(CalificacionesPartido n) {
+        java.util.function.Function<List<CalificacionesPartido.Calificacion>, List<Object>> jugadores = lista -> lista.stream()
+                .map(x -> (Object) mapa("id", x.idJugador(), "equipo", x.idEquipo(), "nombre", x.nombre(), "dorsal", x.dorsal(),
+                        "posicion", x.posicion(), "portero", x.portero(), "titular", x.titular(), "goles", x.goles(),
+                        "asistencias", x.asistencias(), "amarillas", x.amarillas(), "rojas", x.rojas(),
+                        "golesRecibidos", x.golesRecibidos(), "notaSistema", x.notaSistema(), "desglose", x.desglose(),
+                        "votos", x.votos(), "promedioPublico", x.promedioPublico(), "notaFinal", x.notaFinal(),
+                        "mvp", x.mvp(), "miVoto", x.miVoto()))
+                .collect(Collectors.toList());
+        return mapa("votacion", n.votacion().name(), "cierraEn", n.cierraEn(), "disponible", n.disponible(),
+                "motivo", n.motivoSinCalificaciones(), "mvp", n.idMvp(),
+                "local", jugadores.apply(n.local()), "visitante", jugadores.apply(n.visitante()));
     }
 
     /** Partido previo; si se da el equipo, agrega resultado (V/E/D) y rival desde su punto de vista. */
@@ -439,7 +461,7 @@ public class Presentador {
         for (List<DetallePartido.Puesto> linea : a.lineas()) {
             lineas.add(linea.stream().map(p -> p.jugador() == null ? null
                     : (Object) mapa("id", p.jugador().getId(), "dorsal", p.jugador().getDorsal(),
-                            "nombre", p.jugador().getNombre(), "posicion", p.jugador().getPosicion()))
+                            "nombre", p.jugador().getNombre(), "posicion", p.jugador().getPosicion(), "foto", p.jugador().getFoto()))
                     .collect(Collectors.toList()));
         }
         return mapa("formacion", a.formacion(), "formacionElegida", a.formacionElegida(), "confirmada", a.confirmada(),
