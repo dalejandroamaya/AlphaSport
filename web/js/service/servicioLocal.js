@@ -450,7 +450,10 @@ function crearServicioLocal() {
       P.ponerTarjetas(datos, d.tarjetas.map(t => {
         const minuto = t.minuto | 0;
         if (minuto < 0 || minuto > MINUTO_MAXIMO) throw new ErrorRegla(`El minuto de la tarjeta debe estar entre 1 y ${MINUTO_MAXIMO}.`);
-        return Object.assign({}, t, { minuto, fechas: t.tipo === 'ROJA' ? Math.max(1, t.fechas | 0) : 0 });
+        // Igual que en Java: el nombre y el dorsal salen de la plantilla, no de lo que envía la pantalla.
+        const e = m.equipo(t.equipo), j = e && e.jugadores.find(x => x.id === t.jugador);
+        if (!j) throw new ErrorRegla('Una de las tarjetas es de un jugador que ya no existe.');
+        return Object.assign({}, t, { jugador: j.id, nombre: j.nombre, dorsal: j.dorsal, minuto, fechas: t.tipo === 'ROJA' ? Math.max(1, t.fechas | 0) : 0 });
       }), p.local);
       ponerTitulares(); // antes de los cambios: se validan contra este XI
       if (d.cambios) datos.cambios = leerCambios(d.cambios, p, datos);
