@@ -335,8 +335,7 @@ final class VistaDetallePartido {
         if (partidos.isEmpty()) {
             col.getChildren().add(etiqueta("Sin partidos jugados todavía.", "sutil"));
         } else {
-            col.getChildren().addAll(new HBox(8, etiqueta("Últimos " + partidos.size() + ":", "sutil"), cuadros),
-                    etiqueta("V = victoria · E = empate · D = derrota (el más reciente a la izquierda)", "sutil", "pequeno"));
+            col.getChildren().add(cuadros);
             for (Map<String, Object> x : partidos) {
                 col.getChildren().add(filaPartido(x, s(x, "resultado")));
             }
