@@ -650,12 +650,58 @@ class Dialogos {
             jugadores.add(new LinkedHashMap<>(j));
         }
         Spinner<Integer> dorsal = numero(1, 99, 1);
+        dorsal.setMinWidth(84); // que el número se lea entero junto al botón «Foto»
         TextField jgNombre = new TextField();
         TextField jgDocumento = new TextField();
         ComboBox<String> posicion = comboPosiciones();
         Label errJugador = error();
+        Label err = error();
         VBox lista = new VBox(6);
         Runnable[] dibujar = new Runnable[1];
+
+        // ---- Escudo: se sube con su botón y, una vez puesto, se toca para cambiarlo o eliminarlo.
+        String[] escudo = {s(equipo, "escudo")};       // nombre guardado, data URL recién elegida o "" (sin escudo)
+        StackPane cajaEscudo = new StackPane();
+        Button subirEscudo = boton("Subir escudo", "mini", "fantasma");
+        Runnable dibujarEscudo = () -> {
+            StackPane vista = Aplicacion.escudo(mapa("id", equipo == null ? 0 : n(equipo, "id"),
+                    "nombre", nombre.getText().isBlank() ? "?" : nombre.getText().trim(), "escudo", escudo[0]), 64);
+            cajaEscudo.getChildren().setAll(vista);
+            subirEscudo.setText(escudo[0].isEmpty() ? "Subir escudo" : "Cambiar escudo");
+        };
+        java.util.function.Consumer<String> ponerEscudo = imagen -> {
+            escudo[0] = imagen;
+            mostrarError(err, null);
+            dibujarEscudo.run();
+        };
+        Fotos.tocable(cajaEscudo, "Escudo del equipo: tocar para subirlo, cambiarlo o eliminarlo",
+                () -> Fotos.tocar(cajaEscudo, !escudo[0].isEmpty(), true, ponerEscudo, texto -> mostrarError(err, texto)));
+        subirEscudo.setOnAction(e -> {
+            String nueva = Fotos.elegir(subirEscudo, true, texto -> mostrarError(err, texto));
+            if (nueva != null) {
+                ponerEscudo.accept(nueva);
+            }
+        });
+        nombre.textProperty().addListener((o, a, b) -> {
+            if (escudo[0].isEmpty()) {
+                dibujarEscudo.run(); // las iniciales siguen al nombre mientras no haya escudo
+            }
+        });
+        dibujarEscudo.run();
+
+        // ---- Foto tipo cédula del jugador que se va a agregar.
+        String[] fotoNueva = {""};
+        Button jgFoto = boton("Foto", "mini", "fantasma", "foto-boton");
+        Runnable dibujarFotoNueva = () -> {
+            jgFoto.setGraphic(Fotos.cedula(fotoNueva[0], 24));
+            jgFoto.setText(fotoNueva[0].isEmpty() ? "Foto" : "Cambiar");
+        };
+        jgFoto.setOnAction(e -> Fotos.tocar(jgFoto, !fotoNueva[0].isEmpty(), false, imagen -> {
+            fotoNueva[0] = imagen;
+            mostrarError(errJugador, null);
+            dibujarFotoNueva.run();
+        }, texto -> mostrarError(errJugador, texto)));
+        dibujarFotoNueva.run();
         Runnable siguienteDorsal = () -> {
             int d = 1;
             while (d < 99 && tieneDorsal(jugadores, d)) {
@@ -682,7 +728,15 @@ class Dialogos {
                     dibujar[0].run();
                     siguienteDorsal.run();
                 });
-                HBox fila = new HBox(10, etiqueta(String.valueOf(n(j, "dorsal")), "dorsal"), datos, quitar);
+                // La foto de cada jugador de la lista también se toca para subirla, cambiarla o eliminarla.
+                StackPane foto = Fotos.cedula(s(j, "foto"), 30);
+                Fotos.tocable(foto, "Foto de " + s(j, "nombre") + (s(j, "foto").isEmpty() ? ": subir" : ": cambiar o eliminar"),
+                        () -> Fotos.tocar(foto, !s(j, "foto").isEmpty(), false, imagen -> {
+                            j.put("foto", imagen);
+                            mostrarError(errJugador, null);
+                            dibujar[0].run();
+                        }, texto -> mostrarError(errJugador, texto)));
+                HBox fila = new HBox(10, foto, etiqueta(String.valueOf(n(j, "dorsal")), "dorsal"), datos, quitar);
                 fila.setAlignment(Pos.CENTER_LEFT);
                 fila.getStyleClass().add("fila-lista");
                 lista.getChildren().add(fila);
@@ -698,7 +752,9 @@ class Dialogos {
                 return;
             }
             jugadores.add(mapa("id", 0, "nombre", jgNombre.getText().trim(), "documento", jgDocumento.getText().trim(),
-                    "dorsal", d, "posicion", posicion.getValue()));
+                    "dorsal", d, "posicion", posicion.getValue(), "foto", fotoNueva[0]));
+            fotoNueva[0] = "";
+            dibujarFotoNueva.run();
             jgNombre.clear();
             jgDocumento.clear();
             dibujar[0].run();
@@ -710,14 +766,20 @@ class Dialogos {
         dibujar[0].run();
         siguienteDorsal.run();
 
-        Label err = error();
         Button cancelar = boton("Cancelar", "fantasma");
         Button guardar = boton("Guardar equipo", "primario");
-        HBox filaJugador = new HBox(10, campo("Dorsal", dorsal), campo("Nombre", jgNombre), campo("Documento", jgDocumento),
+        HBox filaJugador = new HBox(10, jgFoto, campo("Dorsal", dorsal), campo("Nombre", jgNombre), campo("Documento", jgDocumento),
                 campo("Posición", posicion), agregar);
         filaJugador.setAlignment(Pos.BOTTOM_LEFT);
         String titulo = equipo == null ? "Agregar equipo" : "Equipo: " + s(equipo, "nombre");
-        Stage v = ventana(titulo, cuerpo(titulo, new HBox(12, campo("Nombre del equipo", nombre), campo("Estadio / cancha", estadio)),
+        VBox columnaEscudo = new VBox(8, cajaEscudo, subirEscudo);
+        columnaEscudo.setAlignment(Pos.CENTER);
+        HBox datosEquipo = new HBox(12, campo("Nombre del equipo", nombre), campo("Estadio / cancha", estadio));
+        datosEquipo.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(datosEquipo, Priority.ALWAYS);
+        HBox cabeceraEquipo = new HBox(18, columnaEscudo, datosEquipo);
+        cabeceraEquipo.setAlignment(Pos.CENTER_LEFT);
+        Stage v = ventana(titulo, cuerpo(titulo, cabeceraEquipo,
                 grupo("Director técnico", new HBox(12, campo("Nombre", dtNombre), campo("Documento", dtDocumento), campo("Nacionalidad", dtNacionalidad))),
                 grupo("Plantilla", filaJugador, errJugador, lista), err, acciones(cancelar, guardar)), 860);
         cancelar.setOnAction(e -> v.close());
@@ -725,7 +787,7 @@ class Dialogos {
             Map<String, Object> r = app.ejecutar("equipo", mapa("id", equipo == null ? null : n(equipo, "id"),
                     "nombre", nombre.getText(), "estadio", estadio.getText(),
                     "dt", mapa("nombre", dtNombre.getText(), "documento", dtDocumento.getText(), "nacionalidad", dtNacionalidad.getText()),
-                    "jugadores", jugadores));
+                    "jugadores", jugadores, "escudo", escudo[0]));
             if (!b(r, "ok")) {
                 mostrarError(err, s(r, "error"));
                 return;
@@ -1539,7 +1601,7 @@ class Dialogos {
      *
      * @return el archivo elegido, o null si se canceló
      */
-    private static java.io.File elegirArchivo(javafx.stage.FileChooser selector, Stage dialogo) {
+    static java.io.File elegirArchivo(javafx.stage.FileChooser selector, Stage dialogo) {
         Stage anfitrion = new Stage(StageStyle.UNDECORATED);
         anfitrion.initOwner(dialogo);                 // hija del diálogo: queda encima y no está bloqueada
         anfitrion.setScene(new Scene(new Pane(), 1, 1));
@@ -1684,17 +1746,45 @@ class Dialogos {
      * visitante y administrador; solo el visitante puede votar (con el id anónimo de este equipo).
      */
     void detallePartido(Map<String, Object> p) {
-        Node vista;
+        StackPane contenedor = new StackPane();
+        int[] pestana = {0};
+        java.util.function.BooleanSupplier[] armar = new java.util.function.BooleanSupplier[1];
+        // El administrador toca la foto de un jugador o un escudo; al guardarse, el detalle se vuelve a dibujar ahí mismo.
+        VistaDetallePartido.Edicion edicion = !app.puedeEditar() ? null : new VistaDetallePartido.Edicion() {
+            @Override
+            public void foto(Node ancla, int idEquipo, Map<String, Object> jugador) {
+                app.tocarFotoJugador(ancla, idEquipo, jugador, () -> armar[0].getAsBoolean());
+            }
+
+            @Override
+            public void escudo(Node ancla, int idEquipo) {
+                Map<String, Object> equipo = app.equipoPorId(idEquipo);
+                if (equipo != null) {
+                    app.tocarEscudo(ancla, equipo, () -> armar[0].getAsBoolean());
+                }
+            }
+        };
         try {
             String dispositivo = Dispositivo.id();
-            Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id") + "/" + dispositivo);
-            if (detalle == null || m(detalle, "partido") == null) {
+            VistaCalificaciones.Votante votante = (jugador, valor) -> app.ejecutar("calificacion/votar",
+                    mapa("partido", n(p, "id"), "jugador", jugador, "valor", valor, "dispositivo", dispositivo));
+            armar[0] = () -> {
+                Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id") + "/" + dispositivo);
+                if (detalle == null || m(detalle, "partido") == null) {
+                    return false;
+                }
+                Node vista = VistaDetallePartido.construir(detalle, !app.puedeEditar(), votante, edicion);
+                if (vista.lookup(".detalle-pestanas") instanceof javafx.scene.control.TabPane pestanas) {
+                    pestanas.getSelectionModel().select(pestana[0]);
+                    pestanas.getSelectionModel().selectedIndexProperty().addListener((o, a, ahora) -> pestana[0] = ahora.intValue());
+                }
+                contenedor.getChildren().setAll(vista);
+                return true;
+            };
+            if (!armar[0].getAsBoolean()) {
                 mensaje("Detalle del partido", "Todavía no hay información de este partido.");
                 return;
             }
-            VistaCalificaciones.Votante votante = (jugador, valor) -> app.ejecutar("calificacion/votar",
-                    mapa("partido", n(p, "id"), "jugador", jugador, "valor", valor, "dispositivo", dispositivo));
-            vista = VistaDetallePartido.construir(detalle, !app.puedeEditar(), votante);
         } catch (RuntimeException e) {
             // Nunca se deja una ventana a medio armar: se avisa y la aplicación sigue respondiendo.
             mensaje("No se pudo abrir el partido", e.getMessage() == null ? "Todavía no hay información de este partido." : e.getMessage());
@@ -1702,7 +1792,7 @@ class Dialogos {
         }
         Button cerrar = boton("Cerrar", "primario");
         cerrar.setDefaultButton(true);
-        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), vista, acciones(cerrar)), 920);
+        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), contenedor, acciones(cerrar)), 920);
         cerrar.setOnAction(e -> v.close());
         v.showAndWait();
     }

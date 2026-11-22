@@ -185,9 +185,10 @@ function crearServicioLocal() {
       },
       equipos: c.equipos.map(e => ({
         id: e.id, nombre: e.nombre, estadio: e.estadio || '', retirado: !!e.retirado, division: divisionDe(c, e),
+        escudo: e.escudo || '',
         dt: e.dt ? Object.assign({}, e.dt) : null,
         jugadores: e.jugadores.map(j => ({
-          id: j.id || 0, nombre: j.nombre, documento: j.documento || '', dorsal: j.dorsal, posicion: j.posicion,
+          id: j.id || 0, nombre: j.nombre, documento: j.documento || '', dorsal: j.dorsal, posicion: j.posicion, foto: j.foto || '',
           amarillas: j.id ? m.contarTarjetas(j.id, 'AMARILLA') : 0, rojas: j.id ? m.contarTarjetas(j.id, 'ROJA') : 0,
           pendientes: j.id ? m.fechasPendientesDe(j.id) : 0
         }))
@@ -291,7 +292,27 @@ function crearServicioLocal() {
     equipo.estadio = String(d.estadio || '').trim();
     equipo.dt = d.dt && String(d.dt.nombre || '').trim()
       ? { nombre: d.dt.nombre.trim(), documento: String(d.dt.documento || '').trim(), nacionalidad: String(d.dt.nacionalidad || '').trim() } : null;
-    equipo.jugadores = d.jugadores.map(j => ({ id: j.id || m.nuevoIdJugador(), nombre: j.nombre.trim(), documento: String(j.documento || '').trim(), dorsal: j.dorsal, posicion: j.posicion }));
+    equipo.jugadores = d.jugadores.map(j => ({
+      id: j.id || m.nuevoIdJugador(), nombre: j.nombre.trim(), documento: String(j.documento || '').trim(), dorsal: j.dorsal,
+      posicion: j.posicion, foto: fotoValida(j.foto, 'jugador')
+    }));
+    if ('escudo' in d) equipo.escudo = fotoValida(d.escudo, 'escudo');
+  }
+
+  /*
+   * Fotos de jugadores (tipo cédula) y escudos. En la web sola la interfaz ya las recorta
+   * (240x320 JPG y 256x256 PNG) y se guardan dentro del campeonato como «data URL».
+   * Aquí solo se revisa que sean una imagen de ese tamaño razonable; lo demás queda sin foto.
+   */
+  const MAXIMO_FOTO = 400 * 1024; // caracteres de la data URL (las ya recortadas pesan ~20 KB)
+  function fotoValida(valor, tipo) {
+    const v = String(valor || '');
+    if (!v) return '';
+    if (!/^data:image\/(jpeg|png);base64,[A-Za-z0-9+\/=]+$/.test(v)) {
+      throw new ErrorRegla(tipo === 'escudo' ? 'El escudo no tiene un formato válido.' : 'La foto no tiene un formato válido.');
+    }
+    if (v.length > MAXIMO_FOTO) throw new ErrorRegla('La foto es muy pesada.');
+    return v;
   }
 
   const MINUTO_MAXIMO = 130; // 90 + prórroga + descuento
@@ -605,6 +626,21 @@ function crearServicioLocal() {
       return mensaje;
     },
     semilla: d => cargarDatosPrueba(d),
+    'jugador/foto': d => {
+      exigir();
+      const e = m.equipo(d.equipo);
+      const j = e && e.jugadores.find(x => x.id === d.jugador);
+      if (!j) throw new ErrorRegla('Ese jugador ya no está en la plantilla.');
+      j.foto = fotoValida(d.imagen, 'jugador');
+      return j.foto ? `Foto de ${j.nombre} actualizada.` : `Foto de ${j.nombre} eliminada.`;
+    },
+    'equipo/escudo': d => {
+      exigir();
+      const e = m.equipo(d.id);
+      if (!e) throw new ErrorRegla('El equipo no existe.');
+      e.escudo = fotoValida(d.imagen, 'escudo');
+      return e.escudo ? `Escudo de ${e.nombre} actualizado.` : `Escudo de ${e.nombre} eliminado.`;
+    },
     'equipo/rapido': d => {
       exigir();
       exigirNoIniciado();
@@ -703,6 +739,7 @@ function crearServicioLocal() {
     },
     /** En la web sola la foto ya es una «data URL»: se usa tal cual. */
     urlImagen: imagen => imagen || '',
+    urlFoto: foto => foto || '',
     /** Detalle tipo Flashscore de un partido (mismo JSON que GET /api/partido/{id}/{dispositivo}). */
     async detalle(id) {
       try {
@@ -732,7 +769,16 @@ function crearServicioLocal() {
           guardar();
           return { ok: true, mensaje, estado: estado(), sesion: sesion(), calificaciones: ultimasCalificaciones };
         }
-        if (c && !RUTAS_PUBLICAS.has(ruta)) guardar();
+        if (c && !RUTAS_PUBLICAS.has(ruta)) {
+          try {
+            guardar();
+          } catch (e) {
+            const anterior = Almacen.campeonato.cargar();
+            if (anterior) usar(anterior);
+            throw new ErrorRegla('El navegador no tiene más espacio para guardar (las fotos ocupan espacio). '
+              + 'No se guardó este cambio: quite algunas fotos o use el programa Java, que las guarda en archivos.');
+          }
+        }
         return { ok: true, mensaje, estado: estado(), sesion: sesion() };
       } catch (e) {
         return fallo(e);

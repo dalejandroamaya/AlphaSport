@@ -132,12 +132,13 @@ public class Presentador {
         List<Object> jugadores = new ArrayList<>();
         for (Jugador j : e.getJugadores()) {
             jugadores.add(mapa("id", j.getId(), "nombre", j.getNombre(), "documento", j.getDocumento(),
-                    "dorsal", j.getDorsal(), "posicion", j.getPosicion(),
+                    "dorsal", j.getDorsal(), "posicion", j.getPosicion(), "foto", j.getFoto(),
                     "amarillas", j.getId() == 0 ? 0 : sanciones.contar(j.getId(), false),
                     "rojas", j.getId() == 0 ? 0 : sanciones.contar(j.getId(), true),
                     "pendientes", j.getId() == 0 ? 0 : sanciones.fechasPendientesDe(j.getId())));
         }
         return mapa("id", e.getId(), "nombre", e.getNombreEquipo(), "estadio", e.getEstadio(), "retirado", e.isRetirado(),
+                "escudo", e.getEscudo(),
                 "dt", dt == null ? null : mapa("nombre", dt.getNombre(), "documento", dt.getDocumento(),
                         "nacionalidad", dt.getNacionalidad()),
                 "division", servicio.getCampeonato().divisionDe(e),
@@ -460,7 +461,7 @@ public class Presentador {
         for (List<DetallePartido.Puesto> linea : a.lineas()) {
             lineas.add(linea.stream().map(p -> p.jugador() == null ? null
                     : (Object) mapa("id", p.jugador().getId(), "dorsal", p.jugador().getDorsal(),
-                            "nombre", p.jugador().getNombre(), "posicion", p.jugador().getPosicion()))
+                            "nombre", p.jugador().getNombre(), "posicion", p.jugador().getPosicion(), "foto", p.jugador().getFoto()))
                     .collect(Collectors.toList()));
         }
         return mapa("formacion", a.formacion(), "formacionElegida", a.formacionElegida(), "confirmada", a.confirmada(),

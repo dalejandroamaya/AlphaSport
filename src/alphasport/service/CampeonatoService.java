@@ -9,6 +9,7 @@ import alphasport.model.Partido;
 import alphasport.model.TipoFormato;
 import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.RepositorioCampeonato;
+import alphasport.persistence.RepositorioFotosEnMemoria;
 import alphasport.persistence.RepositorioHistorial;
 import alphasport.persistence.Serializacion;
 import java.time.Clock;
@@ -28,6 +29,8 @@ public class CampeonatoService {
     private final RepositorioHistorial historial;
     /** [REQ-07] Reloj para la hora de cierre de los partidos y la ventana de votacion (las pruebas lo adelantan). */
     private final Clock reloj;
+    /** Fotos de jugadores y escudos (por defecto en memoria; Arranque pone la carpeta datos/imagenes). */
+    private FotosService fotos = new FotosService(new RepositorioFotosEnMemoria());
     private Campeonato campeonato;
     private MotorCampeonato motor;
 
@@ -39,6 +42,14 @@ public class CampeonatoService {
         this.repositorio = repositorio;
         this.historial = historial;
         this.reloj = reloj;
+    }
+
+    public void usarFotos(FotosService fotos) {
+        this.fotos = fotos;
+    }
+
+    public FotosService getFotos() {
+        return fotos;
     }
 
     public void cargarGuardado() {
@@ -287,6 +298,16 @@ public class CampeonatoService {
 
     public void guardarEquipo(Integer idEquipo, String nombre, String estadio, DirectorTecnico dt, List<Jugador> jugadores)
             throws PersistenciaException {
+        guardarEquipo(idEquipo, nombre, estadio, dt, jugadores, null);
+    }
+
+    /**
+     * Crea o edita un equipo. La foto de cada jugador y el {@code escudo} pueden ser una foto nueva
+     * (data URL, se normaliza y se guarda), el nombre de la que ya tenia o "" (sin foto).
+     * {@code escudo} null deja el escudo como estaba.
+     */
+    public void guardarEquipo(Integer idEquipo, String nombre, String estadio, DirectorTecnico dt, List<Jugador> jugadores,
+            String escudo) throws PersistenciaException {
         exigirCampeonato();
         String limpio = nombre == null ? "" : nombre.trim();
         if (limpio.isEmpty()) {
@@ -310,9 +331,36 @@ public class CampeonatoService {
             if (j.getId() == 0) {
                 j.setId(campeonato.nuevoIdJugador());
             }
+            j.setFoto(fotos.resolver(j.getFoto(), false));
+        }
+        if (escudo != null) {
+            equipo.setEscudo(fotos.resolver(escudo, true));
         }
         equipo.setJugadores(new ArrayList<>(jugadores));
         guardar();
+    }
+
+    /** Cambia (data URL) o quita ("" o null) la foto tipo cedula de un jugador. */
+    public String cambiarFotoJugador(int idEquipo, int idJugador, String dataUrl) throws PersistenciaException {
+        exigirCampeonato();
+        Jugador j = campeonato.buscarJugador(idEquipo, idJugador);
+        if (j == null) {
+            throw new ReglaNegocioException("Ese jugador ya no está en la plantilla.");
+        }
+        boolean quitar = dataUrl == null || dataUrl.isBlank();
+        j.setFoto(quitar ? "" : fotos.guardarJugador(dataUrl));
+        guardar();
+        return quitar ? "Foto de " + j.getNombre() + " eliminada." : "Foto de " + j.getNombre() + " actualizada.";
+    }
+
+    /** Cambia (data URL) o quita ("" o null) el escudo de un equipo. */
+    public String cambiarEscudo(int idEquipo, String dataUrl) throws PersistenciaException {
+        exigirCampeonato();
+        Equipo e = buscarEquipo(idEquipo);
+        boolean quitar = dataUrl == null || dataUrl.isBlank();
+        e.setEscudo(quitar ? "" : fotos.guardarEscudo(dataUrl));
+        guardar();
+        return quitar ? "Escudo de " + e.getNombreEquipo() + " eliminado." : "Escudo de " + e.getNombreEquipo() + " actualizado.";
     }
 
     /**

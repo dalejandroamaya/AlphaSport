@@ -139,6 +139,7 @@ public class Aplicacion extends Application {
         api = new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias());
         catalogo = api.consultar("catalogo");
         dialogos = new Dialogos(this);
+        Fotos.usar(this);
         cargarFuentes();
         scene = new Scene(new StackPane(), 1280, 820);
         scene.getStylesheets().add(hojaEstilos());
@@ -955,7 +956,9 @@ public class Aplicacion extends Application {
         HBox.setHgrow(textos, Priority.ALWAYS);
         HBox chips = new HBox(6);
         for (Map<String, Object> d : divisiones) {
-            chips.getChildren().add(etiqueta(s(d, "nombre") + " · " + n(d, "equipos"), "chip"));
+            Label chip = etiqueta(s(d, "nombre") + " · " + n(d, "equipos"), "chip");
+            chip.setMinWidth(Region.USE_PREF_SIZE); // la ayuda larga no la aplasta letra por letra
+            chips.getChildren().add(chip);
         }
         Button agregar = boton("+ Agregar división", "mini");
         agregar.setDisable(bloqueada || divisiones.size() >= n(c, "maximoDivisiones"));
@@ -979,6 +982,9 @@ public class Aplicacion extends Application {
     }
 
     static StackPane escudo(Map<String, Object> e, double tamano) {
+        if (Fotos.escudo(s(e, "escudo"), tamano) instanceof StackPane imagen) {
+            return imagen; // el escudo subido; si no hay (o no se pudo leer), el de iniciales
+        }
         String nombre = s(e, "nombre");
         Region forma = new Region();
         int tono = (n(e, "id") * 47) % 360;
@@ -1022,7 +1028,13 @@ public class Aplicacion extends Application {
             quitar.setOnAction(ev -> quitarEquipo(e, iniciado));
             botones.getChildren().add(quitar);
         }
-        HBox fila = new HBox(14, escudo(e, 54), datos);
+        StackPane escudoTarjeta = escudo(e, 54);
+        if (puedeEditar() && !b(e, "retirado")) {
+            // Sin botón extra: se toca el escudo para subirlo, cambiarlo o eliminarlo.
+            Fotos.tocable(escudoTarjeta, s(e, "escudo").isEmpty() ? "Subir el escudo de " + s(e, "nombre")
+                    : "Cambiar o eliminar el escudo de " + s(e, "nombre"), () -> tocarEscudo(escudoTarjeta, e, null));
+        }
+        HBox fila = new HBox(14, escudoTarjeta, datos);
         fila.setAlignment(Pos.CENTER_LEFT);
         VBox tarjeta = new VBox(10, fila, botones);
         tarjeta.getStyleClass().addAll("vidrio", "tarjeta-equipo");
@@ -1031,6 +1043,35 @@ public class Aplicacion extends Application {
         }
         tarjeta.setPrefWidth(320);
         return tarjeta;
+    }
+
+    /**
+     * Cambia o elimina el escudo guardado de un equipo (tocándolo en su tarjeta o en un partido).
+     * {@code despues} se ejecuta si se guardó (por ejemplo, para redibujar el detalle del partido).
+     */
+    void tocarEscudo(Node ancla, Map<String, Object> e, Runnable despues) {
+        Fotos.tocar(ancla, !s(e, "escudo").isEmpty(), true,
+                imagen -> cambiarImagen("equipo/escudo", mapa("id", n(e, "id"), "imagen", imagen), "Escudo", despues),
+                error -> dialogos.mensaje("Escudo", error));
+    }
+
+    /** Cambia o elimina la foto guardada de un jugador (tocándola en la alineación). */
+    void tocarFotoJugador(Node ancla, int idEquipo, Map<String, Object> j, Runnable despues) {
+        Fotos.tocar(ancla, !s(j, "foto").isEmpty(), false,
+                imagen -> cambiarImagen("jugador/foto", mapa("equipo", idEquipo, "jugador", n(j, "id"), "imagen", imagen), "Foto del jugador", despues),
+                error -> dialogos.mensaje("Foto del jugador", error));
+    }
+
+    private void cambiarImagen(String ruta, Map<String, Object> cuerpo, String titulo, Runnable despues) {
+        Map<String, Object> r = ejecutar(ruta, cuerpo);
+        if (!b(r, "ok")) {
+            dialogos.mensaje(titulo, s(r, "error"));
+            return;
+        }
+        aviso(s(r, "mensaje"));
+        if (despues != null) {
+            despues.run();
+        }
     }
 
     private void quitarEquipo(Map<String, Object> e, boolean iniciado) {

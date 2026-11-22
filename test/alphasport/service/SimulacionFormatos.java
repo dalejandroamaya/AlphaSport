@@ -61,7 +61,193 @@ public class SimulacionFormatos {
         probarNoticias();
         probarPreviaYResultado();
         probarCalificaciones();
+        probarFotos();
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
+    }
+
+    /* ---------------------------------------------------------------- fotos de jugadores y escudos */
+
+    /** Imagen de prueba como «data URL» (la forma en que la interfaz envia las fotos). */
+    private static String dataUrl(java.awt.image.BufferedImage img, String formato) throws Exception {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(img, formato, b);
+        return "data:image/" + formato + ";base64," + java.util.Base64.getEncoder().encodeToString(b.toByteArray());
+    }
+
+    private static java.awt.image.BufferedImage abrir(byte[] datos) throws Exception {
+        return javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(datos));
+    }
+
+    /** Mitad izquierda roja y derecha azul (para ver hacia donde quedo girada). */
+    private static java.awt.image.BufferedImage dosColores(int w, int h, int tipo) {
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(w, h, tipo);
+        java.awt.Graphics2D g = img.createGraphics();
+        g.setColor(java.awt.Color.RED);
+        g.fillRect(0, 0, w / 2, h);
+        g.setColor(java.awt.Color.BLUE);
+        g.fillRect(w / 2, 0, w - w / 2, h);
+        g.dispose();
+        return img;
+    }
+
+    private static boolean rojo(int rgb) {
+        return ((rgb >> 16) & 0xFF) > 180 && (rgb & 0xFF) < 90;
+    }
+
+    private static boolean azul(int rgb) {
+        return (rgb & 0xFF) > 180 && ((rgb >> 16) & 0xFF) < 90;
+    }
+
+    /**
+     * Fotos tipo cedula y escudos: formato final, recorte, transparencia, fotos de celular giradas,
+     * archivos que no son imagenes o demasiado grandes, permisos y que la foto viaje con el equipo
+     * al crear otro campeonato con los mismos equipos. Todo por ApiControlador, como la web y el escritorio.
+     */
+    private static void probarFotos() {
+        boolean correcto;
+        try {
+            alphasport.persistence.RepositorioFotosEnMemoria repo = new alphasport.persistence.RepositorioFotosEnMemoria();
+            FotosService fotos = new FotosService(repo);
+
+            // 1) Formatos: cualquier foto queda en 240x320 (jugador) o 256x256 con transparencia (escudo).
+            String apaisada = dataUrl(dosColores(900, 300, java.awt.image.BufferedImage.TYPE_INT_RGB), "png");
+            String alargada = dataUrl(dosColores(200, 1200, java.awt.image.BufferedImage.TYPE_INT_RGB), "jpg");
+            java.awt.image.BufferedImage c1 = abrir(repo.leer(fotos.guardarJugador(apaisada)));
+            java.awt.image.BufferedImage c2 = abrir(repo.leer(fotos.guardarJugador(alargada)));
+            java.awt.image.BufferedImage chica = abrir(repo.leer(fotos.guardarJugador(
+                    dataUrl(dosColores(30, 20, java.awt.image.BufferedImage.TYPE_INT_RGB), "png"))));
+            boolean formatos = c1.getWidth() == 240 && c1.getHeight() == 320 && c2.getWidth() == 240 && c2.getHeight() == 320
+                    && chica.getWidth() == 240 && chica.getHeight() == 320;
+            // la apaisada se recorta al centro: queda mitad roja y mitad azul
+            formatos &= rojo(c1.getRGB(20, 160)) && azul(c1.getRGB(220, 160));
+            java.awt.image.BufferedImage transparente = new java.awt.image.BufferedImage(400, 200, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = transparente.createGraphics();
+            g.setColor(java.awt.Color.GREEN);
+            g.fillOval(0, 0, 400, 200);
+            g.dispose();
+            java.awt.image.BufferedImage esc = abrir(repo.leer(fotos.guardarEscudo(dataUrl(transparente, "png"))));
+            boolean escudo = esc.getWidth() == 256 && esc.getHeight() == 256 && ((esc.getRGB(2, 2) >>> 24) == 0) // esquina transparente
+                    && ((esc.getRGB(128, 128) >> 8) & 0xFF) > 180;                                                   // centro verde
+
+            // 2) Foto de celular con EXIF «girar 90°»: rojo (izquierda) debe quedar arriba.
+            java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(dosColores(400, 300, java.awt.image.BufferedImage.TYPE_INT_RGB), "jpg", b);
+            byte[] jpg = b.toByteArray();
+            byte[] exif = {(byte) 0xFF, (byte) 0xE1, 0, 34, 'E', 'x', 'i', 'f', 0, 0,
+                'I', 'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0};
+            byte[] conExif = new byte[jpg.length + exif.length];
+            System.arraycopy(jpg, 0, conExif, 0, 2);
+            System.arraycopy(exif, 0, conExif, 2, exif.length);
+            System.arraycopy(jpg, 2, conExif, 2 + exif.length, jpg.length - 2);
+            java.awt.image.BufferedImage girada = abrir(repo.leer(fotos.guardarJugador(
+                    "data:image/jpeg;base64," + java.util.Base64.getEncoder().encodeToString(conExif))));
+            boolean exifBien = FotosService.orientacionExif(conExif) == 6 && rojo(girada.getRGB(120, 20)) && azul(girada.getRGB(120, 300));
+
+            // 3) Lo que no es una foto valida se rechaza.
+            String gigante = gigantePng(12000, 12000);
+            String noImagen = "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString("no soy una imagen".getBytes());
+            String webp = "data:image/webp;base64," + java.util.Base64.getEncoder().encodeToString(
+                    new byte[]{'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'E', 'B', 'P', 0, 0});
+            boolean rechazos = rechaza(() -> fotos.guardarJugador("hola"))
+                    && rechaza(() -> fotos.guardarJugador("data:image/png;base64,AAAA"))
+                    && rechaza(() -> fotos.guardarJugador(noImagen))
+                    && rechaza(() -> fotos.guardarJugador(webp))
+                    && rechaza(() -> fotos.guardarJugador(gigante))
+                    && FotosService.esNombreValido("jugador-abcdef123456.jpg") && !FotosService.esNombreValido("../datos/campeonato.dat")
+                    && fotos.leerGuardada("../campeonato.dat") == null;
+
+            // 4) Por la API, como la web y el escritorio.
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-fotos")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-fotos")));
+            servicio.usarFotos(fotos);
+            alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService());
+            api.ejecutar("login", java.util.Map.of("usuario", "admin", "clave", "123"));
+            ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+            cfg.setSorteoAleatorio(false);
+            servicio.crear("Fotos", TipoFormato.LIGA, cfg, false);
+            java.util.Map<String, Object> j1 = new java.util.HashMap<>(java.util.Map.of("id", 0, "nombre", "Ana", "documento", "1",
+                    "dorsal", 1, "posicion", "Portero", "foto", alargada));
+            java.util.Map<String, Object> j2 = new java.util.HashMap<>(java.util.Map.of("id", 0, "nombre", "Beto", "documento", "2",
+                    "dorsal", 2, "posicion", "Defensa central", "foto", ""));
+            java.util.Map<String, Object> cuerpo = new java.util.HashMap<>(java.util.Map.of("nombre", "Lobos", "estadio", "",
+                    "jugadores", new ArrayList<Object>(List.of(j1, j2)), "escudo", dataUrl(transparente, "png")));
+            api.ejecutar("equipo", cuerpo);
+            alphasport.model.Equipo lobos = servicio.getCampeonato().buscarEquipoPorNombre("Lobos");
+            String fotoAna = lobos.getJugadores().get(0).getFoto();
+            String escudoLobos = lobos.getEscudo();
+            boolean api1 = FotosService.esNombreValido(fotoAna) && lobos.getJugadores().get(1).getFoto().isEmpty()
+                    && FotosService.esNombreValido(escudoLobos) && api.foto(fotoAna) != null && api.foto(escudoLobos) != null;
+            // editar el equipo reenviando los nombres conserva las fotos; un nombre inventado no se acepta
+            j1.put("id", lobos.getJugadores().get(0).getId());
+            j1.put("foto", fotoAna);
+            j2.put("id", lobos.getJugadores().get(1).getId());
+            j2.put("foto", "../../campeonato.dat");
+            cuerpo.put("id", lobos.getId());
+            cuerpo.remove("escudo"); // sin «escudo» se deja como estaba
+            api.ejecutar("equipo", cuerpo);
+            boolean api2 = lobos.getJugadores().get(0).getFoto().equals(fotoAna) && lobos.getJugadores().get(1).getFoto().isEmpty()
+                    && lobos.getEscudo().equals(escudoLobos);
+            // cambiar y quitar desde la alineacion o el equipo
+            int idEquipo = lobos.getId();
+            int idBeto = lobos.getJugadores().get(1).getId();
+            api.ejecutar("jugador/foto", java.util.Map.of("equipo", idEquipo, "jugador", idBeto, "imagen", apaisada));
+            boolean api3 = FotosService.esNombreValido(lobos.getJugadores().get(1).getFoto());
+            api.ejecutar("jugador/foto", java.util.Map.of("equipo", idEquipo, "jugador", idBeto, "imagen", ""));
+            api.ejecutar("equipo/escudo", java.util.Map.of("id", idEquipo, "imagen", ""));
+            api3 &= lobos.getJugadores().get(1).getFoto().isEmpty() && lobos.getEscudo().isEmpty();
+            api.ejecutar("equipo/escudo", java.util.Map.of("id", idEquipo, "imagen", dataUrl(transparente, "png")));
+            api3 &= rechaza(() -> api.ejecutar("jugador/foto", java.util.Map.of("equipo", idEquipo, "jugador", 9999, "imagen", apaisada)))
+                    && rechaza(() -> api.ejecutar("jugador/foto", java.util.Map.of("equipo", idEquipo, "jugador", idBeto, "imagen", "data:image/png;base64,xx")));
+            // el JSON lleva la foto y el escudo
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> eqJson = ((List<java.util.Map<String, Object>>) api.consultar("estado").get("equipos")).get(0);
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> anaJson = ((List<java.util.Map<String, Object>>) eqJson.get("jugadores")).get(0);
+            boolean json = fotoAna.equals(anaJson.get("foto")) && FotosService.esNombreValido((String) eqJson.get("escudo"));
+            // el visitante no puede cambiar fotos, pero si verlas; sin sesion no se ven
+            api.ejecutar("logout", java.util.Map.of());
+            api.ejecutar("login/visitante", java.util.Map.of());
+            boolean permisos = rechaza(() -> api.ejecutar("jugador/foto", java.util.Map.of("equipo", idEquipo, "jugador", idBeto, "imagen", apaisada)))
+                    && rechaza(() -> api.ejecutar("equipo/escudo", java.util.Map.of("id", idEquipo, "imagen", "")))
+                    && api.foto(fotoAna) != null;
+            api.ejecutar("logout", java.util.Map.of());
+            boolean sinSesion = rechaza(() -> api.foto(fotoAna));
+            // un campeonato nuevo con los mismos equipos conserva fotos y escudos
+            api.ejecutar("login", java.util.Map.of("usuario", "admin", "clave", "123"));
+            servicio.crear("Fotos 2", TipoFormato.LIGA, cfg, true);
+            alphasport.model.Equipo copia = servicio.getCampeonato().buscarEquipoPorNombre("Lobos");
+            boolean copiaBien = copia.getJugadores().get(0).getFoto().equals(fotoAna) && FotosService.esNombreValido(copia.getEscudo());
+
+            correcto = formatos && escudo && exifBien && rechazos && api1 && api2 && api3 && json && permisos && sinSesion && copiaBien;
+            if (!correcto) {
+                System.out.println("  formatos=" + formatos + " escudo=" + escudo + " exif=" + exifBien + " rechazos=" + rechazos
+                        + " api1=" + api1 + " api2=" + api2 + " api3=" + api3 + " json=" + json + " permisos=" + permisos
+                        + " sinSesion=" + sinSesion + " copia=" + copiaBien);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            correcto = false;
+        }
+        if (!correcto) {
+            fallos++;
+        }
+        System.out.println("Fotos de jugadores y escudos: " + (correcto ? "correcto" : "FALLO"));
+    }
+
+    /** Una PNG que dice medir ancho x alto (solo la cabecera): no se debe intentar abrir. */
+    private static String gigantePng(int ancho, int alto) throws Exception {
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream d = new java.io.DataOutputStream(b);
+        d.write(new byte[]{(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10});
+        byte[] ihdr = java.nio.ByteBuffer.allocate(17).put("IHDR".getBytes()).putInt(ancho).putInt(alto)
+                .put((byte) 8).put((byte) 2).put((byte) 0).put((byte) 0).put((byte) 0).array();
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        crc.update(ihdr);
+        d.writeInt(13);
+        d.write(ihdr);
+        d.writeInt((int) crc.getValue());
+        return "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(b.toByteArray());
     }
 
     /** Reloj que la prueba puede adelantar (para la ventana de 24 horas de la votacion). */

@@ -607,3 +607,24 @@
 .chip-portero { -fx-text-fill: -cian; -fx-padding: 1 8; -fx-font-size: 11px; }
 .chip-mvp { -fx-text-fill: -oro-texto; -fx-border-color: rgba(247, 199, 90, 0.6); -fx-padding: 1 8; -fx-font-size: 11px; }
 .chip-voto { -fx-text-fill: -cesped; -fx-border-color: rgba(46, 229, 152, 0.36); }
+/* ------------------------------------------------------------------ fotos de jugadores (tipo cédula) y escudos */
+/* Toda foto de jugador es vertical 3:4, como una cédula; sin foto se ve la persona «NN». */
+.foto-cedula { -fx-background-color: #dfe6ef; }
+.nn-fondo { -fx-background-color: #2a3a52; }
+.nn-figura { -fx-fill: #8fa3bf; }
+.nn-texto { -fx-text-fill: #2a3a52; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-padding: 0; }
+.raiz.claro .nn-fondo { -fx-background-color: #d5dde8; }
+.raiz.claro .nn-figura { -fx-fill: #8b9bb2; }
+.raiz.claro .nn-texto { -fx-text-fill: #f2f5f9; }
+.escudo-imagen { -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 8, 0, 0, 3); }
+
+/* Fotos y escudos que se tocan para cambiarlos (sin botones extra). */
+.foto-tocable:hover { -fx-scale-x: 1.06; -fx-scale-y: 1.06; }
+.foto-tocable:focused { -fx-effect: dropshadow(gaussian, -cian, 10, 0.5, 0, 0); }
+.foto-boton { -fx-content-display: top; -fx-graphic-text-gap: 4; -fx-padding: 4 8; -fx-border-style: segments(4, 3); -fx-border-color: rgba(116, 220, 255, 0.5);
+  -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: rgba(116, 220, 255, 0.06); }
+
+/* En la cancha: la foto con el borde del color del equipo y el dorsal encima, en la esquina. */
+.ficha-foto { -fx-border-width: 2; -fx-border-radius: 7; -fx-background-radius: 7; -fx-padding: 0; }
+.ficha-dorsal-mini { -fx-font-size: 10px; -fx-border-width: 1.5; -fx-padding: 0; }
+.menu-foto .menu-item { -fx-padding: 8 14; }

@@ -149,6 +149,9 @@ public class ApiControlador {
             case "equipo" -> guardarEquipo(cuerpo);
             case "semilla" -> mensaje = servicio.cargarDatosPrueba(entero(cuerpo.get("semilla")),
                     entero(cuerpo.get("cantidad")), !Boolean.FALSE.equals(cuerpo.get("completar")));
+            case "jugador/foto" -> mensaje = servicio.cambiarFotoJugador(entero(cuerpo.get("equipo")), entero(cuerpo.get("jugador")),
+                    texto(cuerpo, "imagen"));
+            case "equipo/escudo" -> mensaje = servicio.cambiarEscudo(entero(cuerpo.get("id")), texto(cuerpo, "imagen"));
             case "equipo/quitar" -> mensaje = servicio.quitarEquipo(entero(cuerpo.get("id")));
             case "partido" -> guardarPartido(cuerpo);
             case "criterios" -> servicio.cambiarCriterios(criterios(lista(cuerpo, "criterios")));
@@ -220,6 +223,12 @@ public class ApiControlador {
     }
 
     /** Foto de una noticia (la pide ServidorWeb para /api/imagen/{nombre}). Las de pendientes solo las ve el administrador. */
+    /** Foto de un jugador o escudo (la pide ServidorWeb para /api/foto/{nombre}); basta con tener sesion. */
+    public byte[] foto(String nombre) throws Exception {
+        exigirSesion();
+        return servicio.getFotos().leerGuardada(nombre);
+    }
+
     public byte[] imagenNoticia(String nombre) throws Exception {
         exigirSesion();
         return noticias.imagen(nombre, usuarioActual.puedeEditar());
@@ -239,11 +248,12 @@ public class ApiControlador {
             Jugador jugador = new Jugador(texto(j, "nombre").trim(), texto(j, "documento").trim(),
                     entero(j.get("dorsal")), texto(j, "posicion"));
             jugador.setId(j.get("id") == null ? 0 : entero(j.get("id")));
+            jugador.setFoto(texto(j, "foto")); // foto nueva (data URL), la que tenia o ""
             jugadores.add(jugador);
         }
         Object id = cuerpo.get("id");
         servicio.guardarEquipo(id == null ? null : entero(id), texto(cuerpo, "nombre"), texto(cuerpo, "estadio"),
-                director, jugadores);
+                director, jugadores, cuerpo.containsKey("escudo") ? texto(cuerpo, "escudo") : null);
     }
 
     private void guardarPartido(Map<String, Object> cuerpo) throws Exception {

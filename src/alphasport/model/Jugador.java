@@ -19,6 +19,7 @@ public class Jugador extends Persona {
     private int id; // no cambia aunque se edite el dorsal (lo usan las tarjetas)
     private int dorsal;
     private String posicion;
+    private String foto; // nombre de la foto tipo cedula (datos/imagenes); null o "" = sin foto (se ve «NN»)
 
     public Jugador() {
     }
@@ -51,6 +52,15 @@ public class Jugador extends Persona {
 
     public void setPosicion(String posicion) {
         this.posicion = posicion;
+    }
+
+    /** Foto tipo cedula del jugador ("" si no tiene). */
+    public String getFoto() {
+        return foto == null ? "" : foto;
+    }
+
+    public void setFoto(String foto) {
+        this.foto = foto == null ? "" : foto;
     }
 
     @Override
