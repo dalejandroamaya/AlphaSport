@@ -1242,7 +1242,9 @@ button.partido:hover { background: var(--fila-hover); transform: none; }
 [data-tema="claro"] .logo-login, [data-tema="claro"] .marca-lateral img { filter: none; }
 
 /* Menú «Cambiar / Eliminar» de fotos. */
-.menu-foto { border-radius: var(--radio); background: var(--superficie); box-shadow: 0 12px 28px rgba(0, 0, 0, .45); }
+/* Sobre un diálogo (que ya es «superficie») el menú usa la segunda superficie y un borde para distinguirse. */
+.menu-foto, .menu-foto.vidrio { border-radius: var(--radio); background: var(--superficie-2); border: 1px solid var(--linea); box-shadow: 0 14px 32px rgba(0, 0, 0, .55); }
+[data-tema="claro"] .menu-foto, [data-tema="claro"] .menu-foto.vidrio { box-shadow: 0 14px 32px rgba(20, 40, 70, .25); }
 .menu-foto button { border-radius: 4px; padding: .5rem .7rem; }
 
 @media (max-width: 640px) {

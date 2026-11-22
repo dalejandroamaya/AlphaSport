@@ -417,9 +417,13 @@ function menuFoto(ancla, tieneFoto, cosa) {
     menu.setAttribute('role', 'menu');
     menu.innerHTML = `<button type="button" role="menuitem" data-op="cambiar">${tieneFoto ? 'Cambiar' : 'Subir'} ${cosa}</button>`
       + (tieneFoto ? `<button type="button" role="menuitem" class="opcion-peligro" data-op="quitar">Eliminar ${cosa}</button>` : '');
-    (ancla.closest('dialog[open]') || document.body).append(menu);
+    const dialogo = ancla.closest('dialog[open]');
+    (dialogo || document.body).append(menu);
     const r = ancla.getBoundingClientRect(), mw = menu.offsetWidth, mh = menu.offsetHeight;
-    menu.style.left = Math.max(8, Math.min(innerWidth - mw - 8, r.left + r.width / 2 - mw / 2)) + 'px';
+    // Alineado con la foto tocada y sin salirse del diálogo (ni de la ventana).
+    const caja = dialogo ? dialogo.getBoundingClientRect() : { left: 0, right: innerWidth };
+    const izq = Math.max(caja.left, 0) + 8, der = Math.min(caja.right, innerWidth) - 8;
+    menu.style.left = Math.max(izq, Math.min(der - mw, r.left)) + 'px';
     menu.style.top = (r.bottom + mh + 8 > innerHeight ? Math.max(8, r.top - mh - 6) : r.bottom + 6) + 'px';
     const cerrar = op => {
       menuFotoAbierto = null;
@@ -436,7 +440,7 @@ function menuFoto(ancla, tieneFoto, cosa) {
       document.addEventListener('keydown', tecla, true);
     });
     menuFotoAbierto = cerrar;
-    menu.querySelector('button').focus();
+    menu.querySelector('button').focus({ preventScroll: true }); // sin desplazar el diálogo hasta el final
   });
 }
 
