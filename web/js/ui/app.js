@@ -1636,8 +1636,7 @@ function caraACaraHtml(h, p) {
 function rachaHtml(r, p) {
   const columna = (equipo, partidos) => `<div class="detalle-racha">
       <h3 class="ficha-titulo">${esc(equipo)}</h3>
-      ${partidos.length ? `<div class="racha-cuadros"><span class="sutil">Últimos ${partidos.length}:</span>${partidos.map(x => formaHtml(x.resultado)).join('')}</div>
-        <p class="sutil pequeno">V = victoria · E = empate · D = derrota (el más reciente a la izquierda)</p>
+      ${partidos.length ? `<div class="racha-cuadros">${partidos.map(x => formaHtml(x.resultado)).join('')}</div>
         <ol class="detalle-lista">${partidos.map(x => filaPrevia(x, x.resultado)).join('')}</ol>`
       : '<p class="sutil">Sin partidos jugados todavía.</p>'}
     </div>`;
