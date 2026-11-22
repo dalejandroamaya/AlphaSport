@@ -1792,8 +1792,16 @@ class Dialogos {
         }
         Button cerrar = boton("Cerrar", "primario");
         cerrar.setDefaultButton(true);
-        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), contenedor, acciones(cerrar)), 920);
+        // El ancho de la cancha horizontal (960) más los márgenes; nunca más ancho que la pantalla.
+        double ancho = Math.min(1024, javafx.stage.Screen.getPrimary().getVisualBounds().getWidth() - 126);
+        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), contenedor, acciones(cerrar)), ancho);
         cerrar.setOnAction(e -> v.close());
+        // El foco empieza en las pestañas. Si lo ponía JavaFX al mostrar la ventana, además desplazaba el
+        // contenido hacia abajo: el marcador quedaba tapado y había que subir para verlo.
+        Node pestanas = contenedor.lookup(".detalle-pestanas");
+        if (pestanas != null) {
+            pestanas.requestFocus();
+        }
         v.showAndWait();
     }
 
