@@ -9,7 +9,6 @@ import alphasport.model.Partido;
 import alphasport.model.Tarjeta;
 import alphasport.model.VotoJugador;
 import alphasport.service.CalificacionesPartido.Calificacion;
-import alphasport.service.CalificacionesPartido.Votacion;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -25,13 +24,12 @@ import java.util.Set;
  * <li><b>Nota del sistema</b>: 6.0 de base para todo el que jugo (titular o ingresado de cambio);
  * gol +1.0, asistencia +0.5, amarilla -0.5, roja -2.0. El portero ademas suma +1.5 con la valla
  * invicta y resta 0.3 por cada gol recibido. Siempre queda entre 1.0 y 10.0.</li>
- * <li><b>Voto del publico</b>: durante las 24 horas siguientes al cierre del partido cada visitante
- * califica a cada jugador del 1 al 10, una sola vez por dispositivo.</li>
+ * <li><b>Voto del publico</b>: mientras la votacion esta abierta cada visitante califica a cada jugador del
+ * 1 al 10, una sola vez por dispositivo (ver {@link ReglasVotacion}).</li>
  * <li><b>Nota final</b>: la del sistema si no hay votos; si los hay, (sistema + promedio del publico) / 2,
  * redondeada a 1 decimal. El MVP es el jugador con la nota final mas alta.</li>
  * </ol>
- * Solo tiene metodos estaticos: calcula ({@link #calcular}) o registra un voto ({@link #votar}); el
- * resultado es un {@link CalificacionesPartido}. La version web tiene su gemela en
+ * Solo tiene metodos estaticos; el resultado de {@link #calcular} es un {@link CalificacionesPartido}. La version web tiene su gemela en
  * web/js/service/calificaciones.js con las mismas reglas.
  */
 public final class CalculadoraCalificaciones {
@@ -45,8 +43,6 @@ public final class CalculadoraCalificaciones {
     public static final double PUNTOS_GOL_RECIBIDO = -0.3;
     public static final double NOTA_MINIMA = 1.0;
     public static final double NOTA_MAXIMA = 10.0;
-    /** Ventana de votacion despues del cierre del partido. */
-    public static final long VENTANA_VOTACION_MS = 24L * 60 * 60 * 1000;
 
     private CalculadoraCalificaciones() {
     }
@@ -56,7 +52,7 @@ public final class CalculadoraCalificaciones {
     /**
      * Califica a los jugadores del partido.
      *
-     * @param ahora       hora actual en ms (se pasa para poder probar la ventana de 24 horas)
+     * @param ahora       hora actual en ms (se pasa para poder probar el cierre de la votacion)
      * @param dispositivo identificador del navegador o equipo que consulta (para mostrar su voto); puede ser null
      */
     public static CalificacionesPartido calcular(Campeonato campeonato, Partido partido, long ahora, String dispositivo) {
@@ -77,58 +73,6 @@ public final class CalculadoraCalificaciones {
         int idMvp = mvp(local, visitante);
         return new CalificacionesPartido(ReglasVotacion.estado(partido, ahora), ReglasVotacion.cierraEn(partido), motivo,
                 marcarMvp(local, idMvp), marcarMvp(visitante, idMvp), idMvp);
-    }
-
-    /* ---------------------------------------------------------------- votacion */
-
-    /** Estado de la ventana de 24 horas para la hora indicada. */
-    public static Votacion estadoVotacion(Partido p, long ahora) {
-        if (!p.isJugado()) {
-            return Votacion.SIN_RESULTADO;
-        }
-        if (p.getFinalizadoEn() <= 0) {
-            return Votacion.SIN_REGISTRO;
-        }
-        return ahora >= p.getFinalizadoEn() && ahora < p.getFinalizadoEn() + VENTANA_VOTACION_MS
-                ? Votacion.ABIERTA : Votacion.CERRADA;
-    }
-
-    /**
-     * Registra el voto de un visitante. Valida que el partido este en su ventana de 24 horas, que el
-     * jugador haya jugado ese partido, que la nota sea un entero del 1 al 10 y que ese dispositivo no
-     * haya votado antes al mismo jugador en el mismo partido.
-     *
-     * @throws ReglaNegocioException con un mensaje para mostrar en pantalla
-     */
-    public static VotoJugador votar(Campeonato campeonato, Partido p, int idJugador, int valor, String dispositivo, long ahora) {
-        if (dispositivo == null || !dispositivo.matches("[A-Za-z0-9-]{8,64}")) {
-            throw new ReglaNegocioException("No se pudo identificar este dispositivo para registrar el voto.");
-        }
-        if (esWalkover(p)) {
-            throw new ReglaNegocioException("Partido definido por W.O.: no hay jugadores que calificar.");
-        }
-        switch (estadoVotacion(p, ahora)) {
-            case SIN_RESULTADO -> throw new ReglaNegocioException("La votación se abre cuando el partido termina.");
-            case SIN_REGISTRO -> throw new ReglaNegocioException("Este partido se jugó antes de existir las votaciones: solo tiene nota del sistema.");
-            case CERRADA -> throw new ReglaNegocioException("La votación de este partido ya cerró: pasaron más de 24 horas desde el final.");
-            case ABIERTA -> {
-                // se puede votar
-            }
-        }
-        if (valor < VotoJugador.MINIMO || valor > VotoJugador.MAXIMO) {
-            throw new ReglaNegocioException("La calificación debe ser un número entero del 1 al 10.");
-        }
-        if (!participantes(campeonato, p, p.getIdLocal()).contains(idJugador)
-                && !participantes(campeonato, p, p.getIdVisitante()).contains(idJugador)) {
-            throw new ReglaNegocioException("Ese jugador no participó en este partido.");
-        }
-        boolean yaVoto = p.getVotos().stream().anyMatch(v -> v.getIdJugador() == idJugador && dispositivo.equals(v.getDispositivo()));
-        if (yaVoto) {
-            throw new ReglaNegocioException("Ya calificó a este jugador en este partido desde este dispositivo.");
-        }
-        VotoJugador voto = new VotoJugador(idJugador, valor, dispositivo, ahora);
-        p.getVotos().add(voto);
-        return voto;
     }
 
     /** Un W.O. no se juega: el motor lo marca con la observacion «W.O. a favor de ...». */
