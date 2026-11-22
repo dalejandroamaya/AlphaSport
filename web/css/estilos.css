@@ -634,32 +634,49 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 .calificacion-estado { margin: 0; padding: .65rem .9rem; border-radius: var(--radio-sm); border: 1px solid var(--borde); font-weight: 600; }
 .calificacion-abierta { color: var(--cesped); background: var(--cesped-suave); border-color: rgba(46, 229, 152, .36); }
 .calificacion-cerrada { color: var(--sutil); background: rgba(255, 255, 255, .04); }
-.calificacion-gracias { margin: 0; color: var(--cesped); font-weight: 600; }
 .tarjeta-mvp {
   display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .9rem; padding: .9rem 1.1rem;
   border-color: rgba(247, 199, 90, .6); background: linear-gradient(to right, rgba(247, 199, 90, .2), transparent 60%), var(--vidrio);
 }
 .tarjeta-mvp > div { display: grid; gap: .1rem; min-width: 0; }
-.mvp-estrella { color: var(--oro); font-size: 1.9rem; line-height: 1; }
 .mvp-titulo { color: var(--oro-texto); font-size: .78rem; font-weight: 600; }
 .mvp-nombre { font-family: var(--titulos); font-size: 1.15rem; overflow-wrap: anywhere; }
 .calificacion-columna { display: grid; gap: .55rem; min-width: 0; }
 .calificacion-columna p { margin: .2rem 0 0; }
 .lista-calificaciones { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; }
 .fila-calificacion {
-  display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto auto; align-items: center; gap: .6rem;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .6rem;
   padding: .5rem .7rem; border-radius: var(--radio-sm); border: 1px solid var(--borde); background: rgba(255, 255, 255, .03);
 }
 .fila-calificacion.fila-mvp { border-color: rgba(247, 199, 90, .65); background: rgba(247, 199, 90, .08); }
-.calificacion-dorsal { font-family: var(--titulos); color: var(--sutil); text-align: center; }
 .calificacion-textos { display: grid; gap: .05rem; min-width: 0; }
 .calificacion-nombre { font-weight: 600; overflow-wrap: anywhere; }
 .chip-portero, .chip-mvp { padding: 0 .45rem; font-size: .7rem; vertical-align: middle; }
 .chip-portero { color: var(--cian); }
 .chip-mvp { color: var(--oro-texto); border-color: rgba(247, 199, 90, .6); }
 .chip-voto { color: var(--cesped); border-color: rgba(46, 229, 152, .36); white-space: nowrap; }
-.voto-control { display: inline-flex; gap: .35rem; align-items: center; }
-.voto-control select { width: 4.6rem; padding: .3rem .4rem; }
+.foto-cedula.fila { width: 30px; border-radius: 4px; box-shadow: none; }
+.fila-calificacion.fila-votada { border-color: rgba(46, 229, 152, .36); }
+.fila-calificacion select { width: 4.6rem; min-height: 36px; padding: .3rem .4rem; }
+.calificacion-cabecera { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.calificacion-cabecera .calificacion-estado { flex: 1 1 16rem; }
+/* Votaciones (visitante): una tarjeta por partido. Editor del tiempo (administrador). */
+.lista-votaciones { display: grid; gap: .9rem; }
+.tarjeta-votacion { display: grid; gap: .9rem; padding: .9rem 1.1rem; }
+.tarjeta-votacion header { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem .9rem; }
+.tarjeta-votacion header > div { flex: 1 1 14rem; min-width: 0; display: grid; gap: .1rem; }
+.tarjeta-votacion h3 { margin: 0; font-size: 1.1rem; overflow-wrap: anywhere; }
+.tarjeta-votacion h4 { margin: 0; color: var(--sutil); font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+.tarjeta-votacion footer { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; padding: .6rem 0; background: var(--superficie); border-top: 1px solid var(--linea); }
+.tarjeta-votacion footer p { flex: 1 1 14rem; margin: 0; }
+.tarjeta-votacion footer .error { flex-basis: 100%; }
+.chip.chip-votacion, [data-tema="claro"] .chip.chip-votacion { color: var(--cesped); background: var(--cesped-suave); border-color: transparent; text-transform: none; white-space: nowrap; }
+.navegacion .contador { display: inline-block; min-width: 1.3rem; margin-inline-start: .3rem; padding: 0 .35rem; border-radius: 999px; font-size: .75rem; line-height: 1.5; text-align: center; background: var(--cesped-suave); color: var(--cesped); }
+.votacion-abierta { color: var(--cesped); font-weight: 600; }
+.fila-votacion { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.fila-votacion select { width: auto; }
+.fila-votacion input { width: 5.5rem; }
+.fila-votacion .btn { margin-inline-start: auto; }
 /* La nota: el número siempre va escrito; verde alta, neutra media, rojo baja */
 .nota { min-width: 3.1rem; padding: .3rem .55rem; border-radius: 10px; text-align: center; font-family: var(--titulos); font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 .nota-alta { color: #05080f; background: var(--cesped); }
@@ -949,9 +966,6 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
   .detalle-cifras { gap: .5rem; }
   .detalle-cifra b { font-size: 1.6rem; }
   .detalle-columnas { grid-template-columns: 1fr; }
-  /* Calificaciones en el teléfono: el selector de voto baja a su propia línea */
-  .fila-calificacion { grid-template-columns: 2rem minmax(0, 1fr) auto; }
-  .fila-calificacion .voto-control, .fila-calificacion .chip-voto { grid-column: 2 / -1; grid-row: 2; justify-self: start; }
   .detalle-fila-marcador { gap: .4rem; font-size: .9rem; }
   /* En el teléfono la línea de tiempo va en una sola columna. */
   .linea-tiempo::before { left: 1.5rem; }
@@ -1250,6 +1264,8 @@ button.partido:hover { background: var(--fila-hover); transform: none; }
 .detalle-cifra, .detalle-fila, .evento, [data-tema="claro"] .evento { background: var(--superficie-2); border: 0; border-radius: var(--radio); box-shadow: none; }
 .detalle-cifra b { font-size: 1.6rem; }
 .detalle-centro .goles { font-size: 2rem; }
+/* El MVP conserva su borde dorado sobre el panel plano. */
+.vidrio.tarjeta-mvp { border: 1px solid rgba(247, 199, 90, .6); background: linear-gradient(to right, rgba(247, 199, 90, .2), transparent 60%); }
 
 .marcador-partido, .cruce, .marcador-partido .vs { background: var(--pantalla); border: 0; border-radius: var(--radio); box-shadow: none; }
 .marcador-partido { padding: 1.1rem 1rem; }
@@ -1265,7 +1281,16 @@ button.partido:hover { background: var(--fila-hover); transform: none; }
 [data-tema="claro"] .menu-foto, [data-tema="claro"] .menu-foto.vidrio { box-shadow: 0 14px 32px rgba(20, 40, 70, .25); }
 .menu-foto button { border-radius: 4px; padding: .5rem .7rem; }
 
+@media (max-width: 1000px) {
+  /* El menú va fijo abajo: «Enviar calificaciones» se detiene encima y la cantidad sube a la esquina del icono. */
+  .tarjeta-votacion footer { bottom: 84px; }
+  .navegacion { overflow-x: auto; scrollbar-width: none; }
+  .navegacion button { flex: 1 0 auto; }
+  .navegacion .contador { position: absolute; top: 2px; left: 54%; min-width: 1.1rem; padding: 0 .3rem; background: var(--cesped); color: #03170d; font-size: .68rem; }
+  [data-tema="claro"] .navegacion .contador { color: #fff; }
+}
 @media (max-width: 640px) {
+  .navegacion button { font-size: .66rem; padding-inline: .3rem; }
   .partido, .partido.rapido { grid-template-columns: 5.6rem minmax(0, 1fr) auto; gap: .15rem .6rem; }
   .bloque-ronda { padding: 0 .5rem .2rem; }
   .bloque-ronda h3 { margin: 0 -.5rem; padding: 0 .5rem; }
