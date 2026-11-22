@@ -24,9 +24,9 @@ public record CalificacionesPartido(Votacion votacion, long cierraEn, String mot
     public enum Votacion {
         /** El partido no tiene resultado final: todavia no hay calificaciones. */
         SIN_RESULTADO,
-        /** Dentro de las 24 horas: los visitantes pueden votar. */
+        /** Dentro del tiempo programado: los visitantes pueden votar. */
         ABIERTA,
-        /** Pasaron las 24 horas: la nota final es definitiva. */
+        /** Vencio el tiempo o la cerro el administrador: la nota final es definitiva. */
         CERRADA,
         /** Partido jugado antes de existir las calificaciones (sin hora de cierre): solo nota del sistema. */
         SIN_REGISTRO
@@ -36,7 +36,7 @@ public record CalificacionesPartido(Votacion votacion, long cierraEn, String mot
      * Calificacion de un jugador. {@code promedioPublico} vale 0 si nadie lo ha votado;
      * {@code miVoto} es el voto de ESTE dispositivo (0 = no ha votado).
      */
-    public record Calificacion(int idJugador, int idEquipo, String nombre, int dorsal, String posicion,
+    public record Calificacion(int idJugador, int idEquipo, String nombre, int dorsal, String posicion, String foto,
             boolean portero, boolean titular, int goles, int asistencias, int amarillas, int rojas,
             int golesRecibidos, double notaSistema, List<String> desglose, int votos, double promedioPublico,
             double notaFinal, boolean mvp, int miVoto) {

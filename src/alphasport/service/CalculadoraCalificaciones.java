@@ -75,8 +75,7 @@ public final class CalculadoraCalificaciones {
             }
         }
         int idMvp = mvp(local, visitante);
-        long cierraEn = partido.getFinalizadoEn() > 0 ? partido.getFinalizadoEn() + VENTANA_VOTACION_MS : 0;
-        return new CalificacionesPartido(estadoVotacion(partido, ahora), cierraEn, motivo,
+        return new CalificacionesPartido(ReglasVotacion.estado(partido, ahora), ReglasVotacion.cierraEn(partido), motivo,
                 marcarMvp(local, idMvp), marcarMvp(visitante, idMvp), idMvp);
     }
 
@@ -190,7 +189,7 @@ public final class CalculadoraCalificaciones {
             double notaFinal = votos.isEmpty() ? nota : redondear((nota + promedio) / 2);
             int miVoto = dispositivo == null ? 0 : votos.stream().filter(v -> dispositivo.equals(v.getDispositivo()))
                     .mapToInt(VotoJugador::getValor).findFirst().orElse(0);
-            lista.add(new Calificacion(id, idEquipo, j.getNombre(), j.getDorsal(), j.getPosicion(), portero,
+            lista.add(new Calificacion(id, idEquipo, j.getNombre(), j.getDorsal(), j.getPosicion(), j.getFoto(), portero,
                     titulares.contains(id), goles, asistencias, amarillas, rojas, portero ? recibidos : 0, nota,
                     List.copyOf(desglose), votos.size(), redondear(promedio), notaFinal, false, miVoto));
         }
@@ -269,7 +268,7 @@ public final class CalculadoraCalificaciones {
 
     private static List<Calificacion> marcarMvp(List<Calificacion> lista, int idMvp) {
         return lista.stream().map(x -> x.idJugador() != idMvp ? x
-                : new Calificacion(x.idJugador(), x.idEquipo(), x.nombre(), x.dorsal(), x.posicion(), x.portero(),
+                : new Calificacion(x.idJugador(), x.idEquipo(), x.nombre(), x.dorsal(), x.posicion(), x.foto(), x.portero(),
                         x.titular(), x.goles(), x.asistencias(), x.amarillas(), x.rojas(), x.golesRecibidos(),
                         x.notaSistema(), x.desglose(), x.votos(), x.promedioPublico(), x.notaFinal(), true, x.miVoto()))
                 .toList();
