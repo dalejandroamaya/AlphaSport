@@ -662,7 +662,7 @@ class Dialogos {
         // ---- Escudo: se sube con su botón y, una vez puesto, se toca para cambiarlo o eliminarlo.
         String[] escudo = {s(equipo, "escudo")};       // nombre guardado, data URL recién elegida o "" (sin escudo)
         StackPane cajaEscudo = new StackPane();
-        Button subirEscudo = boton("Subir escudo", "mini", "fantasma");
+        Button subirEscudo = boton("Subir escudo", "mini");
         Runnable dibujarEscudo = () -> {
             StackPane vista = Aplicacion.escudo(mapa("id", equipo == null ? 0 : n(equipo, "id"),
                     "nombre", nombre.getText().isBlank() ? "?" : nombre.getText().trim(), "escudo", escudo[0]), 64);
@@ -1580,7 +1580,7 @@ class Dialogos {
 
     /* ---------------------------------------------------------------- datos de prueba */
 
-    /* ---------------------------------------------------------------- detalle de partido (Flashscore) */
+    /* ---------------------------------------------------------------- detalle de partido */
 
     static final String SIN_FORMACION = "Sin definir";
 

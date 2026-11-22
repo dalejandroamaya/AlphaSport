@@ -721,6 +721,9 @@ function dibujarListaPartidos() {
     <section class="bloque-ronda"><h3>${esc(titulo)}</h3><div class="partidos">${ps.map(dibujar).join('')}</div></section>`).join('');
 }
 
+/** Escudo pequeño junto al nombre del equipo en la fila del partido. */
+const escudoFila = (id, nombre) => escudoEquipoHtml(E.equipos.find(e => e.id === id) || { id, nombre }, 'mini');
+
 const fechaDefinida = p => /^\d{4}-\d{2}-\d{2}$/.test(p.fecha || '');
 /** Línea superior de la tarjeta: la fecha solo si existe (no repetir «Por definir» en cada partido). */
 const metaPartido = p => `<span class="partido-meta"><span>${fechaDefinida(p) ? esc(fechaTexto(p)) : ''}</span>
@@ -735,13 +738,13 @@ function htmlPartidoRapido(p) {
   const valor = v => p.jugado ? v : '';
   return `<div class="partido rapido vidrio ${p.jugado ? 'jugado' : ''}" data-rapido="${p.id}">
       ${metaPartido(p)}
-      <span class="local ${p.ganador === p.local ? 'ganador' : ''}">${esc(p.localNombre)}</span>
+      <span class="local ${p.ganador === p.local ? 'ganador' : ''}">${escudoFila(p.local, p.localNombre)}<span class="nombre-equipo">${esc(p.localNombre)}</span></span>
       <span class="rapido-goles">
         <input type="number" min="0" max="99" inputmode="numeric" placeholder="–" value="${valor(p.gl)}" data-lado="gl" aria-label="Goles de ${esc(p.localNombre)}" ${editable ? '' : 'disabled'}>
         <span aria-hidden="true">:</span>
         <input type="number" min="0" max="99" inputmode="numeric" placeholder="–" value="${valor(p.gv)}" data-lado="gv" aria-label="Goles de ${esc(p.visitanteNombre)}" ${editable ? '' : 'disabled'}>
       </span>
-      <span class="visitante ${p.ganador === p.visitante ? 'ganador' : ''}">${esc(p.visitanteNombre)}</span>
+      <span class="visitante ${p.ganador === p.visitante ? 'ganador' : ''}">${escudoFila(p.visitante, p.visitanteNombre)}<span class="nombre-equipo">${esc(p.visitanteNombre)}</span></span>
       <span class="rapido-acciones">
         <span class="error" role="alert" hidden></span>
         <span class="sutil pequeno">${editable ? '' : 'Reprograme este partido desde el detalle.'}</span>
@@ -837,9 +840,9 @@ function htmlPartido(p, previa = false) {
     : previa ? 'Preparar la previa: fecha, sede, formación y XI' : 'Registrar o editar el resultado';
   return `<button class="partido vidrio ${p.jugado ? 'jugado' : ''} ${p.estado === 'EN_JUEGO' ? 'en-vivo' : ''}" data-partido="${p.id}" title="${titulo}">
       ${metaPartido(p)}
-      <span class="local ${p.ganador === p.local ? 'ganador' : ''}">${esc(p.localNombre)}</span>
+      <span class="local ${p.ganador === p.local ? 'ganador' : ''}">${escudoFila(p.local, p.localNombre)}<span class="nombre-equipo">${esc(p.localNombre)}</span></span>
       <span class="resultado">${marcador}</span>
-      <span class="visitante ${p.ganador === p.visitante ? 'ganador' : ''}">${esc(p.visitanteNombre)}</span>
+      <span class="visitante ${p.ganador === p.visitante ? 'ganador' : ''}">${escudoFila(p.visitante, p.visitanteNombre)}<span class="nombre-equipo">${esc(p.visitanteNombre)}</span></span>
       ${p.sede || p.obs ? `<span class="obs">${esc([p.sede, p.obs].filter(Boolean).join(' · '))}</span>` : ''}
       ${incidencias ? `<span class="incidencias">${esc(incidencias)}</span>` : ''}
       ${previa ? fichasPreviaHtml(p) : ''}
@@ -853,7 +856,7 @@ let cambiosTemp = [];
 let titularesTemp = new Map();
 const TITULARES = 11;
 
-/** Administrador: editor de la previa o del resultado (según la pestaña). Visitante: detalle estilo Flashscore. */
+/** Administrador: editor de la previa o del resultado (según la pestaña). Visitante: detalle del partido. */
 function abrirSegunRol(id) {
   if (!puedeEditar()) abrirDetalle(id);
   else if (pestanaPartidos === 'previa') abrirPartido(id, true);
@@ -1534,7 +1537,7 @@ function resumenPartidoHtml(p) {
       : '<p class="sutil ficha-vacia">No se registraron goles, cambios ni tarjetas en este partido.</p>'}`;
 }
 
-/* ---------------------------------------------------------------- detalle del partido (estilo Flashscore) */
+/* ---------------------------------------------------------------- detalle del partido */
 
 let detalleActual = null;
 let detallePestana = 'resumen';
@@ -1794,7 +1797,7 @@ function alineacionesCanchaHtml(a, p) {
     </div>`;
 }
 
-/* ---------------------------------------------------------------- noticias (estilo Flashscore) */
+/* ---------------------------------------------------------------- noticias */
 
 let N = { publicadas: [], pendientes: [], puedeModerar: false };
 

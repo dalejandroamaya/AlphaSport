@@ -1,7 +1,7 @@
 'use strict';
 
 /*
- * Detalle de un partido al estilo Flashscore (versión web sola): cara a cara, racha
+ * Detalle de un partido (versión web sola): cara a cara, racha
  * reciente de cada equipo y alineaciones sobre la cancha según la formación.
  * Es la misma regla que service.DetallePartido en Java y devuelve el mismo JSON
  * que ApiControlador.consultar("partido/{id}").

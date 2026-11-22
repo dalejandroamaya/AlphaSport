@@ -25,7 +25,7 @@ import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
 
 /**
- * Detalle de partido estilo Flashscore: cabecera con el marcador y pestañas «Resumen»,
+ * Detalle de partido: cabecera con el marcador y pestañas «Resumen»,
  * «Calificaciones» [REQ-07], «Cara a cara», «Racha» y «Alineaciones». Dibuja el JSON que
  * entrega ApiControlador.consultar("partido/{id}"); no calcula nada. Lo único que se puede
  * hacer aquí es votar en «Calificaciones» (visitante, dentro de las 24 horas).

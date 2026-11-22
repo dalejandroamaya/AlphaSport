@@ -561,7 +561,7 @@ public class CampeonatoService {
         return partido;
     }
 
-    /** Detalle tipo Flashscore de un partido (cara a cara, racha y alineaciones). Solo lectura. */
+    /** Detalle de un partido (cara a cara, racha y alineaciones). Solo lectura. */
     public DetallePartido detallePartido(int idPartido) {
         exigirCampeonato();
         return new DetallePartido(campeonato, historial(), buscarPartido(idPartido));

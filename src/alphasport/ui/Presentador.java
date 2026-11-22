@@ -403,7 +403,7 @@ public class Presentador {
                 : "Suspendidos (fechas que faltan): " + String.join(", ", suspendidos), "registros", registros);
     }
 
-    /* ---------------------------------------------------------------- detalle de partido (Flashscore) */
+    /* ---------------------------------------------------------------- detalle de partido */
 
     /**
      * JSON del detalle: {partido, caraACara:{resumen, partidos}, racha:{local, visitante}, alineaciones:{local, visitante},

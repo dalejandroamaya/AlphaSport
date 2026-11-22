@@ -119,7 +119,7 @@ classDiagram
 - **La regla real está en `ui.ApiControlador`**: guarda `usuarioActual` y, antes de ejecutar cualquier acción, llama a `exigirAdministrador()`. Solo `login`, `login/visitante` y `logout` son públicas (lista blanca). Con sesión, el visitante solo puede proponer noticias, comentar y calificar jugadores (`RUTAS_VISITANTE`). `ServidorWeb` protege aparte el respaldo y el cierre del programa.
 - Las interfaces solo **ocultan**: escritorio con `Aplicacion.puedeEditar()`, `soloAdmin(...)` y `puedeVer(vista)`; web con el atributo `data-solo-admin` y `puedeVer()` en `app.js`.
 
-## Detalle de partido (estilo Flashscore)
+## Detalle de partido
 
 Al tocar un partido, el visitante ve un detalle de solo lectura con cuatro pestañas; el administrador abre el editor (y desde ahí, «Ver detalle»). **Todo lo que es de UN partido vive solo aquí**, no en el menú de Estadísticas.
 
