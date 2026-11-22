@@ -517,9 +517,25 @@ public class SimulacionFormatos {
             api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", resultado, "accion", "borrar", "confirmado", false));
             boolean previaConservada = !p.isJugado() && p.getCambios().isEmpty() && p.getTitularesLocal().equals(xiLocal)
                     && p.getFormacionVisitante().equals("4-3-3");
-            correcto = previaGuardada && resultadoGuardado && previaConservada;
+            // 4) [REQ-07] Votacion por la API: el admin programa las horas y cierra; el visitante la ve, vota y la deja de ver.
+            resultado.put("horasVotacion", 48);
+            api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", resultado, "accion", "guardar", "confirmado", false));
+            boolean adminNoVota = rechaza(() -> api.ejecutar("calificacion/votar", java.util.Map.of("partido", p.getId(), "jugador", xiLocal.get(0), "valor", 8, "dispositivo", "dispositivo-A1")));
+            api.ejecutar("logout", java.util.Map.of());
+            api.ejecutar("login/visitante", java.util.Map.of());
+            java.util.function.Supplier<Integer> abiertas = () -> ((List<?>) api.consultar("votaciones/dispositivo-A1").get("votaciones")).size();
+            boolean votacion = adminNoVota && p.getHorasVotacion() == 48 && abiertas.get() == 1;
+            java.util.Map<String, Object> votado = api.ejecutar("calificacion/votar", java.util.Map.of("partido", p.getId(), "dispositivo", "dispositivo-A1",
+                    "votos", List.of(java.util.Map.of("jugador", xiLocal.get(0), "valor", 8), java.util.Map.of("jugador", entra, "valor", 9))));
+            votacion &= Boolean.TRUE.equals(votado.get("ok")) && p.getVotos().size() == 2 && abiertas.get() == 1
+                    && rechaza(() -> api.ejecutar("votacion/cerrar", java.util.Map.of("partido", p.getId()))); // el visitante no la cierra
+            api.ejecutar("login", java.util.Map.of("usuario", "admin", "clave", "123"));
+            api.ejecutar("votacion/cerrar", java.util.Map.of("partido", p.getId()));
+            votacion &= abiertas.get() == 0;
+
+            correcto = previaGuardada && resultadoGuardado && previaConservada && votacion;
             if (!correcto) {
-                System.out.println("  previa=" + previaGuardada + " resultado=" + resultadoGuardado + " conservada=" + previaConservada);
+                System.out.println("  previa=" + previaGuardada + " resultado=" + resultadoGuardado + " conservada=" + previaConservada + " votacion=" + votacion);
             }
         } catch (Exception e) {
             correcto = false;
