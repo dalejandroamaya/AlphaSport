@@ -866,3 +866,28 @@
 
 /* Menú «Cambiar / Eliminar» de fotos. */
 .menu-foto { -fx-background-radius: 8; -fx-border-radius: 8; }
+
+/* Menús emergentes (Archivo, campos de texto, fotos): JavaFX les aplica el estilo una primera vez
+   antes de engancharlos a la ventana, cuando aún no heredan los colores del tema, y avisaba
+   «Could not resolve '-texto'». Por eso el menú trae sus propios colores base (oscuros) y, ya
+   enganchado a una ventana en modo claro, toma los claros. */
+.context-menu {
+    -texto: #eef4ff;
+    -sutil: #a3b2ca;
+    -rojo: #ff6b81;
+    -cesped-suave: rgba(46, 229, 152, 0.15);
+    -superficie: #0b1522;
+    -linea: rgba(150, 185, 230, 0.1);
+    -vidrio-denso: -superficie;
+    -vidrio-borde: transparent;
+    -borde: -linea;
+}
+.raiz.claro .context-menu, .context-menu.claro {
+    -texto: #0b1726;
+    -sutil: #4b5b73;
+    -rojo: #c8243f;
+    -cesped-suave: rgba(7, 138, 82, 0.13);
+    -superficie: #ffffff;
+    -linea: rgba(11, 23, 38, 0.09);
+}
+.context-menu .menu-item .label { -fx-font-family: "Inter"; -fx-font-weight: normal; -fx-font-size: 13.5px; }
