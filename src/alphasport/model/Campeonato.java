@@ -73,6 +73,7 @@ public class Campeonato implements Serializable {
             Equipo nuevo = agregarEquipo(viejo.getNombreEquipo());
             nuevo.setEstadio(viejo.getEstadio());
             nuevo.setDivision(viejo.getDivision());
+            nuevo.setEscudo(viejo.getEscudo());
             DirectorTecnico dt = viejo.getDirectorTecnico();
             if (dt != null) {
                 nuevo.setDirectorTecnico(new DirectorTecnico(dt.getNombre(), dt.getDocumento(), dt.getNacionalidad()));
@@ -80,6 +81,7 @@ public class Campeonato implements Serializable {
             for (Jugador j : viejo.getJugadores()) {
                 Jugador copia = new Jugador(j.getNombre(), j.getDocumento(), j.getDorsal(), j.getPosicion());
                 copia.setId(nuevoIdJugador());
+                copia.setFoto(j.getFoto());
                 nuevo.agregarJugador(copia);
             }
         }

@@ -58,7 +58,7 @@ const DetallePartido = (() => {
     return posicion.includes('izquierd') ? 0 : posicion.includes('derech') ? 2 : 1;
   }
 
-  const fichaJugador = j => (j ? { id: j.id, dorsal: j.dorsal, nombre: j.nombre, posicion: j.posicion } : null);
+  const fichaJugador = j => (j ? { id: j.id, dorsal: j.dorsal, nombre: j.nombre, posicion: j.posicion, foto: j.foto || '' } : null);
 
   /**
    * Ubica el XI en la cancha: el portero en la línea 0 y el resto ordenado de atrás

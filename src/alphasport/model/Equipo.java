@@ -20,8 +20,18 @@ public class Equipo implements Serializable {
     private ArrayList<Jugador> jugadores = new ArrayList<>();
     // Division de una liga con divisiones: 0 = Liga A, 1 = Liga B... (0 en archivos anteriores)
     private int division;
+    private String escudo; // imagen del escudo (datos/imagenes); null o "" = escudo con las iniciales
 
     public Equipo() {
+    }
+
+    /** Imagen del escudo ("" si no tiene: se dibuja el escudo con las iniciales). */
+    public String getEscudo() {
+        return escudo == null ? "" : escudo;
+    }
+
+    public void setEscudo(String escudo) {
+        this.escudo = escudo == null ? "" : escudo;
     }
 
     public int getDivision() {

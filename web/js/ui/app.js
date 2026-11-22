@@ -293,6 +293,168 @@ function mostrarVista(nombre) {
 
 /* ---------------------------------------------------------------- equipos */
 
+/* ---------------------------------------------------------------- fotos de jugadores y escudos */
+
+/** Persona «NN» (sin foto), con la misma proporción 3:4 de la foto tipo cédula. */
+const SILUETA_NN = `<svg class="nn" viewBox="0 0 30 40" aria-hidden="true"><rect width="30" height="40" rx="3" class="nn-fondo"/>
+  <circle cx="15" cy="13.5" r="6.5" class="nn-figura"/><path d="M3.5 40c0-8 5-12.5 11.5-12.5S26.5 32 26.5 40z" class="nn-figura"/>
+  <text x="15" y="37.5" text-anchor="middle" class="nn-texto">NN</text></svg>`;
+
+/** Foto tipo cédula de un jugador, o la persona «NN» si no tiene. */
+const fotoCedulaHtml = (foto, nombre, clase = '') => foto
+  ? `<img class="foto-cedula ${clase}" src="${esc(servicio.urlFoto(foto))}" alt="Foto de ${esc(nombre)}" loading="lazy">`
+  : `<span class="foto-cedula nn-caja ${clase}" role="img" aria-label="${esc(nombre)}: sin foto">${SILUETA_NN}</span>`;
+
+/** Escudo del equipo: su imagen o, si no tiene, el escudo con las iniciales. */
+function escudoEquipoHtml(e, clase = '') {
+  const id = e ? e.id : 0, nombre = e ? e.nombre || '?' : '?';
+  return e && e.escudo
+    ? `<div class="escudo con-imagen ${clase}"><img src="${esc(servicio.urlFoto(e.escudo))}" alt="Escudo de ${esc(nombre)}"></div>`
+    : `<div class="escudo ${clase}" style="--tono:${(id * 47) % 360}" aria-hidden="true">${esc(String(nombre).slice(0, 2).toUpperCase())}</div>`;
+}
+
+/** Abre el selector de archivos del sistema; devuelve el archivo o null si se cancela. */
+function elegirImagen() {
+  return new Promise(resolver => {
+    const entrada = document.createElement('input');
+    entrada.type = 'file';
+    entrada.accept = 'image/jpeg,image/png,image/gif,image/webp';
+    let listo = false;
+    const fin = archivo => { if (!listo) { listo = true; resolver(archivo); } };
+    entrada.addEventListener('change', () => fin(entrada.files[0] || null));
+    entrada.addEventListener('cancel', () => fin(null));
+    entrada.click();
+  });
+}
+
+/** Abre la imagen ya derecha (las fotos de celular traen su giro en el EXIF). */
+async function abrirImagen(archivo) {
+  try {
+    return await createImageBitmap(archivo, { imageOrientation: 'from-image' });
+  } catch (e) {
+    const url = URL.createObjectURL(archivo);
+    try {
+      return await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = url; });
+    } catch (e2) {
+      throw new Error('No se pudo abrir la imagen: use una foto JPG o PNG.');
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+  }
+}
+
+/** Dibuja reduciendo a la mitad varias veces antes del último paso (más nítido que de golpe). */
+function dibujarReducida(ctx, img, sx, sy, sw, sh, dx, dy, dw, dh) {
+  let fuente = img, x = sx, y = sy, w = sw, h = sh;
+  while (w / 2 >= dw && h / 2 >= dh) {
+    const lienzo = document.createElement('canvas');
+    lienzo.width = Math.max(1, Math.round(w / 2));
+    lienzo.height = Math.max(1, Math.round(h / 2));
+    const c = lienzo.getContext('2d');
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(fuente, x, y, w, h, 0, 0, lienzo.width, lienzo.height);
+    fuente = lienzo; x = 0; y = 0; w = lienzo.width; h = lienzo.height;
+  }
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(fuente, x, y, w, h, dx, dy, dw, dh);
+}
+
+/**
+ * Deja la imagen en su formato fijo (igual que FotosService en Java):
+ *  - jugador: foto tipo cédula 3:4, recortada al centro con la cara arriba, 240x320 JPG;
+ *  - escudo: completo (sin recortar) en un cuadrado transparente de 256x256 PNG.
+ */
+async function prepararImagen(archivo, tipo) {
+  if (!/^image\/(jpeg|png|gif|webp)$/.test(archivo.type)) throw new Error('El archivo no es una imagen JPG, PNG, GIF o WEBP.');
+  if (archivo.size > 15 * 1024 * 1024) throw new Error('La foto es muy pesada (máximo 15 MB).');
+  const img = await abrirImagen(archivo);
+  const w = img.width, h = img.height;
+  if (!w || !h) throw new Error('La imagen está vacía.');
+  if (w * h > 40e6) throw new Error('La foto es demasiado grande (máximo 40 megapíxeles).');
+  const lienzo = document.createElement('canvas');
+  const ctx = lienzo.getContext('2d');
+  if (tipo === 'escudo') {
+    lienzo.width = lienzo.height = 256;
+    const caja = 240, escala = Math.min(caja / w, caja / h);
+    const dw = Math.max(1, Math.round(w * escala)), dh = Math.max(1, Math.round(h * escala));
+    dibujarReducida(ctx, img, 0, 0, w, h, (256 - dw) / 2, (256 - dh) / 2, dw, dh);
+    return lienzo.toDataURL('image/png');
+  }
+  lienzo.width = 240;
+  lienzo.height = 320;
+  const proporcion = 240 / 320;
+  let cx = 0, cy = 0, cw = w, ch = h;
+  if (w / h > proporcion) { cw = Math.max(1, Math.round(h * proporcion)); cx = (w - cw) / 2; }
+  else { ch = Math.max(1, Math.round(w / proporcion)); cy = (h - ch) * 0.3; }
+  ctx.fillStyle = '#fff'; // las PNG con transparencia quedan sobre fondo blanco, como una cédula
+  ctx.fillRect(0, 0, 240, 320);
+  dibujarReducida(ctx, img, cx, cy, cw, ch, 0, 0, 240, 320);
+  return lienzo.toDataURL('image/jpeg', 0.88);
+}
+
+/** Elige un archivo y lo deja en su formato. Devuelve la data URL, o null si se canceló o falló (con aviso). */
+async function pedirImagen(tipo) {
+  const archivo = await elegirImagen();
+  if (!archivo) return null;
+  try {
+    return await prepararImagen(archivo, tipo);
+  } catch (e) {
+    aviso(e.message);
+    return null;
+  }
+}
+
+/**
+ * Menú pequeño junto a la foto o el escudo tocado: «Cambiar» y, si ya tiene, «Eliminar».
+ * Devuelve 'cambiar', 'quitar' o null. Se dibuja dentro del diálogo abierto para quedar encima.
+ */
+let menuFotoAbierto = null;
+function menuFoto(ancla, tieneFoto, cosa) {
+  if (menuFotoAbierto) menuFotoAbierto(null);
+  return new Promise(resolver => {
+    const menu = document.createElement('div');
+    menu.className = 'menu-foto vidrio';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = `<button type="button" role="menuitem" data-op="cambiar">${tieneFoto ? 'Cambiar' : 'Subir'} ${cosa}</button>`
+      + (tieneFoto ? `<button type="button" role="menuitem" class="opcion-peligro" data-op="quitar">Eliminar ${cosa}</button>` : '');
+    (ancla.closest('dialog[open]') || document.body).append(menu);
+    const r = ancla.getBoundingClientRect(), mw = menu.offsetWidth, mh = menu.offsetHeight;
+    menu.style.left = Math.max(8, Math.min(innerWidth - mw - 8, r.left + r.width / 2 - mw / 2)) + 'px';
+    menu.style.top = (r.bottom + mh + 8 > innerHeight ? Math.max(8, r.top - mh - 6) : r.bottom + 6) + 'px';
+    const cerrar = op => {
+      menuFotoAbierto = null;
+      document.removeEventListener('pointerdown', fuera, true);
+      document.removeEventListener('keydown', tecla, true);
+      menu.remove();
+      resolver(op);
+    };
+    const fuera = e => { if (!menu.contains(e.target)) cerrar(null); };
+    const tecla = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cerrar(null); ancla.focus(); } };
+    menu.addEventListener('click', e => { const b = e.target.closest('[data-op]'); if (b) cerrar(b.dataset.op); });
+    setTimeout(() => {
+      document.addEventListener('pointerdown', fuera, true);
+      document.addEventListener('keydown', tecla, true);
+    });
+    menuFotoAbierto = cerrar;
+    menu.querySelector('button').focus();
+  });
+}
+
+/** Cambiar o quitar una foto ya guardada (jugador o escudo) desde donde se toque. */
+async function editarFotoGuardada(ancla, tipo, actual, enviar) {
+  const op = actual ? await menuFoto(ancla, true, tipo === 'escudo' ? 'escudo' : 'foto') : 'cambiar';
+  if (!op) return false;
+  let imagen = '';
+  if (op === 'cambiar') {
+    imagen = await pedirImagen(tipo);
+    if (!imagen) return false;
+  }
+  const r = await enviar(imagen);
+  if (!r.ok) { if (r.codigo !== 'LOGIN') mensaje('No se pudo guardar', r.error); return false; }
+  aviso(r.mensaje);
+  return true;
+}
+
 function renderEquipos() {
   const iniciado = E.campeonato.iniciado;
   $('nombreRapido').disabled = iniciado;
@@ -311,7 +473,9 @@ function renderEquipos() {
       <select data-division-equipo="${e.id}">${divisiones.map(d => `<option value="${d.indice}" ${d.indice === e.division ? 'selected' : ''}>${esc(d.nombre)}</option>`).join('')}</select></label>` : '';
   const tarjeta = e => `
     <article class="tarjeta-equipo vidrio ${e.retirado ? 'retirado' : ''}">
-      <div class="escudo" style="--tono:${(e.id * 47) % 360}">${esc(e.nombre.slice(0, 2).toUpperCase())}</div>
+      ${puedeEditar() && !e.retirado
+        ? `<button type="button" class="escudo-boton" data-escudo-equipo="${e.id}" title="Cambiar o quitar el escudo de ${esc(e.nombre)}">${escudoEquipoHtml(e)}</button>`
+        : escudoEquipoHtml(e)}
       <div class="equipo-datos">
         <h3>${esc(e.nombre)}${e.retirado ? ' <span class="etiqueta retirado">Retirado</span>' : ''}</h3>
         <p class="sutil pequeno">${ICONO.persona}DT: ${e.dt ? esc(e.dt.nombre) : 'Sin asignar'} · ${e.jugadores.length === 1 ? '1 jugador' : e.jugadores.length + ' jugadores'}</p>
@@ -365,9 +529,50 @@ async function accionDivision(ruta, cuerpo) {
 let equipoEditando = null;
 let jugadoresTemp = [];
 
+/** Escudo y foto que se están editando en el diálogo del equipo (se guardan con «Guardar equipo»). */
+let escudoTemp = '';
+let fotoNuevaJugador = '';
+
+function renderEscudoTemp() {
+  const e = { id: equipoEditando ? equipoEditando.id : 0, nombre: $('eqNombre').value.trim() || '?', escudo: escudoTemp };
+  $('eqEscudo').innerHTML = escudoEquipoHtml(e, 'grande');
+  $('eqEscudo').title = escudoTemp ? 'Cambiar o quitar el escudo' : 'Subir el escudo';
+  $('eqSubirEscudo').textContent = escudoTemp ? 'Cambiar escudo' : 'Subir escudo';
+}
+
+function renderFotoNueva() {
+  $('jgFoto').innerHTML = fotoCedulaHtml(fotoNuevaJugador, $('jgNombre').value.trim() || 'Jugador nuevo', 'mini')
+    + `<span>${fotoNuevaJugador ? 'Cambiar foto' : 'Foto'}</span>`;
+}
+
+async function tocarEscudoDialogo(ancla) {
+  const op = escudoTemp ? await menuFoto(ancla, true, 'escudo') : 'cambiar';
+  if (op === 'quitar') escudoTemp = '';
+  if (op === 'cambiar') { const img = await pedirImagen('escudo'); if (img) escudoTemp = img; }
+  renderEscudoTemp();
+}
+
+async function tocarFotoNueva(ancla) {
+  const op = fotoNuevaJugador ? await menuFoto(ancla, true, 'foto') : 'cambiar';
+  if (op === 'quitar') fotoNuevaJugador = '';
+  if (op === 'cambiar') { const img = await pedirImagen('jugador'); if (img) fotoNuevaJugador = img; }
+  renderFotoNueva();
+}
+
+async function tocarFotoFila(ancla, i) {
+  const j = jugadoresTemp[i];
+  if (!j) return;
+  const op = j.foto ? await menuFoto(ancla, true, 'foto') : 'cambiar';
+  if (op === 'quitar') j.foto = '';
+  if (op === 'cambiar') { const img = await pedirImagen('jugador'); if (img) j.foto = img; }
+  renderJugadores();
+}
+
 function abrirEquipo(equipo) {
   equipoEditando = equipo;
   jugadoresTemp = equipo ? equipo.jugadores.map(j => Object.assign({}, j)) : [];
+  escudoTemp = equipo ? equipo.escudo || '' : '';
+  fotoNuevaJugador = '';
   $('eqTitulo').textContent = equipo ? 'Equipo: ' + equipo.nombre : 'Agregar equipo';
   $('eqNombre').value = equipo ? equipo.nombre : '';
   $('eqEstadio').value = equipo ? equipo.estadio : '';
@@ -379,6 +584,8 @@ function abrirEquipo(equipo) {
   $('jgError').hidden = true;
   limpiarFormJugador();
   renderJugadores();
+  renderEscudoTemp();
+  renderFotoNueva();
   $('dlgEquipo').showModal();
 }
 
@@ -393,11 +600,12 @@ function limpiarFormJugador() {
 function renderJugadores() {
   jugadoresTemp.sort((a, b) => a.dorsal - b.dorsal);
   $('tablaJugadores').innerHTML = jugadoresTemp.length
-    ? jugadoresTemp.map((j, i) => `<tr><td class="num"><span class="dorsal">${j.dorsal}</span></td><td>${esc(j.nombre)}</td><td>${esc(j.documento)}</td>
+    ? jugadoresTemp.map((j, i) => `<tr><td><button type="button" class="foto-boton-fila" data-foto-fila="${i}" title="${j.foto ? 'Cambiar o quitar la foto' : 'Subir la foto'} de ${esc(j.nombre)}">${fotoCedulaHtml(j.foto, j.nombre, 'mini')}</button></td>
+        <td class="num"><span class="dorsal">${j.dorsal}</span></td><td>${esc(j.nombre)}</td><td>${esc(j.documento)}</td>
         <td>${esc(j.posicion)}</td><td>${(j.amarillas ? tarjetaHtml('AMARILLA', `<span class="solo-lector">Amarillas: </span>${j.amarillas} `) : '') + (j.rojas ? tarjetaHtml('ROJA', `<span class="solo-lector">Rojas: </span>${j.rojas} `) : '')
         + (j.pendientes ? `<span class="etiqueta suspendido">Suspendido ${j.pendientes}</span>` : '')}</td>
         <td class="acciones-fila"><button type="button" class="btn mini peligro" data-quitar-jugador="${i}">Quitar</button></td></tr>`).join('')
-    : '<tr><td colspan="6" class="vacia">Sin jugadores todavía.</td></tr>';
+    : '<tr><td colspan="7" class="vacia">Sin jugadores todavía.</td></tr>';
 }
 
 function agregarJugador() {
@@ -409,9 +617,11 @@ function agregarJugador() {
   $('jgError').textContent = error || '';
   $('jgError').hidden = !error;
   if (error) return;
-  jugadoresTemp.push({ id: 0, nombre, documento: $('jgDocumento').value.trim(), dorsal, posicion: $('jgPosicion').value });
+  jugadoresTemp.push({ id: 0, nombre, documento: $('jgDocumento').value.trim(), dorsal, posicion: $('jgPosicion').value, foto: fotoNuevaJugador });
+  fotoNuevaJugador = '';
   renderJugadores();
   limpiarFormJugador();
+  renderFotoNueva();
   $('jgNombre').focus();
 }
 
@@ -421,7 +631,8 @@ async function guardarEquipo(e) {
     id: equipoEditando ? equipoEditando.id : null,
     nombre: $('eqNombre').value, estadio: $('eqEstadio').value,
     dt: { nombre: $('dtNombre').value, documento: $('dtDocumento').value, nacionalidad: $('dtNacionalidad').value },
-    jugadores: jugadoresTemp.map(({ id, nombre, documento, dorsal, posicion }) => ({ id, nombre, documento, dorsal, posicion }))
+    jugadores: jugadoresTemp.map(({ id, nombre, documento, dorsal, posicion, foto }) => ({ id, nombre, documento, dorsal, posicion, foto: foto || '' })),
+    escudo: escudoTemp
   });
   $('eqError').hidden = r.ok;
   if (!r.ok) { $('eqError').textContent = r.error; return; }
@@ -1329,7 +1540,7 @@ let detalleActual = null;
 let detallePestana = 'resumen';
 
 /** Pide el detalle al servicio (resumen, cara a cara, racha y alineaciones) y lo muestra. Es de solo lectura. */
-async function abrirDetalle(id) {
+async function abrirDetalle(id, pestana = 'resumen') {
   const r = await servicio.detalle(id);
   if (!r.ok) {
     if (r.codigo === 'LOGIN') volverAlLogin('Su sesión terminó. Inicie sesión de nuevo.');
@@ -1337,7 +1548,7 @@ async function abrirDetalle(id) {
     return;
   }
   detalleActual = r;
-  detallePestana = 'resumen';
+  detallePestana = pestana;
   avisoCalificacion = null;
   const p = r.partido;
   $('dpContexto').textContent = contextoPartido(p);
@@ -1347,7 +1558,13 @@ async function abrirDetalle(id) {
   $('dpCerrar').focus();
 }
 
-const escudoHtml = (id, nombre, clase = '') => `<div class="escudo ${clase}" style="--tono:${(id * 47) % 360}" aria-hidden="true">${esc(String(nombre).slice(0, 2).toUpperCase())}</div>`;
+/** Escudo de la cabecera del detalle: el administrador lo toca para cambiarlo o quitarlo. */
+function escudoHtml(id, nombre) {
+  const e = equipoPorId(id) || { id, nombre, escudo: '' };
+  return puedeEditar()
+    ? `<button type="button" class="escudo-boton" data-escudo-detalle="${id}" title="Cambiar o quitar el escudo de ${esc(nombre)}">${escudoEquipoHtml(e)}</button>`
+    : escudoEquipoHtml(e);
+}
 
 function cabeceraDetalle(p) {
   const marcador = conMarcador(p)
@@ -1540,8 +1757,14 @@ function alineacionesCanchaHtml(a, p) {
         // Si salió en un cambio, el minuto va debajo del nombre.
         const salio = j && cambios.find(x => x.sale === j.id);
         const titulo = j ? `#${j.dorsal} ${j.nombre} · ${j.posicion || ''}${salio ? ` · salió en el minuto ${salio.minuto}` : ''}` : 'Por confirmar';
-        return `<div class="ficha-cancha" style="left:${izq}%;top:${arr}%" title="${esc(titulo)}">
-            <span class="ficha-dorsal ${arriba ? 'ficha-visitante' : 'ficha-local'}">${j ? j.dorsal : '?'}</span>
+        const dorsal = `<span class="ficha-dorsal ${arriba ? 'ficha-visitante' : 'ficha-local'}">${j ? j.dorsal : '?'}</span>`;
+        // Con jugador: su foto tipo cédula (o «NN») con el dorsal encima. El administrador la toca para cambiarla.
+        const foto = !j ? dorsal : puedeEditar()
+          ? `<button type="button" class="ficha-foto ${arriba ? 'ficha-visitante' : 'ficha-local'}" data-foto-equipo="${arriba ? p.visitante : p.local}" data-foto-jugador="${j.id}"
+              title="${j.foto ? 'Cambiar o quitar la foto' : 'Subir la foto'} de ${esc(j.nombre)}">${fotoCedulaHtml(j.foto, j.nombre)}${dorsal}</button>`
+          : `<span class="ficha-foto ${arriba ? 'ficha-visitante' : 'ficha-local'}">${fotoCedulaHtml(j.foto, j.nombre)}${dorsal}</span>`;
+        return `<div class="ficha-cancha${j ? ' con-foto' : ''}" style="left:${izq}%;top:${arr}%" title="${esc(titulo)}">
+            ${foto}
             ${j ? `<span class="ficha-nombre">${esc(apellido(j.nombre))}</span>` : ''}
             ${salio ? `<span class="ficha-sale" aria-hidden="true">↓ ${minutoTexto(salio.minuto)}</span>` : ''}
             <span class="solo-lector">${esc(titulo)}</span></div>`;
@@ -1561,7 +1784,7 @@ function alineacionesCanchaHtml(a, p) {
   const nota = !a.local.confirmada || !a.visitante.confirmada
     ? '<p class="sutil pequeno">Las casillas con «?» son puestos por confirmar: el XI inicial se registra al abrir el partido.</p>' : '';
   return `<div class="detalle-alineaciones">
-      <div class="cancha" role="img" aria-label="Alineaciones sobre la cancha: ${esc(p.visitanteNombre)} arriba y ${esc(p.localNombre)} abajo">
+      <div class="cancha" role="group" aria-label="Alineaciones sobre la cancha: ${esc(p.visitanteNombre)} arriba y ${esc(p.localNombre)} abajo">
         <span class="cancha-medio"></span><span class="cancha-circulo"></span>
         <span class="cancha-area arriba"></span><span class="cancha-area abajo"></span>
         <span class="cancha-chica arriba"></span><span class="cancha-chica abajo"></span>
@@ -2220,9 +2443,26 @@ function conectarEventos() {
     const selector = e.target.closest('[data-voto-de]');
     if (selector) document.querySelector(`[data-votar="${selector.dataset.votoDe}"]`).disabled = !selector.value;
   });
-  $('dpPanel').addEventListener('click', e => {
+  $('dpPanel').addEventListener('click', async e => {
     const boton = e.target.closest('[data-votar]');
     if (boton) votarJugador(Number(boton.dataset.votar));
+    // Fotos en la alineación: el administrador toca al jugador para cambiar o quitar su foto.
+    const ficha = e.target.closest('[data-foto-jugador]');
+    if (ficha && detalleActual) {
+      const idEquipo = Number(ficha.dataset.fotoEquipo), idJugador = Number(ficha.dataset.fotoJugador);
+      const j = (equipoPorId(idEquipo) || { jugadores: [] }).jugadores.find(x => x.id === idJugador);
+      const hecho = await editarFotoGuardada(ficha, 'jugador', j && j.foto,
+        imagen => accion('jugador/foto', { equipo: idEquipo, jugador: idJugador, imagen }, { silencioso: true }));
+      if (hecho) abrirDetalle(detalleActual.partido.id, 'alineaciones');
+    }
+  });
+  $('dpCabecera').addEventListener('click', async e => {
+    const escudo = e.target.closest('[data-escudo-detalle]');
+    if (!escudo || !detalleActual) return;
+    const eq = equipoPorId(Number(escudo.dataset.escudoDetalle));
+    if (!eq) return;
+    const hecho = await editarFotoGuardada(escudo, 'escudo', eq.escudo, imagen => accion('equipo/escudo', { id: eq.id, imagen }, { silencioso: true }));
+    if (hecho) abrirDetalle(detalleActual.partido.id, detallePestana);
   });
   $('dlgDetalle').querySelector('.detalle-pestanas').addEventListener('keydown', e => {
     const pestanas = [...document.querySelectorAll('[data-dp]')], i = pestanas.findIndex(b => b.dataset.dp === detallePestana);
@@ -2363,15 +2603,28 @@ function conectarEventos() {
     if (s) accionDivision('equipo/division', { id: Number(s.dataset.divisionEquipo), division: Number(s.value) });
   });
   $('gridEquipos').addEventListener('click', e => {
+    const escudo = e.target.closest('[data-escudo-equipo]');
+    if (escudo) {
+      const eq = equipoPorId(Number(escudo.dataset.escudoEquipo));
+      editarFotoGuardada(escudo, 'escudo', eq.escudo, imagen => accion('equipo/escudo', { id: eq.id, imagen }, { silencioso: true }));
+      return;
+    }
     const editar = e.target.closest('[data-editar-equipo]'), quitar = e.target.closest('[data-quitar-equipo]');
     if (editar) abrirEquipo(equipoPorId(Number(editar.dataset.editarEquipo)));
     if (quitar) quitarEquipo(Number(quitar.dataset.quitarEquipo));
   });
   $('formEquipo').addEventListener('submit', guardarEquipo);
+  $('eqEscudo').addEventListener('click', e => tocarEscudoDialogo(e.currentTarget));
+  $('eqSubirEscudo').addEventListener('click', async () => { const img = await pedirImagen('escudo'); if (img) { escudoTemp = img; renderEscudoTemp(); } });
+  $('eqNombre').addEventListener('input', () => { if (!escudoTemp) renderEscudoTemp(); });
+  $('jgFoto').addEventListener('click', e => tocarFotoNueva(e.currentTarget));
+  $('jgNombre').addEventListener('input', renderFotoNueva);
   $('eqCancelar').addEventListener('click', () => $('dlgEquipo').close());
   $('jgAgregar').addEventListener('click', agregarJugador);
   $('jgNombre').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarJugador(); } });
   $('tablaJugadores').addEventListener('click', e => {
+    const f = e.target.closest('[data-foto-fila]');
+    if (f) { tocarFotoFila(f, Number(f.dataset.fotoFila)); return; }
     const b = e.target.closest('[data-quitar-jugador]');
     if (b) { jugadoresTemp.splice(Number(b.dataset.quitarJugador), 1); renderJugadores(); }
   });

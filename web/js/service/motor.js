@@ -1017,6 +1017,7 @@ function importarEquipos(destino, origen) {
     if (!e) continue;
     e.estadio = viejo.estadio || '';
     e.division = viejo.division || 0;
+    e.escudo = viejo.escudo || '';
     e.dt = viejo.dt ? Object.assign({}, viejo.dt) : null;
     e.jugadores = viejo.jugadores.map(j => Object.assign({}, j, { id: 0 }));
     for (const j of e.jugadores) j.id = m.nuevoIdJugador();

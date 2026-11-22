@@ -86,6 +86,17 @@ public class ServidorWeb {
                     detener();
                     System.exit(0);
                 }).start();
+            } else if (metodo.equals("GET") && ruta.startsWith("foto/")) {
+                // Foto tipo cedula de un jugador o escudo de un equipo.
+                String nombre = ruta.substring("foto/".length());
+                byte[] foto = api.foto(nombre);
+                if (foto == null) {
+                    enviar(intercambio, 404, "text/plain; charset=utf-8", "No encontrado".getBytes(StandardCharsets.UTF_8));
+                } else {
+                    // cada foto nueva tiene un nombre nuevo: se puede guardar en cache sin miedo
+                    intercambio.getResponseHeaders().set("Cache-Control", "private, max-age=86400, immutable");
+                    enviar(intercambio, 200, nombre.endsWith(".png") ? "image/png" : "image/jpeg", foto);
+                }
             } else if (metodo.equals("GET") && ruta.startsWith("imagen/")) {
                 // Foto de una noticia: solo las de noticias publicadas (o todas para el administrador).
                 String nombre = ruta.substring("imagen/".length());

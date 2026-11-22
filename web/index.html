@@ -261,9 +261,15 @@
   <dialog id="dlgEquipo" class="dialogo">
     <form id="formEquipo">
       <h3 id="eqTitulo">Equipo</h3>
-      <div class="rejilla-2">
-        <label class="campo">Nombre del equipo<input id="eqNombre" maxlength="60" required></label>
-        <label class="campo">Estadio / cancha<input id="eqEstadio" maxlength="60"></label>
+      <div class="eq-cabecera">
+        <div class="eq-escudo">
+          <button type="button" id="eqEscudo" class="escudo-boton" aria-label="Escudo del equipo"></button>
+          <button type="button" id="eqSubirEscudo" class="btn mini fantasma">Subir escudo</button>
+        </div>
+        <div class="rejilla-2">
+          <label class="campo">Nombre del equipo<input id="eqNombre" maxlength="60" required></label>
+          <label class="campo">Estadio / cancha<input id="eqEstadio" maxlength="60"></label>
+        </div>
       </div>
       <fieldset class="grupo"><legend>Director técnico</legend>
         <div class="rejilla-3">
@@ -274,6 +280,7 @@
       </fieldset>
       <fieldset class="grupo"><legend>Plantilla</legend>
         <div class="fila-jugador">
+          <button type="button" id="jgFoto" class="foto-boton" aria-label="Foto tipo cédula del jugador"></button>
           <label class="campo">Dorsal<input id="jgDorsal" type="number" min="1" max="99"></label>
           <label class="campo">Nombre<input id="jgNombre" maxlength="60"></label>
           <label class="campo">Documento<input id="jgDocumento" maxlength="20"></label>
@@ -282,7 +289,7 @@
         </div>
         <p id="jgError" class="error" role="alert" hidden></p>
         <div class="tabla-envoltura"><table class="tabla compacta">
-          <thead><tr><th class="num">#</th><th>Jugador</th><th>Documento</th><th>Posición</th><th>Tarjetas</th><th></th></tr></thead>
+          <thead><tr><th><span class="solo-lector">Foto</span></th><th class="num">#</th><th>Jugador</th><th>Documento</th><th>Posición</th><th>Tarjetas</th><th></th></tr></thead>
           <tbody id="tablaJugadores"></tbody>
         </table></div>
       </fieldset>
