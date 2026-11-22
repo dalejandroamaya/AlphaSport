@@ -90,7 +90,7 @@ const Calificaciones = (() => {
       const promedio = votos.length ? votos.reduce((s, v) => s + v.valor, 0) / votos.length : 0;
       const propio = dispositivo ? votos.find(v => v.dispositivo === dispositivo) : null;
       return {
-        id, equipo: idEquipo, nombre: j.nombre, dorsal: j.dorsal, posicion: j.posicion || '', portero, titular: titulares.has(id),
+        id, equipo: idEquipo, nombre: j.nombre, dorsal: j.dorsal, posicion: j.posicion || '', foto: j.foto || '', portero, titular: titulares.has(id),
         goles, asistencias, amarillas, rojas, golesRecibidos: portero ? recibidos : 0, notaSistema: nota, desglose,
         votos: votos.length, promedioPublico: redondear(promedio), notaFinal: votos.length ? redondear((nota + promedio) / 2) : nota,
         mvp: false, miVoto: propio ? propio.valor : 0
@@ -110,7 +110,6 @@ const Calificaciones = (() => {
 
   /** Mismo JSON que Presentador.calificaciones en Java. */
   function calcular(c, p, ahora, dispositivo) {
-    const votacion = estadoVotacion(p, ahora);
     let motivo = '', local = [], visitante = [];
     if (!P.jugado(p)) motivo = 'Las calificaciones aparecen cuando el partido termina.';
     else if (esWalkover(p)) motivo = 'Partido definido por W.O.: no se jugó, así que no hay calificaciones.';
@@ -122,7 +121,7 @@ const Calificaciones = (() => {
     const idMvp = mvp(local, visitante);
     [...local, ...visitante].forEach(x => { x.mvp = x.id === idMvp; });
     return {
-      votacion, cierraEn: p.finalizadoEn > 0 ? p.finalizadoEn + VENTANA_VOTACION_MS : 0,
+      votacion: ReglasVotacion.estado(p, ahora), cierraEn: ReglasVotacion.cierraEn(p),
       disponible: local.length > 0 || visitante.length > 0, motivo, mvp: idMvp, local, visitante
     };
   }
@@ -159,5 +158,5 @@ const Calificaciones = (() => {
     }
   }
 
-  return { calcular, votar, marcarFinal, notaSistema, redondear, estadoVotacion, VENTANA_VOTACION_MS };
+  return { calcular, votar, marcarFinal, notaSistema, redondear, estadoVotacion, VENTANA_VOTACION_MS, participantes, esWalkover };
 })();
