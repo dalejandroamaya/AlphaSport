@@ -678,26 +678,51 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 .forma-E { background: #f7c75a; }
 .forma-D { background: #ff6b81; }
 
-/* Cancha: el visitante arriba y el local abajo */
-.detalle-alineaciones { display: grid; grid-template-columns: minmax(0, 520px) minmax(200px, 1fr); gap: 1.4rem; align-items: start; }
+/* Cancha horizontal: el local a la izquierda y el visitante a la derecha. Todo lo de adentro se mide en «cqw»
+   (porcentaje del ancho de la cancha), así se encoge junto con ella y nunca se corta. */
+.cancha-marco { display: grid; justify-items: center; }
 .cancha {
-  position: relative; width: 100%; aspect-ratio: 520 / 720; border-radius: 14px; overflow: hidden;
-  background: repeating-linear-gradient(180deg, #1d7a49 0 6.25%, #1a6e42 6.25% 12.5%);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .35), inset 0 0 0 14px transparent;
+  container-type: inline-size; position: relative; aspect-ratio: 960 / 410; border-radius: 12px; overflow: hidden;
+  width: min(100%, max(560px, calc((100vh - 330px) * 2.34))); /* completa a lo alto de la ventana */
+  background: repeating-linear-gradient(90deg, #1d7a49 0 6.25%, #1a6e42 6.25% 12.5%);
 }
-.cancha::before { content: ''; position: absolute; inset: 2%; border: 2px solid rgba(255, 255, 255, .55); border-radius: 2px; }
-.cancha-medio { position: absolute; left: 2%; right: 2%; top: 50%; height: 0; border-top: 2px solid rgba(255, 255, 255, .55); }
-.cancha-circulo { position: absolute; left: 50%; top: 50%; width: 24%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 2px solid rgba(255, 255, 255, .55); border-radius: 50%; }
-.cancha-area, .cancha-chica { position: absolute; left: 50%; transform: translateX(-50%); border: 2px solid rgba(255, 255, 255, .55); }
-.cancha-area { width: 56%; height: 14%; }
-.cancha-chica { width: 28%; height: 5.5%; }
-.cancha-area.arriba, .cancha-chica.arriba { top: 2%; border-top: 0; }
-.cancha-area.abajo, .cancha-chica.abajo { bottom: 2%; border-bottom: 0; }
-.ficha-cancha { position: absolute; width: 90px; transform: translate(-50%, -17px); display: flex; flex-direction: column; align-items: center; gap: 3px; z-index: 1; }
-.ficha-dorsal { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 2px solid; font-family: var(--titulos); font-weight: 800; font-size: .9rem; box-shadow: 0 3px 8px rgba(0, 0, 0, .35); }
+.cancha::before { content: ''; position: absolute; inset: 2.6% 1.1%; border: 2px solid rgba(255, 255, 255, .55); border-radius: 2px; }
+.cancha-medio { position: absolute; top: 2.6%; bottom: 2.6%; left: 50%; width: 0; border-left: 2px solid rgba(255, 255, 255, .55); transform: translateX(-50%); }
+.cancha-circulo { position: absolute; left: 50%; top: 50%; height: 30%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 2px solid rgba(255, 255, 255, .55); border-radius: 50%; }
+.cancha-area, .cancha-chica { position: absolute; top: 50%; transform: translateY(-50%); border: 2px solid rgba(255, 255, 255, .55); }
+.cancha-area { width: 13%; height: 58%; }
+.cancha-chica { width: 5%; height: 30%; }
+.cancha-area.izq, .cancha-chica.izq { left: 1.1%; border-left: 0; }
+.cancha-area.der, .cancha-chica.der { right: 1.1%; border-right: 0; }
+.ficha-cancha { position: absolute; width: 9.4cqw; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: .25cqw; z-index: 1; }
+.ficha-dorsal { display: grid; place-items: center; width: clamp(18px, 3.4cqw, 34px); height: clamp(18px, 3.4cqw, 34px); border-radius: 50%; border: 2px solid; font-family: var(--titulos); font-weight: 800; font-size: clamp(9px, 1.4cqw, 14px); }
 .ficha-local { background: #eef4ff; color: #0b1726; border-color: #2ee598; }
 .ficha-visitante { background: #0b1726; color: #eef4ff; border-color: #f7c75a; }
-.ficha-sale { color: #ffb3c0; font-size: .66rem; font-weight: 600; line-height: 1; text-shadow: 0 1px 4px rgba(0, 0, 0, .85); }
+.ficha-nombre { max-width: 100%; color: #fff; font-size: clamp(7.5px, 1.2cqw, 12px); font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 4px rgba(0, 0, 0, .85); }
+.ficha-sale { position: absolute; left: calc(100% + 2px); top: 0; color: #ffb3c0; font-size: clamp(7px, 1.05cqw, 11px); font-weight: 600; line-height: 1; white-space: nowrap; text-shadow: 0 1px 4px rgba(0, 0, 0, .85); }
+.rotulo-linea { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.suplentes { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .4rem; }
+.suplente { display: flex; align-items: center; gap: .4rem; padding: .2rem .5rem .2rem .25rem; border-radius: 6px; background: var(--campo-fondo); font-size: .82rem; }
+.foto-cedula.banco { width: 21px; border-radius: 4px; box-shadow: none; }
+.solo-telefono { display: none; }
+/* Con la cancha abierta, el marcador del detalle se hace más bajo. */
+.con-cancha .detalle-marcador { padding: .5rem 1rem; }
+.con-cancha .detalle-equipo { flex-direction: row; justify-content: center; }
+.con-cancha .detalle-equipo .escudo { width: 30px; height: 34px; font-size: .75rem; }
+.con-cancha .detalle-equipo .equipo-nombre { font-size: 1rem; }
+.con-cancha .detalle-centro { gap: .25rem; }
+.con-cancha .detalle-centro .goles { font-size: 1.5rem; }
+.con-cancha .detalle-meta { margin: .3rem 0 .6rem; }
+.con-cancha .detalle-pestanas { margin-bottom: .7rem; }
+@media (max-width: 640px) {
+  /* Teléfono: la misma cancha horizontal, más alta para que quepan las fotos; los nombres completos van debajo. */
+  .cancha { width: 100%; aspect-ratio: 1 / 1; }
+  .ficha-nombre { font-size: max(7px, 2.2cqw); }
+  .ficha-nombre .inicial { display: none; }
+  .ficha-sale { left: 0; top: -9px; font-size: 7px; }
+  .solo-telefono { display: block; }
+  .con-cancha .detalle-equipo { flex-direction: column; }
+}
 .rotulo-cambios { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; width: 100%; }
 .rotulo-cambios li { display: flex; gap: .6rem; align-items: center; padding: .3rem .6rem; border-radius: 10px; background: var(--campo-fondo); border-left: 3px solid var(--cesped); font-size: .88rem; }
 .rotulo-cambios li > span { display: flex; flex-direction: column; line-height: 1.2; }
@@ -707,10 +732,9 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 .panel-estadistica { display: grid; gap: .9rem; }
 .panel-estadistica > p { margin: 0; }
 .titulo-registro { font-size: 1.1rem; margin-top: .6rem; }
-.ficha-nombre { max-width: 90px; color: #fff; font-size: .72rem; font-weight: 600; line-height: 1.15; text-align: center; overflow-wrap: anywhere; text-shadow: 0 1px 4px rgba(0, 0, 0, .85); }
-.detalle-lado { display: grid; gap: .9rem; }
-.detalle-lado p { margin: 0; }
-.detalle-rotulo { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; padding: .9rem 1rem; }
+.detalle-rotulo { display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; padding: .9rem 1rem; min-width: 0; }
+.detalle-rotulo p { margin: 0; }
+.detalle-rotulo h4 { margin: .35rem 0 0; color: var(--sutil); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
 .detalle-rotulo b { font-family: var(--titulos); font-size: 1.15rem; }
 /* Línea de tiempo: local a la izquierda, visitante a la derecha, el minuto en el eje. */
 .linea-tiempo { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; position: relative; }
@@ -912,7 +936,6 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
   .fila-jugador > .btn, .fila-tarjeta > .btn { grid-column: 1 / -1; }
   .fila-jugador > .foto-boton { grid-column: 1 / -1; justify-self: start; }
   .eq-cabecera { grid-template-columns: 1fr; justify-items: start; }
-  .ficha-foto .foto-cedula { width: 30px; }
   .fila-cambio { grid-template-columns: 1fr 1fr; }
   .fila-gol { grid-template-areas: "eq eq" "min contra" "autor autor" "asist asist" "btn btn"; grid-template-columns: 1fr 1fr; }
   .xi-equipos { grid-template-columns: 1fr; }
@@ -925,14 +948,11 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
   .detalle-centro .goles { font-size: 1.9rem; }
   .detalle-cifras { gap: .5rem; }
   .detalle-cifra b { font-size: 1.6rem; }
-  .detalle-columnas, .detalle-alineaciones { grid-template-columns: 1fr; }
+  .detalle-columnas { grid-template-columns: 1fr; }
   /* Calificaciones en el teléfono: el selector de voto baja a su propia línea */
   .fila-calificacion { grid-template-columns: 2rem minmax(0, 1fr) auto; }
   .fila-calificacion .voto-control, .fila-calificacion .chip-voto { grid-column: 2 / -1; grid-row: 2; justify-self: start; }
   .detalle-fila-marcador { gap: .4rem; font-size: .9rem; }
-  .ficha-cancha { width: 64px; }
-  .ficha-dorsal { width: 28px; height: 28px; font-size: .8rem; }
-  .ficha-nombre { max-width: 64px; font-size: .62rem; }
   /* En el teléfono la línea de tiempo va en una sola columna. */
   .linea-tiempo::before { left: 1.5rem; }
   .linea-tiempo li { grid-template-columns: 3rem 1fr; }
@@ -1015,13 +1035,12 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 
 /* En la cancha: la foto con el dorsal encima, en la esquina. */
 .ficha-foto { position: relative; display: block; }
-.ficha-foto .foto-cedula { width: 38px; border-width: 2px; border-color: currentColor; }
+.ficha-foto .foto-cedula { width: clamp(20px, 3.9cqw, 40px); border-width: 2px; border-color: currentColor; }
 .ficha-foto.ficha-local { color: #2ee598; background: none; }
 .ficha-foto.ficha-visitante { color: #f7c75a; background: none; }
-.ficha-foto .ficha-dorsal { position: absolute; right: -9px; bottom: -6px; width: 20px; height: 20px; font-size: .66rem; border-width: 1.5px; }
+.ficha-foto .ficha-dorsal { position: absolute; right: -9px; bottom: -4px; width: 20px; height: 20px; font-size: .66rem; border-width: 1.5px; }
 .ficha-foto.ficha-local .ficha-dorsal { background: #eef4ff; color: #0b1726; border-color: #2ee598; }
 .ficha-foto.ficha-visitante .ficha-dorsal { background: #0b1726; color: #eef4ff; border-color: #f7c75a; }
-.ficha-cancha.con-foto { transform: translate(-50%, -26px); }
 
 /* Menú «Cambiar / Eliminar» junto a la foto o el escudo tocado. */
 .menu-foto { position: fixed; z-index: 1000; display: grid; min-width: 170px; padding: .35rem; border-radius: 14px; background: var(--vidrio-denso);
@@ -1029,9 +1048,8 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 .menu-foto button { background: none; border: 0; color: var(--texto); font: inherit; text-align: left; padding: .6rem .8rem; border-radius: 10px; cursor: pointer; }
 .menu-foto button:hover, .menu-foto button:focus-visible { background: rgba(255, 255, 255, .08); outline: none; }
 @media (max-width: 640px) {
-  .ficha-foto .foto-cedula { width: 24px; border-width: 1.5px; border-radius: 4px; }
-  .ficha-foto .ficha-dorsal { right: -8px; bottom: -5px; width: 16px; height: 16px; font-size: .56rem; }
-  .ficha-cancha.con-foto { transform: translate(-50%, -18px); gap: 1px; }
+  .ficha-foto .foto-cedula { width: clamp(18px, 6.6cqw, 30px); border-width: 1.5px; border-radius: 4px; }
+  .ficha-foto .ficha-dorsal { right: -6px; bottom: -4px; width: 14px; height: 14px; font-size: .5rem; }
 }
 
 
