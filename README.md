@@ -28,7 +28,7 @@ Las tres tienen las mismas funciones, el mismo diseño («Estadio bajo reflector
 - **XI inicial**: en el partido se marcan los 11 titulares de cada equipo (o toda la plantilla si tiene menos). El botón «Dorsales más bajos» los elige de un clic. En los cambios, «Sale» muestra solo a los que están en la cancha y «Entra» solo a los suplentes que no han entrado. No se pueden anotar cambios sin el XI inicial, y el detalle del partido muestra las alineaciones.
 - Estado **«En juego»**: el marcador, las tarjetas y los cambios se guardan en vivo mientras se juega. Ese partido no cuenta en la tabla hasta que pasa a «Jugado».
 - Las tarjetas ahora pueden llevar **minuto** (opcional).
-- **Detalle del partido** (estilo Flashscore) al tocar cualquier partido: **Resumen** (goles, cambios y tarjetas minuto a minuto), **Cara a cara** (incluye campeonatos del historial), **Racha** de los últimos 5 partidos (V/E/D) y **Alineaciones** dibujadas sobre la cancha según la formación y el XI inicial.
+- **Detalle del partido** al tocar cualquier partido: **Resumen** (goles, cambios y tarjetas minuto a minuto), **Cara a cara** (incluye campeonatos del historial), **Racha** de los últimos 5 partidos (V/E/D) y **Alineaciones** dibujadas sobre la cancha según la formación y el XI inicial.
 - **Goles por jugador** en el editor del partido: minuto, autor, asistencia y autogol.
 - **Gestionar partidos** en dos pestañas: «Previa del partido» (fecha, sede, formación y XI) y «Registrar resultados» (marcador, goles, tarjetas y cambios).
 - **Noticias con moderación**: el administrador publica noticias con foto y aprueba o rechaza las que proponen los visitantes; todos pueden comentar y los insultos se cambian por `***` automáticamente.

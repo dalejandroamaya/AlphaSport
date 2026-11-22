@@ -1,18 +1,11 @@
 /* =====================================================================
-   AlphaSport · Estadio bajo reflectores
-   La app vive en vidrio esmerilado sobre la noche del estadio; la tabla es
-   la pantalla gigante. Verde = acción y juego. Dorado = logros.
+   AlphaSport · Marcador en vivo (ver DESIGN.md)
+   Reglas base de los componentes; la capa «marcador en vivo» del final del
+   archivo las deja planas y compactas. Verde = acción y juego. Dorado = logros.
    Fondos: fotos de Unsplash (Josemar Duarte, noche; Miguel Ramírez, día)
    guardadas en img/ (estadio-noche.jpg, estadio-dia.jpg); img/estadio.svg queda de respaldo.
    ===================================================================== */
-/* Fuentes y fotos locales: la web funciona con doble clic y sin internet. */
-@font-face { font-family: "Onest"; font-weight: 400; font-display: swap; src: url("../fuentes/Onest-400.ttf") format("truetype"); }
-@font-face { font-family: "Onest"; font-weight: 500; font-display: swap; src: url("../fuentes/Onest-500.ttf") format("truetype"); }
-@font-face { font-family: "Onest"; font-weight: 600; font-display: swap; src: url("../fuentes/Onest-600.ttf") format("truetype"); }
-@font-face { font-family: "Onest"; font-weight: 700; font-display: swap; src: url("../fuentes/Onest-700.ttf") format("truetype"); }
-@font-face { font-family: "Bricolage Grotesque"; font-weight: 600; font-display: swap; src: url("../fuentes/BricolageGrotesque-600.ttf") format("truetype"); }
-@font-face { font-family: "Bricolage Grotesque"; font-weight: 700; font-display: swap; src: url("../fuentes/BricolageGrotesque-700.ttf") format("truetype"); }
-@font-face { font-family: "Bricolage Grotesque"; font-weight: 800; font-display: swap; src: url("../fuentes/BricolageGrotesque-800.ttf") format("truetype"); }
+/* Fuentes (Inter, declarada en la capa final) y fotos locales: la web funciona con doble clic y sin internet. */
 
 :root {
   --foto: url("../img/estadio-noche.jpg");
@@ -47,8 +40,8 @@
   --radio-sm: 12px;
   --sombra: 0 18px 40px -12px rgba(0, 0, 0, .5);
   --suave: cubic-bezier(.22, 1, .36, 1);
-  --titulos: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
-  --cuerpo: 'Onest', 'Segoe UI', system-ui, sans-serif;
+  --titulos: 'Inter', 'Segoe UI', Arial, sans-serif;
+  --cuerpo: 'Inter', 'Segoe UI', Arial, sans-serif;
   color-scheme: dark;
 }
 
@@ -381,7 +374,7 @@ button.partido:hover { border-color: rgba(255, 255, 255, .26); transform: transl
 .posiciones tr.repechaje .pos { background: rgba(255, 185, 80, .2); color: var(--ambar); }
 .posiciones tr.desciende .pos { background: rgba(255, 107, 129, .2); color: var(--rojo); }
 
-/* Noticias (estilo Flashscore) */
+/* Noticias */
 .lista-noticias { display: grid; gap: 1rem; }
 /* Administrador: pestañas «Pendientes por aprobar» y «Publicadas y oficiales» */
 .pestanas-noticias { margin-bottom: 1rem; }
@@ -607,7 +600,7 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 .chip-rol { justify-content: center; }
 .chip-lectura { color: var(--cian); border-color: rgba(116, 220, 255, .3); }
 
-/* ------------------------------------------------------------------ detalle del partido (estilo Flashscore) */
+/* ------------------------------------------------------------------ detalle del partido */
 .dlg-detalle .cabecera-dlg h3 { font-size: 1.3rem; }
 .dlg-detalle .detalle-panel h3 { font-size: 1.1rem; margin: 0; }
 .detalle-marcador { grid-template-columns: 1fr auto 1fr; }
@@ -1039,4 +1032,221 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
   .ficha-foto .foto-cedula { width: 24px; border-width: 1.5px; border-radius: 4px; }
   .ficha-foto .ficha-dorsal { right: -8px; bottom: -5px; width: 16px; height: 16px; font-size: .56rem; }
   .ficha-cancha.con-foto { transform: translate(-50%, -18px); gap: 1px; }
+}
+
+
+/* =====================================================================
+   Estilo «marcador en vivo»: superficies planas y compactas.
+   Letra Inter pequeña y nítida, paneles sólidos con esquinas de 8 px,
+   encabezados de sección en barra, partidos en filas de dos líneas con el
+   marcador apilado a la derecha, líneas divisorias de 1 px y pestañas tipo
+   pastilla en mayúsculas. Los colores siguen siendo los de AlphaSport.
+   (Esta capa va al final: redefine los tokens y ajusta los componentes.)
+   ===================================================================== */
+@font-face { font-family: "Inter"; font-weight: 400; font-display: swap; src: url("../fuentes/Inter-400.ttf") format("truetype"); }
+@font-face { font-family: "Inter"; font-weight: 600; font-display: swap; src: url("../fuentes/Inter-600.ttf") format("truetype"); }
+@font-face { font-family: "Inter"; font-weight: 700; font-display: swap; src: url("../fuentes/Inter-700.ttf") format("truetype"); }
+
+:root {
+  --fondo: #050a12;
+  --superficie: #0b1522;
+  --superficie-2: #12233a;
+  --linea: rgba(150, 185, 230, .1);
+  --fila-hover: rgba(255, 255, 255, .045);
+  --vidrio: var(--superficie); --vidrio-alto: var(--superficie); --vidrio-denso: var(--superficie);
+  --vidrio-borde: transparent; --vidrio-luz: transparent;
+  --campo-fondo: #070f1a;
+  --pantalla: #050c16;
+  --borde: var(--linea);
+  --radio: 8px;
+  --radio-sm: 6px;
+  --sombra: none;
+  --titulos: "Inter", "Segoe UI", Arial, sans-serif;
+  --cuerpo: "Inter", "Segoe UI", Arial, sans-serif;
+}
+:root[data-tema="claro"] {
+  --fondo: #e7ecf2;
+  --superficie: #ffffff;
+  --superficie-2: #dfe7f1;
+  --linea: rgba(11, 23, 38, .09);
+  --fila-hover: rgba(11, 23, 38, .04);
+  --vidrio: var(--superficie); --vidrio-alto: var(--superficie); --vidrio-denso: var(--superficie);
+  --vidrio-borde: transparent; --vidrio-luz: transparent;
+  --campo-fondo: #f3f6f9;
+  --pantalla: #0e1a2b;
+  --borde: var(--linea);
+  --sombra: none;
+}
+
+html { font-size: 15px; }
+body { font-size: .9rem; line-height: 1.4; }
+h1, h2, h3, h4 { letter-spacing: -.01em; }
+h1, h2 { font-weight: 700; }
+*, *::before, *::after, ::backdrop { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+
+/* Fondo liso en la aplicación; la foto del estadio queda solo en la pantalla de entrada. */
+body:has(#app:not([hidden])) .fondo-estadio { background: var(--fondo); }
+body:has(#app:not([hidden])) .fondo-estadio .foco, body:has(#app:not([hidden])) .fondo-estadio::after { display: none; }
+
+/* Paneles sólidos, sin destello ni sombra. */
+.vidrio, .cabecera-vista { background: var(--superficie); border: 0; border-radius: var(--radio); box-shadow: none; }
+.vidrio::before { display: none; }
+.vista, .vista .partido, .vista .tarjeta-equipo, .vista .llave-fase, .vista .tarjeta, .barra-lateral, .marcador-principal { animation: none; }
+
+/* Etiquetas pequeñas en mayúsculas, como los títulos de sección del marcador. */
+.sobretitulo, .tabla thead th, .campo, .grupo legend, .marca-lateral small, .titulo-seccion {
+  text-transform: uppercase; letter-spacing: .04em; font-size: .75rem; font-weight: 700;
+}
+.campo { color: var(--sutil); }
+
+/* Botones: rectángulos redondeados planos; el principal es césped sólido. */
+.btn { border-radius: var(--radio); min-height: 34px; padding: .4rem .95rem; font-size: .85rem; font-weight: 700; border: 0;
+  background: rgba(255, 255, 255, .07); box-shadow: none; transition: background-color .15s; }
+.btn:hover:not(:disabled) { background-color: rgba(255, 255, 255, .13); }
+.btn:active:not(:disabled) { transform: none; }
+.btn.primario, .btn.dorado { box-shadow: none; }
+.btn.primario { background: var(--cesped); color: #03170d; }
+.btn.primario:hover:not(:disabled) { background: #5af0b0; transform: none; }
+.btn.dorado { background: var(--oro); }
+.btn.dorado:hover:not(:disabled) { background: #ffd77d; transform: none; }
+.btn.primario::after, .btn.dorado::after { display: none; }
+.btn.fantasma { background: transparent; }
+.btn.fantasma:hover:not(:disabled) { background: var(--fila-hover); }
+.btn.mini { min-height: 28px; padding: .25rem .7rem; font-size: .8rem; }
+.btn.grande { min-height: 42px; font-size: .95rem; }
+.btn.icono { width: 36px; height: 36px; }
+.btn.mini.icono { width: 28px; height: 28px; }
+[data-tema="claro"] .btn:not(.primario):not(.dorado):not(.peligro) { background-color: #edf1f6; }
+[data-tema="claro"] .btn:not(.primario):not(.dorado):not(.peligro):hover:not(:disabled) { background-color: #dfe6ef; }
+[data-tema="claro"] .btn.fantasma:not(:hover) { background-color: transparent !important; }
+[data-tema="claro"] .btn.primario:not(.dorado) { background: var(--cesped); color: #fff; box-shadow: none; }
+
+/* Campos compactos. */
+input:not([type=checkbox]), select, textarea { min-height: 36px; padding: .4rem .7rem; border-radius: var(--radio-sm); background: var(--campo-fondo); border: 1px solid var(--linea); }
+
+/* Pastillas de estado y chips: esquinas de 4 px, texto en mayúsculas. */
+.chip, .etiqueta { border-radius: 4px; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: .2rem .5rem; }
+[data-tema="claro"] .chip { background: #edf1f6; }
+
+/* Pestañas tipo pastilla (detalle, noticias, filtros): 28 px, mayúsculas, la activa en césped sólido. */
+.pestanas-mini { background: none; border: 0; padding: 0; gap: .4rem; border-radius: 0; }
+.pestanas-mini button { min-height: 28px; padding: 0 .8rem; border-radius: var(--radio); background: rgba(255, 255, 255, .07);
+  color: var(--texto); font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.pestanas-mini button:hover:not(.activa) { background: rgba(255, 255, 255, .13); }
+.pestanas-mini button.activa { background: var(--cesped); color: #03170d; }
+[data-tema="claro"] .pestanas-mini button:not(.activa) { background: #edf1f6; }
+[data-tema="claro"] .pestanas-mini button.activa { color: #fff; }
+
+/* Barra lateral: menú de enlaces compactos, título de sección en mayúsculas. */
+@media (min-width: 1001px) {
+  .app { gap: 12px; padding: 12px; }
+  .barra-lateral { top: 12px; height: calc(100vh - 24px); padding: 1rem .75rem; gap: 1rem; }
+}
+.marca-lateral img { width: 112px; filter: none; }
+.marca-lateral span { font-size: 1.2rem; font-weight: 700; }
+.navegacion { gap: 2px; }
+.navegacion button { padding: .45rem .6rem; border-radius: 4px; border: 0; font-size: .9rem; color: var(--texto); }
+.navegacion button:hover { background: var(--fila-hover); }
+.navegacion button.activa, [data-tema="claro"] .navegacion button.activa { background: var(--cesped-suave); color: var(--cesped); border: 0; font-weight: 700; }
+.navegacion svg { width: 18px; height: 18px; color: var(--sutil); }
+[data-tema="claro"] .navegacion button:hover { background: var(--fila-hover); }
+.principal { gap: 12px; }
+
+/* Cabecera del torneo y de cada vista: más baja y sobria. */
+.marcador-principal { padding: 1rem 1.2rem; }
+.marcador-principal.terminado, [data-tema="claro"] .marcador-principal.terminado { background: var(--superficie); box-shadow: inset 3px 0 0 var(--oro); border: 0; }
+.marcador-info h1 { font-size: clamp(1.5rem, 2.4vw, 2rem); margin-bottom: .45rem; }
+.estado-vivo { font-size: .85rem; }
+.cabecera-vista { padding: .9rem 1.1rem; margin-bottom: 12px; }
+.cabecera-vista h2 { font-size: 1.35rem; }
+.menu-lista { border-radius: var(--radio); box-shadow: 0 12px 28px rgba(0, 0, 0, .45); padding: .3rem; }
+.menu-lista button { border-radius: 4px; padding: .5rem .7rem; font-size: .88rem; }
+
+/* Bloques de partidos: un panel por ronda con su barra de encabezado y filas de 2 líneas. */
+.bloque-ronda { margin-bottom: 12px; padding: 0 .75rem .25rem; background: var(--superficie); border-radius: var(--radio); }
+.bloque-ronda h3 { margin: 0 -.75rem; padding: 0 .75rem; min-height: 32px; border-radius: var(--radio) var(--radio) 4px 4px; background: var(--superficie-2);
+  font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--texto); text-shadow: none; }
+.bloque-ronda h3::after, [data-tema="claro"] .bloque-ronda h3::after { display: none; }
+[data-tema="claro"] .bloque-ronda h3 { text-shadow: none; }
+.partidos { grid-template-columns: 1fr; gap: 0; }
+.partido, .partido.rapido {
+  grid-template-columns: 9.5rem minmax(0, 1fr) auto; grid-template-areas: "meta local res" "meta visita res" "obs obs obs";
+  gap: .2rem .9rem; padding: .55rem .25rem; text-align: left; background: none; border: 0; border-radius: 0;
+  border-bottom: 1px solid var(--linea); box-shadow: none;
+}
+.partido:last-child { border-bottom: 0; }
+button.partido:hover { background: var(--fila-hover); transform: none; }
+.partido-meta { flex-direction: column; align-items: flex-start; justify-content: center; gap: .25rem; font-size: .78rem; }
+.partido .local, .partido .visitante { display: flex; align-items: center; gap: .5rem; font-family: var(--cuerpo); font-weight: 400; font-size: .9rem; letter-spacing: 0; text-align: left; }
+.partido .ganador { color: var(--texto); font-weight: 700; }
+.partido .nombre-equipo { overflow-wrap: anywhere; }
+.escudo.mini { width: 18px; height: 20px; font-size: .5rem; flex: none; text-shadow: none; }
+.resultado { display: grid; grid-auto-rows: 1fr; justify-items: end; gap: .2rem; min-width: 2.2rem; padding: 0; background: none; border: 0; border-radius: 0;
+  box-shadow: none; color: var(--texto); font-family: var(--cuerpo); font-weight: 700; font-size: .9rem; }
+.resultado i { display: none; }
+.resultado small { grid-column: 1; font-size: .68rem; text-align: right; }
+.resultado .vs { font-size: .72rem; color: var(--sutil); letter-spacing: .06em; align-self: center; grid-row: span 2; }
+.partido .obs, .partido .incidencias, .partido .fichas-previa { grid-column: 2 / -1; font-size: .78rem; }
+.partido .fichas-previa { justify-content: flex-start; border-top: 0; padding-top: 0; }
+.partido.en-vivo .resultado, .partido.en-vivo .partido-meta .etiqueta { color: var(--rojo); }
+[data-tema="claro"] .resultado { color: var(--texto); }
+/* Carga rápida: los dos goles uno debajo del otro, como el marcador de la fila. */
+.partido.rapido { grid-template-areas: "meta local res" "meta visita res" "acc acc acc"; }
+.rapido-goles { flex-direction: column; gap: .2rem; }
+.rapido-goles > span { display: none; }
+.rapido-goles input, [data-tema="claro"] .rapido-goles input { width: 44px; min-height: 28px; padding: 0; font-family: var(--cuerpo); font-size: .95rem; font-weight: 700;
+  border-radius: 4px; background: var(--campo-fondo); color: var(--texto); border: 1px solid var(--linea); }
+.rapido-acciones { border-top: 0; padding-top: .2rem; }
+
+/* Tablas (posiciones, goleadores…): encabezado en barra y filas separadas por líneas finas. */
+.tabla-envoltura { padding: .75rem .75rem .25rem; }
+.tabla { border-collapse: collapse; border-spacing: 0; font-size: .88rem; }
+.tabla thead th { background: var(--superficie-2); padding: .55rem .6rem; font-size: .72rem; color: var(--texto); }
+.tabla thead th:first-child { border-radius: 4px 0 0 4px; }
+.tabla thead th:last-child { border-radius: 0 4px 4px 0; }
+.tabla td, .tabla tbody th { padding: .5rem .6rem; border-bottom: 1px solid var(--linea); }
+.tabla tbody tr:last-child td, .tabla tbody tr:last-child th { border-bottom: 0; }
+.tabla tbody tr td:first-child, .tabla tbody tr th:first-child, .tabla tbody tr td:last-child { border-radius: 0; }
+.tabla tbody tr:nth-child(odd), [data-tema="claro"] .tabla tbody tr:nth-child(odd) { background: none; }
+.tabla tbody tr:hover, [data-tema="claro"] .tabla tbody tr:hover { background: var(--fila-hover); }
+
+/* Tarjetas de equipo y de noticia: planas y más juntas. */
+.grid-equipos { gap: 12px; }
+.tarjeta-equipo { padding: .85rem 1rem; }
+.tarjeta-equipo:hover { border: 0; background: #0f1b2b; }
+[data-tema="claro"] .tarjeta-equipo:hover { background: #f6f8fb; }
+.equipo-datos h3 { font-size: 1.05rem; }
+.equipo-acciones { padding-top: .6rem; }
+.tarjeta { padding: 1.1rem; }
+.tarjeta h3 { font-size: 1.2rem; }
+.grupo, [data-tema="claro"] .grupo { border-radius: var(--radio); background: none; border: 1px solid var(--linea); }
+
+/* Diálogos: panel sólido de esquinas de 8 px sobre un velo oscuro. */
+.dialogo, [data-tema="claro"] .dialogo { border: 0; border-radius: var(--radio); background: var(--superficie); box-shadow: 0 24px 60px rgba(0, 0, 0, .55); padding: 1.3rem; }
+.dialogo::backdrop, [data-tema="claro"] .dialogo::backdrop { background: rgba(0, 0, 0, .62); }
+.dialogo[open] { animation: entrarDialogo .2s ease-out; }
+.dialogo h3 { font-size: 1.3rem; }
+.dialogo .acciones { bottom: -1.3rem; margin: .4rem -1.3rem -1.3rem; padding: .75rem 1.3rem .9rem; background: var(--superficie); }
+
+/* Detalle del partido: cifras y filas en la segunda superficie. */
+.detalle-cifra, .detalle-fila, .evento, [data-tema="claro"] .evento { background: var(--superficie-2); border: 0; border-radius: var(--radio); box-shadow: none; }
+.detalle-cifra b { font-size: 1.6rem; }
+.detalle-centro .goles { font-size: 2rem; }
+
+.marcador-partido, .cruce, .marcador-partido .vs { background: var(--pantalla); border: 0; border-radius: var(--radio); box-shadow: none; }
+.marcador-partido { padding: 1.1rem 1rem; }
+
+/* Login: la tarjeta también plana; el logo nuevo sin sombra pesada. */
+.login-tarjeta { background: var(--superficie); border-radius: 12px; }
+.logo-login { max-width: 260px; filter: none; }
+[data-tema="claro"] .logo-login, [data-tema="claro"] .marca-lateral img { filter: none; }
+
+/* Menú «Cambiar / Eliminar» de fotos. */
+.menu-foto { border-radius: var(--radio); background: var(--superficie); box-shadow: 0 12px 28px rgba(0, 0, 0, .45); }
+.menu-foto button { border-radius: 4px; padding: .5rem .7rem; }
+
+@media (max-width: 640px) {
+  .partido, .partido.rapido { grid-template-columns: 5.6rem minmax(0, 1fr) auto; gap: .15rem .6rem; }
+  .bloque-ronda { padding: 0 .5rem .2rem; }
+  .bloque-ronda h3 { margin: 0 -.5rem; padding: 0 .5rem; }
 }

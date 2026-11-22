@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Detalle de un partido al estilo Flashscore: cara a cara, racha reciente de cada
+ * Detalle de un partido: cara a cara, racha reciente de cada
  * equipo y alineaciones sobre la cancha segun la formacion elegida.
  *
  * Los equipos se reconocen por su NOMBRE, asi se cruzan los datos del campeonato
