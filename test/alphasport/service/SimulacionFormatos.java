@@ -12,6 +12,14 @@ import alphasport.model.Fase;
 import alphasport.model.Partido;
 import alphasport.model.TipoFormato;
 
+/**
+ * Prueba automatica del motor (no necesita JUnit): juega cientos de
+ * campeonatos con resultados aleatorios en los 6 formatos y revisa que
+ * siempre se llegue a un campeon sin errores. Tambien prueba los
+ * desempates y la edicion de partidos.
+ *
+ * En NetBeans: clic derecho sobre este archivo > Run File (Shift + F6).
+ */
 public class SimulacionFormatos {
 
     private static final Random azar = new Random(7);
@@ -242,7 +250,7 @@ public class SimulacionFormatos {
         return "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(b.toByteArray());
     }
 
-    /** Reloj que la prueba puede adelantar (para la ventana de 24 horas de la votacion). */
+    /** Reloj que la prueba puede adelantar (para el cierre de la votacion). */
     private static final class RelojPrueba extends java.time.Clock {
         long ahora = 1_800_000_000_000L;
 
@@ -269,8 +277,9 @@ public class SimulacionFormatos {
 
     /**
      * [REQ-07] Calificaciones: nota del sistema (base, goles, asistencias, tarjetas, valla invicta y goles
-     * recibidos del portero), limites 1.0 y 10.0, votos del publico solo dentro de 24 horas y una vez por
-     * dispositivo, nota final hibrida redondeada a 1 decimal, MVP, y que borrar el resultado descarte la votacion.
+     * recibidos del portero), limites 1.0 y 10.0, votos del publico solo mientras la votacion esta abierta y una
+     * vez por dispositivo, tiempo de votacion configurable y cierre manual, nota final hibrida redondeada a 1
+     * decimal, MVP, y que borrar el resultado descarte la votacion.
      */
     private static void probarCalificaciones() {
         boolean correcto;
@@ -361,8 +370,45 @@ public class SimulacionFormatos {
                     && rechaza(() -> servicio.votarJugador(p.getId(), portero, 0, "dispositivo-C3"))
                     && rechaza(() -> servicio.votarJugador(p.getId(), loc.get(13).getId(), 7, "dispositivo-C3")); // suplente sin jugar
 
-            // Pasadas las 24 horas la votacion se cierra y la nota queda como estaba.
-            reloj.ahora = cierre + CalculadoraCalificaciones.VENTANA_VOTACION_MS + 1;
+            // Varios votos a la vez: si uno no se acepta no se guarda ninguno.
+            boolean varios = rechaza(() -> servicio.votarJugadores(p.getId(), java.util.Map.of(loc.get(8).getId(), 7, loc.get(13).getId(), 7), "dispositivo-D4"))
+                    && rechaza(() -> servicio.votarJugadores(p.getId(), java.util.Map.of(), "dispositivo-D4"))
+                    && p.getVotos().size() == 2
+                    && servicio.votacionesAbiertas().equals(List.of(p)); // el unico partido terminado
+
+            // Tiempo configurable: 48 horas mueve el cierre; cerrar a mano lo adelanta; otro tiempo lo reabre.
+            final long hora = 60L * 60 * 1000;
+            java.util.function.IntConsumer programar = horas -> {
+                Partido copia = new Partido();
+                copia.copiarDatosDe(p);
+                servicio.programarVotacion(copia, horas);
+                try {
+                    servicio.guardarPartido(p.getId(), copia, false);
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            };
+            boolean tiempo = servicio.calificaciones(p.getId(), null).cierraEn() == cierre + 24 * hora;
+            programar.accept(48);
+            tiempo &= p.getHorasVotacion() == 48 && servicio.calificaciones(p.getId(), null).cierraEn() == cierre + 48 * hora
+                    && rechaza(() -> programar.accept(0)) && rechaza(() -> programar.accept(ReglasVotacion.HORAS_MAXIMO + 1));
+            reloj.ahora = cierre + 30 * hora;
+            tiempo &= servicio.calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.ABIERTA
+                    && rechaza(() -> programar.accept(12)) && p.getHorasVotacion() == 48; // 12 h ya habrian pasado
+            servicio.cerrarVotacion(p.getId());
+            tiempo &= servicio.calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.CERRADA
+                    && servicio.calificaciones(p.getId(), null).cierraEn() == cierre + 30 * hora
+                    && servicio.votacionesAbiertas().isEmpty()
+                    && rechaza(() -> servicio.cerrarVotacion(p.getId()))
+                    && rechaza(() -> servicio.votarJugador(p.getId(), loc.get(8).getId(), 8, "dispositivo-C3"));
+            programar.accept(48); // el mismo tiempo no la reabre
+            tiempo &= servicio.votacionesAbiertas().isEmpty();
+            programar.accept(36);
+            tiempo &= servicio.votacionesAbiertas().equals(List.of(p)) && p.getVotos().size() == 2 && p.getFinalizadoEn() == cierre;
+
+            // Vencido el tiempo la votacion se cierra sola y la nota queda como estaba.
+            reloj.ahora = cierre + 36 * hora;
+            tiempo &= servicio.votacionesAbiertas().isEmpty();
             CalificacionesPartido cerrada = servicio.calificaciones(p.getId(), null);
             boolean ventana = rechaza(() -> servicio.votarJugador(p.getId(), loc.get(8).getId(), 8, "dispositivo-C3"))
                     && cerrada.votacion() == CalificacionesPartido.Votacion.CERRADA && de.apply(cerrada.local(), 1).notaFinal() == 8.5;
@@ -377,13 +423,14 @@ public class SimulacionFormatos {
             borrado.copiarDatosDe(p);
             borrado.reiniciarResultado();
             servicio.guardarPartido(p.getId(), borrado, false);
-            boolean descarta = p.getFinalizadoEn() == 0 && p.getVotos().isEmpty()
+            boolean descarta = p.getFinalizadoEn() == 0 && p.getVotos().isEmpty() && p.getVotacionCerradaEn() == 0
+                    && p.getHorasVotacion() == 36 // la duracion se decide antes de jugar: no se borra
                     && servicio.calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.SIN_RESULTADO;
 
-            correcto = reglas && sistema && hibrida && rango && ventana && conserva && descarta;
+            correcto = reglas && sistema && hibrida && rango && varios && tiempo && ventana && conserva && descarta;
             if (!correcto) {
                 System.out.println("  reglas=" + reglas + " sistema=" + sistema + " hibrida=" + hibrida + " rango=" + rango
-                        + " ventana=" + ventana + " conserva=" + conserva + " descarta=" + descarta);
+                        + " varios=" + varios + " tiempo=" + tiempo + " ventana=" + ventana + " conserva=" + conserva + " descarta=" + descarta);
             }
         } catch (Exception e) {
             correcto = false;
