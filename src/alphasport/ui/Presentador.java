@@ -423,11 +423,6 @@ public class Presentador {
                 "calificaciones", calificaciones(notas));
     }
 
-    /**
-     * [REQ-07] JSON de las calificaciones: {votacion: SIN_RESULTADO|ABIERTA|CERRADA|SIN_REGISTRO, cierraEn (ms),
-     * disponible, motivo, mvp (id del jugador), local: [...], visitante: [...]}. Cada jugador lleva su nota del
-     * sistema (con el desglose), los votos del publico, el promedio, la nota final y su propio voto (miVoto, 0 = no voto).
-     */
     public static Map<String, Object> calificaciones(CalificacionesPartido n) {
         java.util.function.Function<List<CalificacionesPartido.Calificacion>, List<Object>> jugadores = lista -> lista.stream()
                 .map(x -> (Object) mapa("id", x.idJugador(), "equipo", x.idEquipo(), "nombre", x.nombre(), "dorsal", x.dorsal(),
@@ -459,13 +454,19 @@ public class Presentador {
     private Map<String, Object> alineacion(DetallePartido.Alineacion a) {
         List<Object> lineas = new ArrayList<>();
         for (List<DetallePartido.Puesto> linea : a.lineas()) {
-            lineas.add(linea.stream().map(p -> p.jugador() == null ? null
-                    : (Object) mapa("id", p.jugador().getId(), "dorsal", p.jugador().getDorsal(),
-                            "nombre", p.jugador().getNombre(), "posicion", p.jugador().getPosicion(), "foto", p.jugador().getFoto()))
+            lineas.add(linea.stream().map(p -> p.jugador() == null ? null : (Object) fichaJugador(p.jugador()))
                     .collect(Collectors.toList()));
         }
+        DirectorTecnico dt = a.directorTecnico();
         return mapa("formacion", a.formacion(), "formacionElegida", a.formacionElegida(), "confirmada", a.confirmada(),
-                "lineas", lineas);
+                "lineas", lineas,
+                "suplentes", a.suplentes().stream().map(Presentador::fichaJugador).collect(Collectors.toList()),
+                "dt", dt == null ? "" : dt.getNombre());
+    }
+
+    /** Lo que se dibuja de un jugador en la cancha y en la lista de suplentes. */
+    private static Map<String, Object> fichaJugador(Jugador j) {
+        return mapa("id", j.getId(), "dorsal", j.getDorsal(), "nombre", j.getNombre(), "posicion", j.getPosicion(), "foto", j.getFoto());
     }
 
     public Map<String, Object> historial(List<Campeonato> campeonatos) {
@@ -542,12 +543,6 @@ public class Presentador {
         return mapa("titulo", titulo, "valor", valor, "detalle", detalle);
     }
 
-    /* ---------------------------------------------------------------- noticias */
-
-    /**
-     * {publicadas, pendientes, puedeModerar}. Cada noticia: {id, titulo, cuerpo, autor, deVisitante, fecha,
-     * imagen (nombre del archivo, "" = sin foto), aprobado, comentarios:[{id, autor, texto, fecha}]}.
-     */
     static Map<String, Object> noticias(List<alphasport.model.Noticia> publicadas, List<alphasport.model.Noticia> pendientes, boolean moderar) {
         return mapa("publicadas", publicadas.stream().map(Presentador::noticia).collect(Collectors.toList()),
                 "pendientes", pendientes.stream().map(Presentador::noticia).collect(Collectors.toList()),
