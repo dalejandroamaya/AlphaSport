@@ -3,7 +3,6 @@ package alphasport.ui.escritorio;
 import static alphasport.ui.escritorio.Aplicacion.etiqueta;
 import static alphasport.ui.escritorio.Datos.b;
 import static alphasport.ui.escritorio.Datos.l;
-import static alphasport.ui.escritorio.Datos.lista;
 import static alphasport.ui.escritorio.Datos.m;
 import static alphasport.ui.escritorio.Datos.n;
 import static alphasport.ui.escritorio.Datos.s;
@@ -16,13 +15,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.shape.Circle;
-import javafx.scene.shape.Line;
-import javafx.scene.shape.Rectangle;
 
 /**
  * Detalle de partido: cabecera con el marcador y pestañas «Resumen»,
@@ -31,9 +26,6 @@ import javafx.scene.shape.Rectangle;
  * hacer aquí es votar en «Calificaciones» (visitante, dentro de las 24 horas).
  */
 final class VistaDetallePartido {
-
-    private static final double ANCHO_CANCHA = 520;
-    private static final double ALTO_CANCHA = 720;
 
     private VistaDetallePartido() {
     }
@@ -69,7 +61,7 @@ final class VistaDetallePartido {
                 new Tab("Calificaciones", VistaCalificaciones.construir(m(detalle, "calificaciones"), p, puedeVotar, votante)),
                 new Tab("Cara a cara", caraACara(m(detalle, "caraACara"), p)),
                 new Tab("Racha", racha(m(detalle, "racha"), p)),
-                new Tab("Alineaciones", alineaciones(m(detalle, "alineaciones"), p, edicion)));
+                new Tab("Alineaciones", VistaAlineaciones.construir(m(detalle, "alineaciones"), p, edicion)));
         pestanas.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         pestanas.getStyleClass().add("detalle-pestanas");
         return new VBox(18, cabecera(p, edicion), pestanas);
@@ -108,7 +100,7 @@ final class VistaDetallePartido {
         String sede = s(p, "sede").isEmpty() ? "" : " · " + s(p, "sede");
         Label meta = etiqueta(fecha + sede, "sutil", "centro");
         meta.setMaxWidth(Double.MAX_VALUE);
-        VBox caja = new VBox(12, marcador, meta);
+        VBox caja = new VBox(6, marcador, meta);
         caja.getStyleClass().addAll("vidrio", "detalle-cabecera");
         return caja;
     }
@@ -359,161 +351,5 @@ final class VistaDetallePartido {
         };
         l.setAccessibleText(nombre);
         return l;
-    }
-
-    /* ---------------------------------------------------------------- alineaciones */
-
-    /** Una cancha vertical: el visitante arriba (ataca hacia abajo) y el local abajo. */
-    private static Node alineaciones(Map<String, Object> a, Map<String, Object> p, Edicion edicion) {
-        Map<String, Object> local = m(a, "local");
-        Map<String, Object> visitante = m(a, "visitante");
-        Pane cancha = new Pane();
-        cancha.setPrefSize(ANCHO_CANCHA, ALTO_CANCHA);
-        cancha.setMinSize(ANCHO_CANCHA, ALTO_CANCHA);
-        cancha.setMaxSize(ANCHO_CANCHA, ALTO_CANCHA);
-        cancha.getStyleClass().add("cancha");
-        dibujarLineas(cancha);
-        List<Map<String, Object>> cambios = l(p, "cambios");
-        ubicar(cancha, visitante, true, cambios, n(p, "visitante"), edicion);
-        ubicar(cancha, local, false, cambios, n(p, "local"), edicion);
-
-        VBox lado = new VBox(14,
-                rotuloEquipo(s(p, "visitanteNombre"), visitante, "Arriba", cambiosDe(cambios, n(p, "visitante"))),
-                rotuloEquipo(s(p, "localNombre"), local, "Abajo", cambiosDe(cambios, n(p, "local"))));
-        if (!b(local, "confirmada") || !b(visitante, "confirmada")) {
-            Label nota = etiqueta("Las casillas con «?» son puestos por confirmar: el XI inicial se registra al abrir el partido.",
-                    "sutil", "pequeno");
-            nota.setWrapText(true);
-            lado.getChildren().add(nota);
-        }
-        lado.setPrefWidth(260);
-        HBox caja = new HBox(22, new StackPane(cancha), lado);
-        caja.getStyleClass().add("detalle-panel");
-        return caja;
-    }
-
-    private static List<Map<String, Object>> cambiosDe(List<Map<String, Object>> cambios, int idEquipo) {
-        return cambios.stream().filter(x -> n(x, "equipo") == idEquipo).toList();
-    }
-
-    /** Rótulo del equipo: formación, estado de la alineación y los cambios (quién entró por quién). */
-    private static Node rotuloEquipo(String equipo, Map<String, Object> al, String donde, List<Map<String, Object>> cambios) {
-        String formacion = s(al, "formacion") + (b(al, "formacionElegida") ? "" : " (por defecto)");
-        VBox v = new VBox(4, etiqueta(donde, "sutil", "pequeno"), etiqueta(equipo, "h3"),
-                etiqueta("Formación " + formacion, "chip"),
-                etiqueta(b(al, "confirmada") ? "Alineación confirmada" : "Alineación por confirmar", "sutil", "pequeno"));
-        if (!cambios.isEmpty()) {
-            v.getChildren().add(etiqueta("Cambios", "sutil", "pequeno"));
-            for (Map<String, Object> x : cambios) {
-                HBox fila = new HBox(8, etiqueta(n(x, "minuto") + "′", "entra-texto"),
-                        new VBox(0, etiqueta("Entra #" + n(x, "entraDorsal") + " " + s(x, "entraNombre"), "jugador-texto"),
-                                etiqueta("Sale #" + n(x, "saleDorsal") + " " + s(x, "saleNombre"), "sale-texto", "pequeno")));
-                fila.setAlignment(Pos.CENTER_LEFT);
-                fila.getStyleClass().addAll("fila-alineacion", "entro");
-                v.getChildren().add(fila);
-            }
-        }
-        v.getStyleClass().addAll("vidrio", "detalle-rotulo");
-        return v;
-    }
-
-    private static void dibujarLineas(Pane cancha) {
-        double w = ANCHO_CANCHA, h = ALTO_CANCHA, m = 14;
-        Rectangle borde = rect(m, m, w - 2 * m, h - 2 * m);
-        Line medio = new Line(m, h / 2, w - m, h / 2);
-        medio.getStyleClass().add("cancha-linea");
-        Circle circulo = new Circle(w / 2, h / 2, 62);
-        circulo.getStyleClass().add("cancha-linea");
-        double areaW = w * 0.56, areaH = h * 0.14, chicaW = w * 0.28, chicaH = h * 0.055;
-        cancha.getChildren().addAll(borde, medio, circulo,
-                rect((w - areaW) / 2, m, areaW, areaH), rect((w - areaW) / 2, h - m - areaH, areaW, areaH),
-                rect((w - chicaW) / 2, m, chicaW, chicaH), rect((w - chicaW) / 2, h - m - chicaH, chicaW, chicaH));
-    }
-
-    private static Rectangle rect(double x, double y, double w, double h) {
-        Rectangle r = new Rectangle(x, y, w, h);
-        r.getStyleClass().add("cancha-linea");
-        return r;
-    }
-
-    /**
-     * Coloca las lineas del equipo en su mitad: el portero junto a su arco y la ultima
-     * linea cerca del medio campo. El de arriba se refleja para que ataque hacia abajo.
-     */
-    private static void ubicar(Pane cancha, Map<String, Object> al, boolean arriba, List<Map<String, Object>> cambios,
-            int idEquipo, Edicion edicion) {
-        List<Object> lineas = lista(al, "lineas");
-        double arco = 0.93, frente = 0.55; // fraccion de alto (equipo de abajo)
-        int ultima = Math.max(1, lineas.size() - 1);
-        for (int i = 0; i < lineas.size(); i++) {
-            @SuppressWarnings("unchecked")
-            List<Object> linea = (List<Object>) lineas.get(i);
-            double y = arco - (arco - frente) * i / ultima;
-            for (int k = 0; k < linea.size(); k++) {
-                double x = (k + 1.0) / (linea.size() + 1);
-                @SuppressWarnings("unchecked")
-                Map<String, Object> j = (Map<String, Object>) linea.get(k);
-                Node ficha = ficha(j, arriba, cambios, idEquipo, edicion);
-                double fx = (arriba ? 1 - x : x) * ANCHO_CANCHA;
-                double fy = (arriba ? 1 - y : y) * ALTO_CANCHA;
-                ficha.setLayoutX(fx - 45);
-                ficha.setLayoutY(fy - (j == null ? 17 : ALTO_FOTO / 2)); // el centro de la foto (o del «?») en su puesto
-                cancha.getChildren().add(ficha);
-            }
-        }
-    }
-
-    private static final double ANCHO_FOTO = 38;
-    private static final double ALTO_FOTO = Math.round(ANCHO_FOTO * 4 / 3);
-
-    private static Node ficha(Map<String, Object> j, boolean visitante, List<Map<String, Object>> cambios, int idEquipo, Edicion edicion) {
-        Label dorsal = etiqueta(j == null ? "?" : String.valueOf(n(j, "dorsal")), "ficha-dorsal",
-                visitante ? "ficha-visitante" : "ficha-local");
-        double lado = j == null ? 34 : 20;
-        dorsal.setMinSize(lado, lado);
-        dorsal.setMaxSize(lado, lado);
-        dorsal.setAlignment(Pos.CENTER);
-        VBox v = new VBox(3);
-        if (j == null) {
-            v.getChildren().add(dorsal);
-        } else {
-            // La foto tipo cédula (o «NN») con el borde del color del equipo y el dorsal en la esquina.
-            javafx.scene.layout.StackPane foto = Fotos.cedula(s(j, "foto"), ANCHO_FOTO);
-            javafx.scene.layout.StackPane marco = new javafx.scene.layout.StackPane(foto);
-            marco.getStyleClass().addAll("ficha-foto", visitante ? "ficha-visitante" : "ficha-local");
-            marco.setMaxSize(ANCHO_FOTO + 4, ALTO_FOTO + 4);
-            dorsal.getStyleClass().add("ficha-dorsal-mini");
-            javafx.scene.layout.StackPane conDorsal = new javafx.scene.layout.StackPane(marco, dorsal);
-            javafx.scene.layout.StackPane.setAlignment(dorsal, Pos.BOTTOM_RIGHT);
-            dorsal.setTranslateX(8);
-            dorsal.setTranslateY(6);
-            conDorsal.setMaxSize(ANCHO_FOTO + 4, ALTO_FOTO + 4);
-            if (edicion != null && n(j, "id") > 0) {
-                Fotos.tocable(marco, "Foto de " + s(j, "nombre") + (s(j, "foto").isEmpty() ? ": subir" : ": cambiar o eliminar"),
-                        () -> edicion.foto(marco, idEquipo, j));
-            }
-            v.getChildren().add(conDorsal);
-        }
-        if (j != null) { // las casillas por confirmar solo llevan «?»
-            Label nombre = etiqueta(apellido(s(j, "nombre")), "ficha-nombre");
-            nombre.setMaxWidth(90);
-            v.getChildren().add(nombre);
-            // Si salió en un cambio, el minuto va debajo del nombre.
-            cambios.stream().filter(x -> n(x, "sale") == n(j, "id")).findFirst()
-                    .ifPresent(x -> v.getChildren().add(etiqueta("↓ " + n(x, "minuto") + "′", "ficha-sale")));
-        }
-        v.setAlignment(Pos.TOP_CENTER);
-        v.setPrefWidth(90);
-        if (j != null) {
-            javafx.scene.control.Tooltip.install(v, new javafx.scene.control.Tooltip(
-                    "#" + n(j, "dorsal") + " " + s(j, "nombre") + " · " + s(j, "posicion")));
-        }
-        return v;
-    }
-
-    /** «Juan Carlos Pérez» -> «J. Pérez», para que quepa sobre la cancha. */
-    static String apellido(String nombre) {
-        String[] partes = nombre.trim().split("\\s+");
-        return partes.length < 2 ? nombre : partes[0].charAt(0) + ". " + partes[partes.length - 1];
     }
 }
