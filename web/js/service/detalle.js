@@ -84,7 +84,9 @@ const DetallePartido = (() => {
       const ordenada = deLinea.map((j, i) => ({ j, i })).sort((a, b) => (a.j ? lado(a.j) : 9) - (b.j ? lado(b.j) : 9) || a.i - b.i);
       lineas.push(ordenada.map(x => fichaJugador(x.j)));
     }
-    return { formacion, formacionElegida: !!elegida, confirmada, lineas };
+    // Suplentes: el resto de la plantilla por dorsal (vacío mientras no se confirme el XI).
+    const suplentes = !confirmada ? [] : equipo.jugadores.filter(j => !xi.includes(j)).sort((a, b) => a.dorsal - b.dorsal).map(fichaJugador);
+    return { formacion, formacionElegida: !!elegida, confirmada, lineas, suplentes, dt: (equipo && equipo.dt && equipo.dt.nombre) || '' };
   }
 
   /** JSON del detalle: {partido, caraACara, racha, alineaciones} (el partido lo arma el servicio). */
