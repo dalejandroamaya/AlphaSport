@@ -12,14 +12,6 @@ import alphasport.model.Fase;
 import alphasport.model.Partido;
 import alphasport.model.TipoFormato;
 
-/**
- * Prueba automatica del motor (no necesita JUnit): juega cientos de
- * campeonatos con resultados aleatorios en los 6 formatos y revisa que
- * siempre se llegue a un campeon sin errores. Tambien prueba los
- * desempates y la edicion de partidos.
- *
- * En NetBeans: clic derecho sobre este archivo > Run File (Shift + F6).
- */
 public class SimulacionFormatos {
 
     private static final Random azar = new Random(7);
@@ -461,6 +453,10 @@ public class SimulacionFormatos {
             api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", previa, "accion", "guardar", "confirmado", false));
             boolean previaGuardada = !p.isJugado() && p.getTitularesLocal().equals(xiLocal) && p.getTitularesVisitante().equals(xiVisitante)
                     && p.getFormacionLocal().equals("4-4-2") && p.getSede().equals("Estadio Norte");
+            // La alineación lleva los 11 de la previa y, como suplentes, los 3 que sobran de la plantilla (por dorsal).
+            DetallePartido.Alineacion alineacion = servicio.detallePartido(p.getId()).getAlineacionLocal();
+            previaGuardada &= alineacion.confirmada() && alineacion.lineas().stream().mapToInt(List::size).sum() == 11
+                    && alineacion.suplentes().stream().map(alphasport.model.Jugador::getDorsal).toList().equals(List.of(12, 13, 14));
             // 2) Resultado: el cambio usa el XI de la previa (sale un titular, entra un suplente).
             int sale = xiLocal.get(10);
             int entra = c.buscarEquipo(p.getIdLocal()).getJugadores().get(12).getId();
