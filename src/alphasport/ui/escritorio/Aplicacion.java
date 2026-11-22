@@ -163,7 +163,7 @@ public class Aplicacion extends Application {
         return new Image(Arranque.CARPETA_WEB.resolve("img").resolve(nombre).toUri().toString(), true);
     }
 
-    /** Bricolage Grotesque (títulos y cifras) y Onest (interfaz), las mismas fuentes de la web, guardadas en web/fuentes. */
+    /** Inter (regular, semibold y bold), la misma fuente de la web, guardada en web/fuentes. */
     private static void cargarFuentes() {
         Path carpeta = Arranque.CARPETA_WEB.resolve("fuentes");
         if (!Files.isDirectory(carpeta)) {
@@ -391,7 +391,7 @@ public class Aplicacion extends Application {
 
     void mostrarLogin() {
         ImageView logo = new ImageView(imagen("logo-texto.png"));
-        logo.setFitWidth(380);
+        logo.setFitWidth(260);
         logo.setPreserveRatio(true);
         logo.setSmooth(true);
         logo.getStyleClass().add("logo-login");
@@ -453,7 +453,7 @@ public class Aplicacion extends Application {
         logo.setFitWidth(150);
         logo.setPreserveRatio(true);
         logo.getStyleClass().add("logo-lateral");
-        logo.setFitWidth(128);
+        logo.setFitWidth(112);
         VBox marca = new VBox(2, logo, etiqueta("AlphaSport", "marca-nombre"), etiqueta("Gestor de campeonatos", "marca-sub"));
         marca.setAlignment(Pos.CENTER);
         marca.getStyleClass().add("marca-lateral");
@@ -550,6 +550,7 @@ public class Aplicacion extends Application {
         StackPane raiz = new StackPane(armazon, toast);
         raiz.getStyleClass().add("fondo-app");
         ponerRaiz(raiz);
+        scene.getRoot().getStyleClass().add("plano"); // la aplicación va sobre fondo liso; la foto queda en la entrada
         if (b(E, "hay")) {
             render();
         } else if (puedeEditar()) {
@@ -1192,11 +1193,22 @@ public class Aplicacion extends Application {
         }
         Map<String, List<Map<String, Object>>> bloques = new LinkedHashMap<>();
         partidos.forEach(p -> bloques.computeIfAbsent(contexto(p), k -> new ArrayList<>()).add(p));
-        VBox caja = new VBox(18);
+        VBox caja = new VBox(12);
         bloques.forEach((tituloBloque, lista) -> {
-            FlowPane grid = new FlowPane(14, 14);
-            lista.forEach(p -> grid.getChildren().add(tarjetaPartido(p, previa)));
-            caja.getChildren().add(new VBox(10, etiqueta(tituloBloque, "titulo-bloque"), grid));
+            // Un panel por ronda: barra con el título y los partidos en filas separadas por una línea fina.
+            Label barra = etiqueta(tituloBloque.toUpperCase(), "titulo-bloque");
+            barra.setMaxWidth(Double.MAX_VALUE);
+            VBox filas = new VBox();
+            for (int i = 0; i < lista.size(); i++) {
+                Node fila = tarjetaPartido(lista.get(i), previa);
+                if (i == lista.size() - 1) {
+                    fila.getStyleClass().add("ultima");
+                }
+                filas.getChildren().add(fila);
+            }
+            VBox bloque = new VBox(barra, filas);
+            bloque.getStyleClass().add("bloque-ronda");
+            caja.getChildren().add(bloque);
         });
         return caja;
     }
@@ -1267,44 +1279,77 @@ public class Aplicacion extends Application {
         if (n(p, "ganador") == n(p, "visitante")) {
             visitante.getStyleClass().add("ganador");
         }
-        local.setAlignment(Pos.CENTER_RIGHT);
-        local.setPrefWidth(120);
-        visitante.setPrefWidth(120);
-        VBox marcador = new VBox(etiqueta(jugado ? n(p, "gl") + " : " + n(p, "gv") : "VS", jugado ? "cifras" : "vs"));
-        if (b(p, "penales")) {
-            marcador.getChildren().add(etiqueta(n(p, "pl") + "-" + n(p, "pv") + " pen", "penales-texto"));
-        }
-        marcador.setAlignment(Pos.CENTER);
-        marcador.getStyleClass().add("resultado");
-        HBox centro = new HBox(12, local, marcador, visitante);
-        centro.setAlignment(Pos.CENTER);
+        HBox filaLocal = new HBox(8, escudoFila(n(p, "local"), s(p, "localNombre")), local);
+        HBox filaVisitante = new HBox(8, escudoFila(n(p, "visitante"), s(p, "visitanteNombre")), visitante);
+        filaLocal.setAlignment(Pos.CENTER_LEFT);
+        filaVisitante.setAlignment(Pos.CENTER_LEFT);
+        VBox equipos = new VBox(4, filaLocal, filaVisitante);
         // La fecha solo se muestra si está definida: no repetir «Por definir» en cada partido.
         String fecha = s(p, "fecha").matches("\\d{4}-\\d{2}-\\d{2}") ? Datos.fecha(p) : "";
-        HBox meta = new HBox(8, etiqueta(fecha, "sutil", "pequeno"), espacio(), etiquetaEstado(s(p, "estado")));
-        VBox tarjeta = new VBox(10, meta, centro);
+        VBox meta = new VBox(4);
+        if (!fecha.isEmpty()) {
+            meta.getChildren().add(etiqueta(fecha, "sutil", "pequeno"));
+        }
+        meta.getChildren().add(etiquetaEstado(s(p, "estado")));
+        meta.setAlignment(Pos.CENTER_LEFT);
+        meta.setMinWidth(150);
+        meta.setPrefWidth(150);
+        // Marcador apilado: los goles de cada equipo a la altura de su nombre.
+        VBox marcador = new VBox(4);
+        if (jugado) {
+            Label gl = etiqueta(String.valueOf(n(p, "gl")), "cifras"), gv = etiqueta(String.valueOf(n(p, "gv")), "cifras");
+            if (s(p, "estado").equals("EN_JUEGO")) {
+                gl.getStyleClass().add("en-vivo");
+                gv.getStyleClass().add("en-vivo");
+            }
+            marcador.getChildren().addAll(gl, gv);
+            if (b(p, "penales")) {
+                marcador.getChildren().add(etiqueta(n(p, "pl") + "-" + n(p, "pv") + " pen", "penales-texto"));
+            }
+        } else {
+            marcador.getChildren().add(etiqueta("VS", "vs"));
+        }
+        marcador.setAlignment(Pos.CENTER_RIGHT);
+        marcador.setMinWidth(40);
+        marcador.getStyleClass().add("resultado");
+        VBox columna = new VBox(4, equipos);
         String obs = String.join(" · ", List.of(s(p, "sede"), s(p, "obs")).stream().filter(x -> !x.isEmpty()).toList());
         if (!obs.isEmpty()) {
-            tarjeta.getChildren().add(etiqueta(obs, "sutil", "pequeno"));
+            columna.getChildren().add(etiqueta(obs, "sutil", "pequeno"));
         }
         String resumen = jugado && !previa ? incidencias(p) : "";
         if (!resumen.isEmpty()) {
             Label inc = etiqueta(resumen, "sutil", "pequeno", "incidencias");
             inc.setMaxWidth(Double.MAX_VALUE);
-            tarjeta.getChildren().add(inc);
+            columna.getChildren().add(inc);
         }
         if (previa) {
-            tarjeta.getChildren().add(fichasPrevia(p));
+            VBox fichas = fichasPrevia(p);
+            fichas.setAlignment(Pos.CENTER_LEFT);
+            ((HBox) fichas.getChildren().get(0)).setAlignment(Pos.CENTER_LEFT);
+            columna.getChildren().add(fichas);
         }
-        tarjeta.getStyleClass().addAll("vidrio", "partido");
+        HBox.setHgrow(columna, Priority.ALWAYS);
+        HBox tarjeta = new HBox(16, meta, columna, marcador);
+        tarjeta.setAlignment(Pos.CENTER_LEFT);
+        tarjeta.getStyleClass().add("partido");
         if (b(p, "jugado")) {
             tarjeta.getStyleClass().add("jugado");
         }
         if (s(p, "estado").equals("EN_JUEGO")) {
             tarjeta.getStyleClass().add("en-vivo");
         }
-        tarjeta.setPrefWidth(380);
+        tarjeta.setMaxWidth(Double.MAX_VALUE);
         tarjeta.setOnMouseClicked(e -> abrirPartido(p, previa));
         return tarjeta;
+    }
+
+    /** Escudo pequeño junto al nombre del equipo en la fila del partido (su imagen o las iniciales). */
+    private Node escudoFila(int id, String nombre) {
+        Map<String, Object> e = equipoPorId(id);
+        StackPane escudo = escudo(e != null ? e : mapa("id", id, "nombre", nombre), 16);
+        escudo.getStyleClass().add("escudo-mini");
+        return escudo;
     }
 
     /**
@@ -1377,7 +1422,7 @@ public class Aplicacion extends Application {
         dialogos.partido(p, false);
     }
 
-    /** Administrador: editor de la previa o del resultado (según la pestaña). Visitante: detalle estilo Flashscore. */
+    /** Administrador: editor de la previa o del resultado (según la pestaña). Visitante: detalle del partido. */
     private void abrirPartido(Map<String, Object> p, boolean previa) {
         if (puedeEditar() && !previa) {
             abrirResultado(p);
@@ -1653,7 +1698,7 @@ public class Aplicacion extends Application {
     /* ---------------------------------------------------------------- noticias */
 
     /**
-     * Noticias estilo Flashscore. Administrador: crea, edita y elimina noticias y modera las
+     * Noticias. Administrador: crea, edita y elimina noticias y modera las
      * propuestas de los visitantes. Visitante: lee, comenta y propone noticias (quedan pendientes).
      */
     private Node vistaNoticias() {

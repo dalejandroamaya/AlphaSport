@@ -740,7 +740,7 @@ function crearServicioLocal() {
     /** En la web sola la foto ya es una «data URL»: se usa tal cual. */
     urlImagen: imagen => imagen || '',
     urlFoto: foto => foto || '',
-    /** Detalle tipo Flashscore de un partido (mismo JSON que GET /api/partido/{id}/{dispositivo}). */
+    /** Detalle de un partido (mismo JSON que GET /api/partido/{id}/{dispositivo}). */
     async detalle(id) {
       try {
         exigirSesion();

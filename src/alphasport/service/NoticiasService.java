@@ -13,7 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Casos de uso del modulo de noticias (estilo Flashscore):
+ * Casos de uso del modulo de noticias:
  * - el administrador crea, edita, aprueba y elimina noticias y comentarios;
  * - el visitante propone noticias (quedan pendientes) y comenta las publicadas.
  *

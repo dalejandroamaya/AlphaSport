@@ -96,7 +96,7 @@ public class ApiControlador {
             exigirSesion(); // consultar es solo lectura: basta con haber iniciado sesion
         }
         if (ruta.startsWith("partido/")) {
-            // Detalle tipo Flashscore: partido/{id} o partido/{id}/{dispositivo}. El dispositivo (anonimo) solo
+            // Detalle del partido: partido/{id} o partido/{id}/{dispositivo}. El dispositivo (anonimo) solo
             // sirve para mostrar en las calificaciones [REQ-07] lo que ya voto este navegador o equipo.
             String[] partes = ruta.substring("partido/".length()).split("/");
             int id = entero(partes[0]);

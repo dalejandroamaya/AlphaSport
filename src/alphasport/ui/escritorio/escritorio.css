@@ -1,8 +1,8 @@
 /* =====================================================================
-   AlphaSport · Escritorio (JavaFX) · Estadio bajo reflectores
-   El mismo sistema de DESIGN.md traducido a JavaFX: foto del estadio
-   desenfocada detrás de paneles translúcidos, focos que se encienden,
-   Bricolage Grotesque para títulos y cifras, Onest para la interfaz.
+   AlphaSport · Escritorio (JavaFX) · Marcador en vivo
+   El mismo sistema de DESIGN.md traducido a JavaFX: reglas base de los
+   componentes y, al final, la capa que los deja planos y compactos;
+   Inter para títulos, cifras e interfaz.
    Verde = acción y juego. Dorado = logros.
    ===================================================================== */
 .raiz {
@@ -28,7 +28,7 @@
     -ambar: #ffb950;
     -cian: #74dcff;
     -haz: rgba(225, 242, 255, 0.34);
-    -fx-font-family: "Onest", "Segoe UI", sans-serif;
+    -fx-font-family: "Inter", "Segoe UI", sans-serif;
     -fx-font-size: 14px;
     -fx-text-fill: -texto;
     -fx-background-color: -fondo;
@@ -88,14 +88,14 @@
 .sutil { -fx-text-fill: -sutil; }
 .pequeno { -fx-font-size: 13px; }
 .centro { -fx-text-alignment: center; -fx-alignment: center; }
-.error { -fx-text-fill: -rojo; -fx-font-family: "Onest SemiBold"; }
-.advertencia { -fx-text-fill: -ambar; -fx-font-family: "Onest SemiBold"; }
-.sobretitulo { -fx-text-fill: -cesped; -fx-font-size: 13px; -fx-font-family: "Onest SemiBold"; }
+.error { -fx-text-fill: -rojo; -fx-font-family: "Inter SemiBold"; }
+.advertencia { -fx-text-fill: -ambar; -fx-font-family: "Inter SemiBold"; }
+.sobretitulo { -fx-text-fill: -cesped; -fx-font-size: 13px; -fx-font-family: "Inter SemiBold"; }
 .oro { -fx-text-fill: -oro-texto; }
-.h2 { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 28px; }
-.h3 { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 19px; }
-.titulo { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 40px; }
-.campo-titulo { -fx-text-fill: -sutil; -fx-font-size: 13px; -fx-font-family: "Onest Medium"; }
+.h2 { -fx-font-family: "Inter Bold"; -fx-font-size: 28px; }
+.h3 { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 19px; }
+.titulo { -fx-font-family: "Inter Bold"; -fx-font-size: 40px; }
+.campo-titulo { -fx-text-fill: -sutil; -fx-font-size: 13px; -fx-font-family: "Inter SemiBold"; }
 .credito-foto { -fx-text-fill: rgba(238, 244, 255, 0.72); -fx-font-size: 11px; }
 .raiz.claro .credito-foto { -fx-text-fill: rgba(11, 23, 38, 0.7); }
 
@@ -122,7 +122,7 @@
     -fx-border-color: -vidrio-borde;
     -fx-border-radius: 999;
     -fx-text-fill: -texto;
-    -fx-font-family: "Onest SemiBold";
+    -fx-font-family: "Inter SemiBold";
     -fx-font-size: 14px;
     -fx-padding: 9 18;
     -fx-min-height: 42;
@@ -212,7 +212,7 @@
 .barra-lateral { -fx-padding: 22 14; }
 .marca-lateral { -fx-padding: 0 0 16 0; -fx-border-color: transparent transparent -borde transparent; }
 .logo-lateral { -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 18, 0, 0, 8); }
-.marca-nombre { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 23px; }
+.marca-nombre { -fx-font-family: "Inter Bold"; -fx-font-size: 23px; }
 .marca-sub { -fx-text-fill: -sutil; -fx-font-size: 12px; }
 .nav {
     -fx-background-color: transparent;
@@ -220,7 +220,7 @@
     -fx-border-color: transparent;
     -fx-border-radius: 14;
     -fx-text-fill: -sutil;
-    -fx-font-family: "Onest Medium";
+    -fx-font-family: "Inter SemiBold";
     -fx-font-size: 15px;
     -fx-padding: 11 14;
     -fx-alignment: center-left;
@@ -231,7 +231,7 @@
     -fx-background-color: linear-gradient(to right, rgba(46, 229, 152, 0.22), rgba(46, 229, 152, 0.05));
     -fx-border-color: rgba(46, 229, 152, 0.3);
     -fx-text-fill: -texto;
-    -fx-font-family: "Onest SemiBold";
+    -fx-font-family: "Inter SemiBold";
 }
 .raiz.claro .nav:selected { -fx-background-color: linear-gradient(to right, rgba(7, 138, 82, 0.17), rgba(7, 138, 82, 0.04)); -fx-border-color: rgba(7, 138, 82, 0.26); }
 .icono-nav { -fx-fill: transparent; -fx-stroke: -sutil; -fx-stroke-width: 1.8; -fx-stroke-line-cap: round; -fx-stroke-line-join: round; }
@@ -244,10 +244,10 @@
     -fx-border-radius: 999;
     -fx-padding: 4 13;
     -fx-font-size: 13px;
-    -fx-font-family: "Onest Medium";
+    -fx-font-family: "Inter SemiBold";
 }
 .raiz.claro .chip { -fx-background-color: rgba(255, 255, 255, 0.7); }
-.chip-estado { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(46, 229, 152, 0.36); -fx-font-family: "Onest SemiBold"; }
+.chip-estado { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(46, 229, 152, 0.36); -fx-font-family: "Inter SemiBold"; }
 .marcador-principal.terminado .chip-estado { -fx-text-fill: -oro-texto; -fx-background-color: rgba(247, 199, 90, 0.17); -fx-border-color: rgba(247, 199, 90, 0.55); }
 .chip-modo { -fx-text-fill: -cian; }
 .marcador-principal { -fx-padding: 26 30; }
@@ -274,7 +274,7 @@
     -fx-border-color: -vidrio-borde;
     -fx-border-radius: 999;
     -fx-padding: 13 22;
-    -fx-font-family: "Onest SemiBold";
+    -fx-font-family: "Inter SemiBold";
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 24, 0, 0, 10);
 }
 
@@ -284,15 +284,15 @@
 /* equipos */
 .tarjeta-equipo { -fx-padding: 18; }
 .tarjeta-equipo:hover { -fx-border-color: rgba(255, 255, 255, 0.26); }
-.escudo-texto { -fx-text-fill: white; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 19px; -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 4, 0, 0, 2); }
+.escudo-texto { -fx-text-fill: white; -fx-font-family: "Inter Bold"; -fx-font-size: 19px; -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 4, 0, 0, 2); }
 
 /* partidos */
-.titulo-bloque { -fx-text-fill: -texto; -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 17px; -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 10, 0, 0, 1); }
+.titulo-bloque { -fx-text-fill: -texto; -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 17px; -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 10, 0, 0, 1); }
 .raiz.claro .titulo-bloque { -fx-effect: dropshadow(gaussian, rgba(255, 255, 255, 0.9), 10, 0, 0, 0); }
-.titulo-ronda { -fx-text-fill: -cesped; -fx-font-family: "Onest SemiBold"; -fx-font-size: 14px; }
+.titulo-ronda { -fx-text-fill: -cesped; -fx-font-family: "Inter SemiBold"; -fx-font-size: 14px; }
 .partido { -fx-padding: 15 18; -fx-cursor: hand; }
 .partido:hover { -fx-border-color: rgba(255, 255, 255, 0.3); -fx-translate-y: -2; }
-.equipo-partido { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 17px; }
+.equipo-partido { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 17px; }
 .ganador { -fx-text-fill: -cesped; }
 /* El marcador como la pantalla gigante del estadio. */
 .resultado {
@@ -303,10 +303,10 @@
     -fx-padding: 5 14;
     -fx-min-width: 100;
 }
-.cifras { -fx-text-fill: white; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 27px; }
-.vs { -fx-text-fill: #a3b2ca; -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 15px; }
-.penales-texto { -fx-text-fill: #f7c75a; -fx-font-size: 12px; -fx-font-family: "Onest SemiBold"; }
-.etiqueta { -fx-background-radius: 999; -fx-border-radius: 999; -fx-padding: 2 10; -fx-font-size: 12px; -fx-font-family: "Onest SemiBold"; }
+.cifras { -fx-text-fill: white; -fx-font-family: "Inter Bold"; -fx-font-size: 27px; }
+.vs { -fx-text-fill: #a3b2ca; -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 15px; }
+.penales-texto { -fx-text-fill: #f7c75a; -fx-font-size: 12px; -fx-font-family: "Inter SemiBold"; }
+.etiqueta { -fx-background-radius: 999; -fx-border-radius: 999; -fx-padding: 2 10; -fx-font-size: 12px; -fx-font-family: "Inter SemiBold"; }
 .etiqueta-jugado { -fx-text-fill: -cesped; -fx-background-color: rgba(46, 229, 152, 0.13); -fx-border-color: rgba(46, 229, 152, 0.32); }
 .etiqueta-pendiente { -fx-text-fill: -cian; -fx-background-color: rgba(116, 220, 255, 0.11); -fx-border-color: rgba(116, 220, 255, 0.3); }
 .etiqueta-aplazado, .etiqueta-suspendido { -fx-text-fill: -ambar; -fx-background-color: rgba(255, 185, 80, 0.13); -fx-border-color: rgba(255, 185, 80, 0.32); }
@@ -325,7 +325,7 @@
 .raiz.claro .table-view { -fx-effect: dropshadow(gaussian, rgba(20, 40, 70, 0.16), 30, 0, 0, 12); }
 .table-view .column-header-background { -fx-background-color: transparent; }
 .table-view .column-header, .table-view .filler { -fx-background-color: transparent; -fx-border-color: transparent; -fx-size: 42; }
-.table-view .column-header .label { -fx-text-fill: -sutil; -fx-font-size: 12px; -fx-font-family: "Onest SemiBold"; }
+.table-view .column-header .label { -fx-text-fill: -sutil; -fx-font-size: 12px; -fx-font-family: "Inter SemiBold"; }
 .table-row-cell { -fx-background-color: transparent; -fx-background-radius: 12; -fx-border-color: transparent; }
 .table-row-cell:odd { -fx-background-color: rgba(255, 255, 255, 0.04); -fx-background-insets: 2 0; }
 .raiz.claro .table-row-cell:odd { -fx-background-color: rgba(255, 255, 255, 0.6); }
@@ -333,8 +333,8 @@
 .table-row-cell:selected { -fx-background-color: -cesped-suave; -fx-background-insets: 2 0; }
 .table-cell { -fx-text-fill: -texto; -fx-padding: 0 10; -fx-alignment: center-left; -fx-border-color: transparent; -fx-background-color: transparent; -fx-font-size: 14px; }
 .num.table-cell, .table-column.num { -fx-alignment: center; }
-.table-column.puntos { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 20px; }
-.table-column.posicion { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 15px; }
+.table-column.puntos { -fx-font-family: "Inter Bold"; -fx-font-size: 20px; }
+.table-column.posicion { -fx-font-family: "Inter Bold"; -fx-font-size: 15px; }
 .table-row-cell.clasifica .table-column.posicion { -fx-text-fill: -cesped; }
 .table-row-cell.repechaje .table-column.posicion { -fx-text-fill: -ambar; }
 .table-row-cell.desciende .table-column.posicion { -fx-text-fill: -rojo; }
@@ -349,10 +349,10 @@
 .cruce { -fx-background-color: -pantalla; -fx-background-radius: 14; -fx-border-color: rgba(255, 255, 255, 0.1); -fx-border-radius: 14; }
 .lado { -fx-padding: 10 13; }
 .lado-nombre, .lado-goles { -fx-text-fill: white; }
-.lado-goles { -fx-text-fill: #a3b2ca; -fx-font-family: "Bricolage Grotesque ExtraBold"; }
+.lado-goles { -fx-text-fill: #a3b2ca; -fx-font-family: "Inter Bold"; }
 .lado.gana { -fx-background-color: linear-gradient(to right, rgba(46, 229, 152, 0.22), transparent); -fx-background-radius: 14; }
-.lado.gana .label { -fx-text-fill: #2ee598; -fx-font-family: "Onest Bold"; }
-.lado.gana .lado-goles { -fx-font-family: "Bricolage Grotesque ExtraBold"; }
+.lado.gana .label { -fx-text-fill: #2ee598; -fx-font-family: "Inter Bold"; }
+.lado.gana .lado-goles { -fx-font-family: "Inter Bold"; }
 .campeon-caja {
     -fx-padding: 22 26;
     -fx-background-color: rgba(247, 199, 90, 0.6), linear-gradient(to right, rgba(247, 199, 90, 0.3), -vidrio 62%);
@@ -362,15 +362,15 @@
     -fx-border-radius: 22;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 30, 0, 0, 12);
 }
-.campeon-nombre { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 32px; -fx-text-fill: -oro-texto; }
-.campeon-sub { -fx-font-family: "Onest SemiBold"; -fx-text-fill: -oro-texto; }
+.campeon-nombre { -fx-font-family: "Inter Bold"; -fx-font-size: 32px; -fx-text-fill: -oro-texto; }
+.campeon-sub { -fx-font-family: "Inter SemiBold"; -fx-text-fill: -oro-texto; }
 
 /* reglas */
 .tarjeta { -fx-padding: 24; }
 .regla { -fx-text-fill: -sutil; }
 .criterio, .fila-lista { -fx-background-color: -campo; -fx-background-radius: 14; -fx-border-color: -borde; -fx-border-radius: 14; -fx-padding: 8 12; }
-.orden { -fx-background-color: -cesped; -fx-background-radius: 999; -fx-text-fill: #03170d; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-min-width: 30; -fx-min-height: 30; -fx-alignment: center; }
-.dorsal { -fx-background-color: -cesped-suave; -fx-background-radius: 10; -fx-text-fill: -cesped; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-min-width: 34; -fx-min-height: 30; -fx-alignment: center; }
+.orden { -fx-background-color: -cesped; -fx-background-radius: 999; -fx-text-fill: #03170d; -fx-font-family: "Inter Bold"; -fx-min-width: 30; -fx-min-height: 30; -fx-alignment: center; }
+.dorsal { -fx-background-color: -cesped-suave; -fx-background-radius: 10; -fx-text-fill: -cesped; -fx-font-family: "Inter Bold"; -fx-min-width: 34; -fx-min-height: 30; -fx-alignment: center; }
 
 /* ------------------------------------------------------------------ ventanas suaves */
 .dialogo-sombra { -fx-background-color: transparent; }
@@ -401,7 +401,7 @@
 .raiz.claro .tarjeta-formato { -fx-background-color: rgba(255, 255, 255, 0.7); }
 .tarjeta-formato:hover { -fx-border-color: rgba(128, 140, 160, 0.45); }
 .tarjeta-formato:selected { -fx-background-color: linear-gradient(to bottom right, rgba(46, 229, 152, 0.22), rgba(46, 229, 152, 0.04)); -fx-border-color: -cesped; }
-.formato-nombre { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 16px; }
+.formato-nombre { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 16px; }
 .tarjeta-formato:selected .formato-nombre { -fx-text-fill: -cesped; }
 .formato-desc { -fx-text-fill: -sutil; -fx-font-size: 13px; }
 /* Marcador del partido: la pantalla gigante. */
@@ -413,20 +413,20 @@
     -fx-border-radius: 22;
 }
 .raiz.claro .marcador-partido { -fx-background-color: radial-gradient(center 50% 0%, radius 80%, rgba(46, 229, 152, 0.14), transparent), #0e1a2b; }
-.equipo-nombre { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 22px; -fx-text-fill: white; }
+.equipo-nombre { -fx-font-family: "Inter Bold"; -fx-font-size: 22px; -fx-text-fill: white; }
 .led-campo { -fx-pref-width: 100; -fx-background-color: rgba(0, 0, 0, 0.45); }
 .text-field.led-gol {
     -fx-pref-width: 86; -fx-pref-height: 70; -fx-background-color: rgba(0, 0, 0, 0.45); -fx-border-color: rgba(255, 255, 255, 0.18); -fx-border-radius: 16; -fx-background-radius: 16;
-    -fx-text-fill: white; -fx-prompt-text-fill: #5d6b82; -fx-font-size: 40px; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-alignment: center;
+    -fx-text-fill: white; -fx-prompt-text-fill: #5d6b82; -fx-font-size: 40px; -fx-font-family: "Inter Bold"; -fx-alignment: center;
 }
 .text-field.led-gol:focused { -fx-border-color: -cesped; }
 .text-field.campo-invalido { -fx-border-color: -rojo; }
-.led-campo .text-field { -fx-text-fill: #f7c75a; -fx-font-size: 22px; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-alignment: center; }
-.led-separador { -fx-font-size: 30px; -fx-text-fill: #a3b2ca; -fx-font-family: "Bricolage Grotesque ExtraBold"; }
+.led-campo .text-field { -fx-text-fill: #f7c75a; -fx-font-size: 22px; -fx-font-family: "Inter Bold"; -fx-alignment: center; }
+.led-separador { -fx-font-size: 30px; -fx-text-fill: #a3b2ca; -fx-font-family: "Inter Bold"; }
 .tab-pane .tab-header-background { -fx-background-color: transparent; }
 .tab-pane .tab { -fx-background-color: transparent; -fx-background-radius: 999; -fx-border-color: -borde; -fx-border-radius: 999; -fx-padding: 5 14; }
 .tab-pane .tab:selected { -fx-background-color: -cesped; -fx-border-color: -cesped; }
-.tab-pane .tab:selected .tab-label { -fx-text-fill: #03170d; -fx-font-family: "Onest SemiBold"; }
+.tab-pane .tab:selected .tab-label { -fx-text-fill: #03170d; -fx-font-family: "Inter SemiBold"; }
 .tab-pane > .tab-content-area { -fx-padding: 14 0 0 0; }
 .lista-historial { -fx-background-color: transparent; -fx-border-color: -borde; -fx-border-radius: 14; -fx-background-radius: 14; }
 .lista-historial .list-cell { -fx-background-color: transparent; -fx-text-fill: -texto; -fx-padding: 11; -fx-border-color: transparent transparent -borde transparent; }
@@ -439,9 +439,9 @@
 .puesto.oro .label { -fx-text-fill: -oro-texto; }
 .puesto.bronce .label { -fx-text-fill: #dc9a62; }
 .raiz.claro .puesto.bronce .label { -fx-text-fill: #9a5a24; }
-.puesto-nombre { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 19px; }
+.puesto-nombre { -fx-font-family: "Inter Bold"; -fx-font-size: 19px; }
 .premio { -fx-background-color: rgba(255, 255, 255, 0.04); -fx-background-radius: 16; -fx-border-color: -borde; -fx-border-radius: 16; -fx-padding: 13; }
-.premio-valor { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 16px; }
+.premio-valor { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 16px; }
 .jugador-texto, .criterio-texto, .lado-nombre { -fx-text-fill: -texto; }
 .cruce .lado-nombre { -fx-text-fill: white; }
 
@@ -454,13 +454,13 @@
         radial-gradient(center 50% 22%, radius 60%, rgba(247, 199, 90, 0.34), transparent),
         linear-gradient(to bottom, rgba(10, 14, 24, 0.55), rgba(6, 10, 18, 0.9));
 }
-.campeon-titulo { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 54px; -fx-text-fill: #f7c75a; }
-.campeon-torneo { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 20px; -fx-text-fill: white; }
+.campeon-titulo { -fx-font-family: "Inter Bold"; -fx-font-size: 54px; -fx-text-fill: #f7c75a; }
+.campeon-torneo { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 20px; -fx-text-fill: white; }
 .campeon-dt { -fx-text-fill: #c3cfe2; }
 .campeon-tablero { -fx-background-color: rgba(255, 255, 255, 0.09); -fx-background-radius: 16; -fx-border-color: rgba(255, 255, 255, 0.15); -fx-border-radius: 16; -fx-padding: 9 4; }
-.campeon-cifra { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 28px; -fx-text-fill: white; }
+.campeon-cifra { -fx-font-family: "Inter Bold"; -fx-font-size: 28px; -fx-text-fill: white; }
 .campeon-cifra-texto { -fx-font-size: 12px; -fx-text-fill: #c3cfe2; }
-.campeon-division-nombre { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 16px; -fx-text-fill: white; }
+.campeon-division-nombre { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 16px; -fx-text-fill: white; }
 
 /* ------------------------------------------------------------------ detalles */
 .punto-vivo { -fx-fill: -cesped; }
@@ -475,11 +475,11 @@
 .incidencias { -fx-border-color: -borde transparent transparent transparent; -fx-border-width: 1 0 0 0; -fx-padding: 8 0 0 0; }
 .minuto, .minuto-eje {
     -fx-background-color: -pantalla; -fx-background-radius: 8; -fx-text-fill: white; -fx-padding: 2 7;
-    -fx-font-family: "Bricolage Grotesque SemiBold"; -fx-font-size: 13px;
+    -fx-font-family: "Inter SemiBold"; -fx-font-size: 13px;
 }
 .minuto-eje { -fx-background-radius: 10; -fx-border-color: rgba(255, 255, 255, 0.14); -fx-border-radius: 10; -fx-padding: 4 8; -fx-font-size: 14px; }
 .raiz.claro .minuto, .raiz.claro .minuto-eje { -fx-background-color: #0e1a2b; }
-.entra-texto { -fx-text-fill: -cesped; -fx-font-family: "Onest SemiBold"; }
+.entra-texto { -fx-text-fill: -cesped; -fx-font-family: "Inter SemiBold"; }
 .sale-texto { -fx-text-fill: -sutil; }
 .icono-entra { -fx-stroke: -cesped; -fx-stroke-width: 2.4; }
 .icono-sale { -fx-stroke: -rojo; -fx-stroke-width: 2.4; }
@@ -488,17 +488,17 @@
 .icono-advertencia {
     -fx-min-width: 34; -fx-min-height: 34; -fx-max-width: 34; -fx-max-height: 34; -fx-alignment: center;
     -fx-background-color: rgba(255, 184, 77, 0.16); -fx-background-radius: 17; -fx-border-color: -ambar; -fx-border-radius: 17;
-    -fx-text-fill: -ambar; -fx-font-family: "Onest SemiBold"; -fx-font-size: 17px;
+    -fx-text-fill: -ambar; -fx-font-family: "Inter SemiBold"; -fx-font-size: 17px;
 }
 /* «Registrar resultados»: alineación que viene de la previa (plegada cuando el XI está completo) */
 .resumen-previa { -fx-border-color: -borde; -fx-border-radius: 18; -fx-background-color: rgba(46, 229, 152, 0.06); -fx-background-radius: 18; -fx-padding: 12 16; }
-.grupo-lista {-fx-text-fill: -cesped; -fx-font-family: "Onest SemiBold"; -fx-font-size: 12px; -fx-opacity: 1; -fx-background-color: transparent; }
+.grupo-lista {-fx-text-fill: -cesped; -fx-font-family: "Inter SemiBold"; -fx-font-size: 12px; -fx-opacity: 1; -fx-background-color: transparent; }
 
 /* ------------------------------------------------------------------ ficha del partido */
 .ficha { -fx-padding: 20 22; }
-.ficha-goles { -fx-text-fill: white; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 40px; }
+.ficha-goles { -fx-text-fill: white; -fx-font-family: "Inter Bold"; -fx-font-size: 40px; }
 .marcador-partido .equipo-nombre.ganador { -fx-text-fill: #2ee598; }
-.cifra-duelo { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 19px; -fx-text-fill: -texto; }
+.cifra-duelo { -fx-font-family: "Inter Bold"; -fx-font-size: 19px; -fx-text-fill: -texto; }
 .barra-fondo { -fx-background-color: rgba(255, 255, 255, 0.09); -fx-background-radius: 99; }
 .raiz.claro .barra-fondo { -fx-background-color: rgba(11, 23, 38, 0.09); }
 .barra-local { -fx-background-color: -cesped; -fx-background-radius: 99; }
@@ -517,15 +517,15 @@
 .xi-jugador.titular:disabled { -fx-opacity: 0.85; }
 .fila-alineacion { -fx-background-color: -campo; -fx-background-radius: 10; -fx-padding: 5 10; }
 .fila-alineacion.entro { -fx-border-color: transparent transparent transparent -cesped; -fx-border-width: 0 0 0 3; }
-.titulo-alineacion { -fx-font-family: "Bricolage Grotesque SemiBold"; -fx-font-size: 16px; }
+.titulo-alineacion { -fx-font-family: "Inter SemiBold"; -fx-font-size: 16px; }
 
 /* =====================================================================
-   Detalle de partido (estilo Flashscore): cara a cara, racha, alineaciones
+   Detalle de partido: cara a cara, racha, alineaciones
    ===================================================================== */
 .detalle-cabecera { -fx-padding: 20 24; }
-.detalle-equipo { -fx-font-family: "Bricolage Grotesque"; -fx-font-weight: bold; -fx-font-size: 18px; -fx-wrap-text: true; -fx-text-alignment: center; }
+.detalle-equipo { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 18px; -fx-wrap-text: true; -fx-text-alignment: center; }
 .detalle-pestanas .tab { -fx-background-color: transparent; -fx-padding: 6 14; }
-.detalle-pestanas .tab .tab-label { -fx-text-fill: -sutil; -fx-font-family: "Onest SemiBold"; }
+.detalle-pestanas .tab .tab-label { -fx-text-fill: -sutil; -fx-font-family: "Inter SemiBold"; }
 .detalle-pestanas .tab:selected { -fx-border-color: transparent transparent -cesped transparent; -fx-border-width: 0 0 3 0; }
 .detalle-pestanas .tab:selected .tab-label { -fx-text-fill: -texto; }
 .detalle-pestanas .tab-header-background { -fx-background-color: transparent; }
@@ -534,12 +534,12 @@
 .detalle-cifra.cifra-victoria .cifras { -fx-text-fill: -cesped; }
 .detalle-cifra.cifra-empate .cifras { -fx-text-fill: -ambar; }
 .detalle-fila { -fx-padding: 10 14; }
-.detalle-fila-equipo { -fx-font-family: "Onest SemiBold"; }
-.detalle-fila-marcador { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 16px; -fx-min-width: 54; -fx-alignment: center; }
+.detalle-fila-equipo { -fx-font-family: "Inter SemiBold"; }
+.detalle-fila-marcador { -fx-font-family: "Inter Bold"; -fx-font-size: 16px; -fx-min-width: 54; -fx-alignment: center; }
 .detalle-rotulo { -fx-padding: 14 16; }
 
 /* Racha: la letra va siempre dentro del cuadro (no depender solo del color) */
-.forma { -fx-background-radius: 6; -fx-font-family: "Onest SemiBold"; -fx-font-size: 13px; -fx-text-fill: #05080f; }
+.forma { -fx-background-radius: 6; -fx-font-family: "Inter SemiBold"; -fx-font-size: 13px; -fx-text-fill: #05080f; }
 .forma-V { -fx-background-color: #2ee598; }
 .forma-E { -fx-background-color: #f7c75a; }
 .forma-D { -fx-background-color: #ff6b81; }
@@ -551,13 +551,13 @@
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 24, 0, 0, 8);
 }
 .cancha-linea { -fx-fill: transparent; -fx-stroke: rgba(255, 255, 255, 0.55); -fx-stroke-width: 2; }
-.ficha-dorsal { -fx-background-radius: 999; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 14px; -fx-border-radius: 999; -fx-border-width: 2; }
+.ficha-dorsal { -fx-background-radius: 999; -fx-font-family: "Inter Bold"; -fx-font-size: 14px; -fx-border-radius: 999; -fx-border-width: 2; }
 .ficha-local { -fx-background-color: #eef4ff; -fx-text-fill: #0b1726; -fx-border-color: #2ee598; }
 .ficha-visitante { -fx-background-color: #0b1726; -fx-text-fill: #eef4ff; -fx-border-color: #f7c75a; }
-.ficha-nombre { -fx-text-fill: white; -fx-font-size: 11px; -fx-font-family: "Onest SemiBold"; -fx-alignment: center; -fx-text-alignment: center;
+.ficha-nombre { -fx-text-fill: white; -fx-font-size: 11px; -fx-font-family: "Inter SemiBold"; -fx-alignment: center; -fx-text-alignment: center;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 4, 0.5, 0, 1); }
 /* Cambio sobre la cancha: minuto en que salió el jugador */
-.ficha-sale { -fx-text-fill: #ffb3c0; -fx-font-size: 10px; -fx-font-family: "Onest SemiBold";
+.ficha-sale { -fx-text-fill: #ffb3c0; -fx-font-size: 10px; -fx-font-family: "Inter SemiBold";
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 4, 0.5, 0, 1); }
 
 /* Goles: el balón en la línea de tiempo y en el editor */
@@ -576,14 +576,14 @@
 
 /* Noticias del administrador: pestañas «Pendientes» y «Publicadas» */
 .pestanas-noticias .tab-header-area { -fx-padding: 0 0 4 0; }
-.pestanas-noticias .tab.pestana-con-pendientes .tab-label { -fx-text-fill: -ambar; -fx-font-family: "Onest SemiBold"; }
+.pestanas-noticias .tab.pestana-con-pendientes .tab-label { -fx-text-fill: -ambar; -fx-font-family: "Inter SemiBold"; }
 .pestanas-noticias .tab.pestana-con-pendientes:selected .tab-label { -fx-text-fill: -texto; }
 
 /* [REQ-07] Calificaciones de jugadores: estado de la votación, MVP y filas con su nota */
-.calificacion-estado { -fx-padding: 10 14; -fx-background-radius: 14; -fx-border-radius: 14; -fx-font-family: "Onest SemiBold"; }
+.calificacion-estado { -fx-padding: 10 14; -fx-background-radius: 14; -fx-border-radius: 14; -fx-font-family: "Inter SemiBold"; }
 .calificacion-abierta { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(46, 229, 152, 0.36); }
 .calificacion-cerrada { -fx-text-fill: -sutil; -fx-background-color: rgba(255, 255, 255, 0.05); -fx-border-color: -borde; }
-.calificacion-gracias { -fx-text-fill: -cesped; -fx-font-family: "Onest SemiBold"; }
+.calificacion-gracias { -fx-text-fill: -cesped; -fx-font-family: "Inter SemiBold"; }
 .tarjeta-mvp {
     -fx-padding: 14 18;
     -fx-border-color: rgba(247, 199, 90, 0.6);
@@ -591,13 +591,13 @@
     -fx-background-insets: 0, 2 0 0 0;
 }
 .mvp-estrella { -fx-text-fill: -oro; -fx-font-size: 30px; }
-.mvp-titulo { -fx-text-fill: -oro-texto; -fx-font-family: "Onest SemiBold"; -fx-font-size: 12px; }
+.mvp-titulo { -fx-text-fill: -oro-texto; -fx-font-family: "Inter SemiBold"; -fx-font-size: 12px; }
 .fila-calificacion { -fx-padding: 8 10; -fx-background-radius: 14; -fx-border-radius: 14; -fx-border-color: -borde; -fx-background-color: rgba(255, 255, 255, 0.03); }
 .raiz.claro .fila-calificacion { -fx-background-color: rgba(255, 255, 255, 0.6); }
 .fila-calificacion.fila-mvp { -fx-border-color: rgba(247, 199, 90, 0.65); -fx-background-color: rgba(247, 199, 90, 0.08); }
-.calificacion-dorsal { -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-text-fill: -sutil; }
+.calificacion-dorsal { -fx-font-family: "Inter Bold"; -fx-text-fill: -sutil; }
 /* La nota: pastilla con el número; verde alta, neutra media, rojo baja (el número siempre va escrito) */
-.nota { -fx-min-width: 52; -fx-alignment: center; -fx-padding: 5 10; -fx-background-radius: 10; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-font-size: 17px; }
+.nota { -fx-min-width: 52; -fx-alignment: center; -fx-padding: 5 10; -fx-background-radius: 10; -fx-font-family: "Inter Bold"; -fx-font-size: 17px; }
 .nota-alta { -fx-text-fill: #05080f; -fx-background-color: -cesped; }
 .nota-media { -fx-text-fill: -texto; -fx-background-color: rgba(255, 255, 255, 0.1); }
 .raiz.claro .nota-media { -fx-background-color: rgba(11, 23, 38, 0.08); }
@@ -612,7 +612,7 @@
 .foto-cedula { -fx-background-color: #dfe6ef; }
 .nn-fondo { -fx-background-color: #2a3a52; }
 .nn-figura { -fx-fill: #8fa3bf; }
-.nn-texto { -fx-text-fill: #2a3a52; -fx-font-family: "Bricolage Grotesque ExtraBold"; -fx-padding: 0; }
+.nn-texto { -fx-text-fill: #2a3a52; -fx-font-family: "Inter Bold"; -fx-padding: 0; }
 .raiz.claro .nn-fondo { -fx-background-color: #d5dde8; }
 .raiz.claro .nn-figura { -fx-fill: #8b9bb2; }
 .raiz.claro .nn-texto { -fx-text-fill: #f2f5f9; }
@@ -628,3 +628,241 @@
 .ficha-foto { -fx-border-width: 2; -fx-border-radius: 7; -fx-background-radius: 7; -fx-padding: 0; }
 .ficha-dorsal-mini { -fx-font-size: 10px; -fx-border-width: 1.5; -fx-padding: 0; }
 .menu-foto .menu-item { -fx-padding: 8 14; }
+
+
+/* =====================================================================
+   Estilo «marcador en vivo» (igual que la web): superficies planas y
+   compactas, letra Inter, paneles sólidos con esquinas de 8, barras de
+   encabezado, filas de partido de dos líneas con líneas divisorias finas
+   y pestañas tipo pastilla en mayúsculas. Colores de AlphaSport.
+   (Esta capa va al final: redefine los colores base y ajusta los componentes.)
+   ===================================================================== */
+.raiz {
+    -fondo: #050a12;
+    -superficie: #0b1522;
+    -superficie-2: #12233a;
+    -linea: rgba(150, 185, 230, 0.1);
+    -fila-hover: rgba(255, 255, 255, 0.045);
+    -vidrio: -superficie;
+    -vidrio-alto: -superficie;
+    -vidrio-denso: -superficie;
+    -vidrio-borde: transparent;
+    -vidrio-luz: transparent;
+    -campo: #070f1a;
+    -pantalla: #050c16;
+    -borde: -linea;
+    -fx-font-family: "Inter", "Segoe UI", sans-serif;
+    -fx-font-size: 13.5px;
+}
+.raiz.claro {
+    -fondo: #e7ecf2;
+    -superficie: #ffffff;
+    -superficie-2: #dfe7f1;
+    -linea: rgba(11, 23, 38, 0.09);
+    -fila-hover: rgba(11, 23, 38, 0.04);
+    -vidrio: -superficie;
+    -vidrio-alto: -superficie;
+    -vidrio-denso: -superficie;
+    -vidrio-borde: transparent;
+    -vidrio-luz: transparent;
+    -campo: #f3f6f9;
+    -pantalla: #0e1a2b;
+    -borde: -linea;
+}
+
+/* Fondo liso en la aplicación; la foto del estadio y los focos quedan solo en la entrada. */
+.raiz.plano .foto-fondo, .raiz.plano .haz { visibility: hidden; }
+.raiz.plano .velo, .raiz.plano.claro .velo { -fx-background-color: -fondo; }
+
+/* Paneles sólidos, sin brillo ni sombra. */
+.vidrio, .raiz.claro .vidrio {
+    -fx-background-color: -superficie;
+    -fx-background-insets: 0;
+    -fx-background-radius: 8;
+    -fx-border-color: transparent;
+    -fx-border-radius: 8;
+    -fx-effect: null;
+}
+
+/* Títulos más sobrios. */
+.h2 { -fx-font-family: "Inter Bold"; -fx-font-size: 21px; }
+.h3 { -fx-font-family: "Inter Bold"; -fx-font-size: 16px; }
+.titulo { -fx-font-family: "Inter Bold"; -fx-font-size: 28px; }
+.campo-titulo, .sobretitulo { -fx-font-family: "Inter Bold"; -fx-font-size: 11px; -fx-text-fill: -sutil; }
+
+/* Botones: rectángulos redondeados planos; el principal es césped sólido. */
+.btn, .raiz.claro .btn {
+    -fx-background-color: rgba(255, 255, 255, 0.07);
+    -fx-background-insets: 0;
+    -fx-background-radius: 8;
+    -fx-border-color: transparent;
+    -fx-border-radius: 8;
+    -fx-font-family: "Inter Bold";
+    -fx-font-size: 13px;
+    -fx-padding: 6 14;
+    -fx-min-height: 34;
+    -fx-effect: null;
+}
+.raiz.claro .btn { -fx-background-color: #edf1f6; }
+.btn:hover { -fx-background-color: rgba(255, 255, 255, 0.13); -fx-border-color: transparent; }
+.raiz.claro .btn:hover { -fx-background-color: #dfe6ef; -fx-border-color: transparent; }
+.btn:pressed { -fx-scale-x: 1; -fx-scale-y: 1; }
+.btn:focused { -fx-border-color: -cian; }
+.btn.primario, .raiz.claro .btn.primario { -fx-background-color: -cesped; -fx-text-fill: #03170d; -fx-effect: null; }
+.raiz.claro .btn.primario { -fx-text-fill: white; }
+.btn.primario:hover { -fx-background-color: #5af0b0; }
+.raiz.claro .btn.primario:hover { -fx-background-color: #0a9a5c; }
+.btn.dorado, .raiz.claro .btn.dorado, .btn.primario.dorado { -fx-background-color: #f7c75a; -fx-text-fill: #2a1900; -fx-effect: null; }
+.btn.dorado:hover { -fx-background-color: #ffd77d; }
+.btn.fantasma, .raiz.claro .btn.fantasma { -fx-background-color: transparent; }
+.btn.fantasma:hover, .raiz.claro .btn.fantasma:hover { -fx-background-color: -fila-hover; }
+.btn.peligro, .raiz.claro .btn.peligro { -fx-background-color: transparent; }
+.btn.mini { -fx-padding: 4 10; -fx-font-size: 12px; -fx-min-height: 28; }
+.btn.foto-boton, .raiz.claro .btn.foto-boton { -fx-border-color: rgba(116, 220, 255, 0.55); -fx-border-style: segments(4, 3); -fx-background-color: rgba(116, 220, 255, 0.06); }
+.btn.grande { -fx-padding: 10 20; -fx-font-size: 14px; -fx-min-height: 42; }
+.btn.icono-solo { -fx-min-width: 36; -fx-min-height: 36; -fx-pref-width: 36; -fx-pref-height: 36; }
+
+/* Menús y campos compactos. */
+.context-menu { -fx-background-radius: 8; -fx-border-radius: 8; -fx-padding: 4; -fx-border-color: transparent; }
+.menu-item { -fx-background-radius: 4; -fx-padding: 7 12; }
+.menu-item .label { -fx-font-size: 13px; }
+.text-field, .password-field, .combo-box, .spinner, .date-picker {
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-border-color: -linea;
+    -fx-min-height: 36;
+}
+.text-field, .password-field { -fx-padding: 7 10; }
+.combo-box-popup .list-view { -fx-background-radius: 8; -fx-border-radius: 8; -fx-border-color: transparent; }
+.combo-box-popup .list-cell { -fx-background-radius: 4; -fx-padding: 6 10; }
+
+/* Barra lateral: enlaces compactos. */
+.logo-lateral, .logo-login { -fx-effect: null; }
+.marca-nombre { -fx-font-size: 18px; }
+.marca-sub { -fx-font-family: "Inter Bold"; -fx-font-size: 10.5px; }
+.nav, .nav:selected {
+    -fx-background-radius: 4;
+    -fx-border-color: transparent;
+    -fx-border-radius: 4;
+    -fx-text-fill: -texto;
+    -fx-font-family: "Inter";
+    -fx-font-size: 14px;
+    -fx-padding: 7 10;
+}
+.nav:hover { -fx-background-color: -fila-hover; }
+.nav:selected, .raiz.claro .nav:selected { -fx-background-color: -cesped-suave; -fx-border-color: transparent; -fx-text-fill: -cesped; -fx-font-family: "Inter Bold"; }
+
+/* Chips y etiquetas de estado: esquinas de 4, mayúsculas pequeñas. */
+.chip, .raiz.claro .chip { -fx-background-radius: 4; -fx-border-radius: 4; -fx-padding: 3 8; -fx-font-size: 11px; -fx-font-family: "Inter Bold"; -fx-border-color: transparent; }
+.raiz.claro .chip { -fx-background-color: #edf1f6; }
+.chip-estado { -fx-border-color: transparent; }
+.etiqueta { -fx-background-radius: 4; -fx-border-radius: 4; -fx-padding: 2 7; -fx-font-size: 11px; -fx-font-family: "Inter Bold"; }
+
+/* Cabeceras: más bajas. */
+.marcador-principal { -fx-padding: 16 20; }
+.marcador-principal.terminado, .raiz.claro .marcador-principal.terminado {
+    -fx-background-color: #f7c75a, -superficie;
+    -fx-background-insets: 0, 0 0 0 3;
+    -fx-border-color: transparent;
+}
+.cabecera-vista { -fx-padding: 14 18; }
+.aviso { -fx-background-radius: 8; -fx-border-radius: 8; -fx-border-color: transparent; -fx-padding: 10 16; }
+
+/* Bloques de partidos: panel por ronda, barra de encabezado y filas de dos líneas. */
+.bloque-ronda { -fx-background-color: -superficie; -fx-background-radius: 8; -fx-padding: 0 0 4 0; }
+.titulo-bloque, .raiz.claro .titulo-bloque {
+    -fx-background-color: -superficie-2;
+    -fx-background-radius: 8 8 4 4;
+    -fx-padding: 8 16;
+    -fx-min-height: 32;
+    -fx-font-family: "Inter Bold";
+    -fx-font-size: 11.5px;
+    -fx-text-fill: -texto;
+    -fx-effect: null;
+}
+.partido {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent transparent -linea transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-insets: 0 12 0 12;
+    -fx-padding: 8 16;
+    -fx-cursor: hand;
+}
+.partido.en-vivo { -fx-border-color: transparent transparent -linea transparent; }
+.partido.ultima { -fx-border-color: transparent; }
+.partido:hover { -fx-background-color: -fila-hover; -fx-translate-y: 0; -fx-border-color: transparent transparent -linea transparent; }
+.partido.ultima:hover { -fx-border-color: transparent; }
+.equipo-partido { -fx-font-family: "Inter"; -fx-font-weight: normal; -fx-font-size: 14px; }
+.equipo-partido.ganador { -fx-text-fill: -texto; -fx-font-family: "Inter Bold"; }
+.escudo-mini .escudo-texto { -fx-font-size: 6.5px; -fx-effect: null; }
+.resultado { -fx-background-color: transparent; -fx-border-color: transparent; -fx-padding: 0; -fx-min-width: 30; }
+.partido .cifras { -fx-text-fill: -texto; -fx-font-family: "Inter Bold"; -fx-font-size: 14px; }
+.partido .cifras.en-vivo { -fx-text-fill: -rojo; }
+.partido .vs { -fx-text-fill: -sutil; -fx-font-family: "Inter Bold"; -fx-font-size: 11px; }
+
+/* Tablas: encabezado en barra y filas separadas por líneas finas. */
+.table-view, .raiz.claro .table-view {
+    -fx-background-color: -superficie;
+    -fx-background-insets: 0;
+    -fx-background-radius: 8;
+    -fx-border-color: transparent;
+    -fx-border-radius: 8;
+    -fx-padding: 10 12;
+    -fx-effect: null;
+}
+.table-view .column-header-background { -fx-background-color: -superficie-2; -fx-background-radius: 4; }
+.table-view .column-header, .table-view .filler { -fx-size: 32; }
+.table-view .column-header .label { -fx-text-fill: -texto; -fx-font-family: "Inter Bold"; -fx-font-size: 11px; }
+.table-row-cell, .table-row-cell:odd, .raiz.claro .table-row-cell:odd {
+    -fx-background-color: -linea, -superficie;
+    -fx-background-insets: 0, 0 0 1 0;
+    -fx-background-radius: 0;
+}
+.table-row-cell:hover { -fx-background-color: -linea, -superficie, -fila-hover; -fx-background-insets: 0, 0 0 1 0, 0 0 1 0; }
+.table-row-cell:selected { -fx-background-color: -linea, -superficie, -cesped-suave; -fx-background-insets: 0, 0 0 1 0, 0 0 1 0; }
+.table-row-cell.lider, .raiz.claro .table-row-cell.lider { -fx-background-color: -linea, -superficie, rgba(247, 199, 90, 0.12); -fx-background-insets: 0, 0 0 1 0, 0 0 1 0; }
+.table-row-cell:empty { -fx-background-color: -superficie; }
+.table-cell { -fx-font-size: 13.5px; }
+.table-column.puntos { -fx-font-size: 15px; }
+.table-column.posicion { -fx-font-size: 13.5px; }
+
+/* Llaves, campeón, reglas y listas: mismas esquinas. */
+.cruce { -fx-background-radius: 8; -fx-border-color: transparent; -fx-border-radius: 8; }
+.lado.gana { -fx-background-radius: 8; }
+.campeon-caja { -fx-background-color: #f7c75a, -superficie; -fx-background-insets: 0, 0 0 0 3; -fx-background-radius: 8; -fx-border-color: transparent; -fx-effect: null; }
+.criterio, .fila-lista { -fx-background-radius: 6; -fx-border-radius: 6; -fx-border-color: -linea; -fx-padding: 6 10; }
+.dorsal { -fx-background-radius: 4; -fx-min-width: 30; -fx-min-height: 26; }
+
+/* Ventanas: panel sólido de esquinas de 8. */
+.dialogo-panel, .raiz.claro .dialogo-panel {
+    -fx-background-color: -superficie;
+    -fx-background-insets: 0;
+    -fx-background-radius: 8;
+    -fx-border-color: transparent;
+    -fx-border-radius: 8;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.55), 24, 0, 0, 10);
+}
+.grupo { -fx-border-color: -linea; -fx-border-radius: 8; -fx-background-color: transparent; -fx-background-radius: 8; -fx-padding: 12; }
+.tarjeta-formato, .raiz.claro .tarjeta-formato { -fx-background-color: transparent; -fx-background-radius: 8; -fx-border-color: -linea; -fx-border-radius: 8; -fx-padding: 12; }
+.tarjeta-formato:selected { -fx-background-color: -cesped-suave; -fx-border-color: -cesped; }
+.marcador-partido, .raiz.claro .marcador-partido { -fx-background-color: -pantalla; -fx-background-radius: 8; -fx-border-color: transparent; -fx-border-radius: 8; -fx-padding: 18; }
+
+/* Pestañas tipo pastilla: 28 de alto, mayúsculas, la activa en césped sólido. */
+.tab-pane .tab, .detalle-pestanas .tab {
+    -fx-background-color: rgba(255, 255, 255, 0.07);
+    -fx-background-radius: 8;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-border-radius: 8;
+    -fx-padding: 4 12;
+    -fx-background-insets: 0 4 0 0;
+}
+.raiz.claro .tab-pane .tab { -fx-background-color: #edf1f6; }
+.tab-pane .tab .tab-label, .detalle-pestanas .tab .tab-label { -fx-text-fill: -texto; -fx-font-family: "Inter Bold"; -fx-font-size: 11.5px; }
+.tab-pane .tab:selected, .detalle-pestanas .tab:selected, .raiz.claro .tab-pane .tab:selected { -fx-background-color: -cesped; -fx-border-color: transparent; }
+.tab-pane .tab:selected .tab-label, .detalle-pestanas .tab:selected .tab-label { -fx-text-fill: #03170d; }
+.raiz.claro .tab-pane .tab:selected .tab-label { -fx-text-fill: white; }
+.tab-pane .tab:focused .focus-indicator { -fx-border-color: transparent; }
+
+/* Menú «Cambiar / Eliminar» de fotos. */
+.menu-foto { -fx-background-radius: 8; -fx-border-radius: 8; }
