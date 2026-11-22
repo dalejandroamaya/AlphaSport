@@ -359,6 +359,14 @@ public class Aplicacion extends Application {
         return r;
     }
 
+    /** Vuelve a pedir el estado y dibuja (por ejemplo, cuando vence una votación sin que nadie haga nada). */
+    void refrescar() {
+        if (api.getUsuarioActual() != null) {
+            E = api.consultar("estado");
+            render();
+        }
+    }
+
     void aviso(String texto) {
         if (texto == null || texto.isBlank()) {
             return;
