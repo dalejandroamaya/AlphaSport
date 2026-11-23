@@ -170,6 +170,39 @@ public class ApiControlador {
 
     /* ---------------------------------------------------------------- archivos */
 
+    /** Archivo para descargar: su contenido, su tipo y el nombre sugerido. */
+    public record Descarga(byte[] datos, String tipo, String nombre) {
+    }
+
+    /** Respaldo del campeonato en curso (.dat). Lo puede descargar cualquiera que lo vea. */
+    public Descarga respaldo() throws Exception {
+        exigir(Permiso.VER);
+        servicio.sincronizar();
+        return new Descarga(servicio.respaldo(), "application/octet-stream", nombreArchivo() + ".dat");
+    }
+
+    /** Historial del campeonato como texto (.txt). */
+    public Descarga historialEnTexto() {
+        exigir(Permiso.VER);
+        servicio.sincronizar();
+        return new Descarga(servicio.textoHistorial().getBytes(java.nio.charset.StandardCharsets.UTF_8), "text/plain; charset=utf-8",
+                nombreArchivo() + ".txt");
+    }
+
+    /** Abre un respaldo: reemplaza el campeonato en curso (el anterior queda en el historial si tuvo partidos). */
+    public Map<String, Object> abrirRespaldo(byte[] datos) throws Exception {
+        exigir(Permiso.GESTIONAR_CAMPEONATO);
+        servicio.sincronizar();
+        servicio.abrirRespaldo(datos);
+        return respuesta("Se abrió «" + servicio.getCampeonato().getNombreCampeonato() + "».");
+    }
+
+    /** Nombre de archivo a partir del nombre del campeonato (solo letras, numeros, - y _). */
+    private String nombreArchivo() {
+        String limpio = servicio.hayCampeonato() ? servicio.getCampeonato().getNombreCampeonato().trim().replaceAll("[^a-zA-Z0-9-_]+", "_") : "";
+        return limpio.isEmpty() ? "campeonato" : limpio;
+    }
+
     /** Foto de un jugador o escudo (la pide ServidorWeb para /api/foto/{nombre}); basta con tener sesion. */
     public byte[] foto(String nombre) throws Exception {
         exigirSesion();

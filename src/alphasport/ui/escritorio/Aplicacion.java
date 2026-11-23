@@ -8,7 +8,6 @@ import static alphasport.ui.escritorio.Datos.n;
 import static alphasport.ui.escritorio.Datos.s;
 
 import alphasport.model.Usuario;
-import alphasport.service.CampeonatoService;
 import alphasport.service.ReglaNegocioException;
 import alphasport.ui.ApiControlador;
 import alphasport.ui.FabricaAplicacion;
@@ -103,7 +102,6 @@ public class Aplicacion extends Application {
     /** Arma la conexion, los servicios y el controlador; se cierra al salir. */
     private final FabricaAplicacion fabrica = new FabricaAplicacion();
     Stage stage;
-    CampeonatoService servicio;
     ApiControlador api;
     Map<String, Object> catalogo;
     Map<String, Object> E = mapa("hay", false);
@@ -141,7 +139,6 @@ public class Aplicacion extends Application {
     public void start(Stage stage) {
         this.stage = stage;
         try {
-            servicio = fabrica.servicio();
             api = fabrica.controlador();
         } catch (alphasport.persistence.PersistenciaException e) {
             avisarSinDatos(e);
@@ -636,7 +633,7 @@ public class Aplicacion extends Application {
         MenuItem abrir = new MenuItem("Abrir respaldo…");
         abrir.setOnAction(e -> abrirRespaldo());
         MenuItem exportar = new MenuItem("Exportar historial (.txt)");
-        exportar.setOnAction(e -> guardarTexto(s(m(E, "campeonato"), "nombre"), servicio.textoHistorial()));
+        exportar.setOnAction(e -> exportarHistorial());
         MenuItem historial = new MenuItem("Historial de campeonatos");
         historial.setOnAction(e -> dialogos.historial());
         MenuItem sesion = new MenuItem("Cerrar sesión");
@@ -714,7 +711,7 @@ public class Aplicacion extends Application {
             return;
         }
         try {
-            Files.write(archivo.toPath(), servicio.respaldo());
+            Files.write(archivo.toPath(), api.respaldo().datos()); // por el controlador: permiso y datos al dia
             aviso("Respaldo guardado en " + archivo.getName());
         } catch (Exception e) {
             dialogos.mensaje("Error", e.getMessage());
@@ -730,11 +727,19 @@ public class Aplicacion extends Application {
             return;
         }
         try {
-            servicio.abrirRespaldo(Files.readAllBytes(archivo.toPath()));
-            E = m(api.respuesta(null), "estado");
+            E = m(api.abrirRespaldo(Files.readAllBytes(archivo.toPath())), "estado");
             render();
             aviso("Se abrió «" + s(m(E, "campeonato"), "nombre") + "».");
         } catch (Exception e) {
+            dialogos.mensaje("Error", e.getMessage());
+        }
+    }
+
+    /** El historial del campeonato en un .txt; el texto lo da el controlador (con permiso y datos al dia). */
+    private void exportarHistorial() {
+        try {
+            guardarTexto(s(m(E, "campeonato"), "nombre"), new String(api.historialEnTexto().datos(), StandardCharsets.UTF_8));
+        } catch (ReglaNegocioException e) {
             dialogos.mensaje("Error", e.getMessage());
         }
     }

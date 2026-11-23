@@ -88,7 +88,7 @@ public final class FabricaAplicacion implements AutoCloseable {
 
     /** El servidor local de la version web. */
     public ServidorWeb servidorWeb() throws PersistenciaException {
-        return new ServidorWeb(CARPETA_WEB, servicio(), controlador());
+        return new ServidorWeb(CARPETA_WEB, controlador());
     }
 
     @Override

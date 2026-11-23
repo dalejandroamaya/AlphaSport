@@ -592,9 +592,12 @@ public class SimulacionFormatos {
             };
             boolean sinSesion = codigo.apply(() -> api.consultar("estado")).equals("LOGIN")
                     && codigo.apply(() -> api.ejecutar("noticia/comentar", java.util.Map.of("id", 1, "autor", "A", "texto", "Hola"))).equals("LOGIN");
+            // [L1] Respaldo y exportacion pasan por el controlador: tambien exigen sesion y permiso.
+            boolean archivos = codigo.apply(api::respaldo).equals("LOGIN") && codigo.apply(api::historialEnTexto).equals("LOGIN");
             api.ejecutar("login/visitante", java.util.Map.of());
             @SuppressWarnings("unchecked")
             List<String> permisosVisitante = (List<String>) api.sesion().get("permisos");
+            archivos &= codigo.apply(() -> api.abrirRespaldo(new byte[0])).equals("PERMISO");
             boolean comoVisitante = codigo.apply(() -> api.ejecutar("nuevo", java.util.Map.of())).equals("PERMISO")
                     && codigo.apply(() -> api.ejecutar("noticia/aprobar", java.util.Map.of("id", 1))).equals("PERMISO")
                     && codigo.apply(() -> api.ejecutar("ruta/que/no/existe", java.util.Map.of())).equals("PERMISO") // lista blanca
@@ -614,10 +617,10 @@ public class SimulacionFormatos {
                     && acciones.get("partido") == alphasport.model.Permiso.GESTIONAR_CAMPEONATO
                     && api.permisosDeConsultas().get("partido/…") == alphasport.model.Permiso.VER
                     && api.permisosDeConsultas().get("catalogo") == null;
-            correcto = roles && sinSesion && comoVisitante && comoAdmin && rutas;
+            correcto = roles && sinSesion && comoVisitante && comoAdmin && rutas && archivos;
             if (!correcto) {
                 System.out.println("  roles=" + roles + " sinSesion=" + sinSesion + " comoVisitante=" + comoVisitante + " comoAdmin=" + comoAdmin
-                        + " rutas=" + rutas + " " + acciones);
+                        + " rutas=" + rutas + " archivos=" + archivos + " " + acciones);
             }
         } catch (Exception e) {
             e.printStackTrace(System.out);
@@ -640,7 +643,7 @@ public class SimulacionFormatos {
             CampeonatoService servicio = new CampeonatoService(
                     new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-web")),
                     new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-web")));
-            servidor = new alphasport.ui.ServidorWeb(java.nio.file.Path.of("web"), servicio,
+            servidor = new alphasport.ui.ServidorWeb(java.nio.file.Path.of("web"),
                     new alphasport.ui.ApiControlador(servicio, new AutenticacionService()));
             int puerto = servidor.iniciar(18300);
             String base = "http://127.0.0.1:" + puerto;

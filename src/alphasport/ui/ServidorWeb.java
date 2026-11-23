@@ -1,7 +1,6 @@
 package alphasport.ui;
 
 import alphasport.persistence.PersistenciaException;
-import alphasport.service.CampeonatoService;
 import alphasport.service.ReglaNegocioException;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -39,7 +38,6 @@ public class ServidorWeb {
             "jpg", "image/jpeg", "gif", "image/gif");
 
     private final Path carpetaWeb;
-    private final CampeonatoService servicio;
     private final ApiControlador api;
     private HttpServer servidor;
     private int puerto;
@@ -47,9 +45,8 @@ public class ServidorWeb {
     private Runnable alSalir = () -> {
     };
 
-    public ServidorWeb(Path carpetaWeb, CampeonatoService servicio, ApiControlador api) {
+    public ServidorWeb(Path carpetaWeb, ApiControlador api) {
         this.carpetaWeb = carpetaWeb.toAbsolutePath().normalize();
-        this.servicio = servicio;
         this.api = api;
     }
 
@@ -93,24 +90,15 @@ public class ServidorWeb {
         ApiControlador api = this.api.cliente(token);
         intercambio.setAttribute(ATRIBUTO_CLIENTE, new Cliente(api, token));
         try {
-            // Rutas que no pasan por api.ejecutar(): se validan aqui.
-            if (ruta.equals("respaldo") || ruta.equals("exportar/historial")) {
-                api.exigirSesion();
-                servicio.sincronizar();
-            }
-            if (metodo.equals("POST") && (ruta.equals("respaldo") || ruta.equals("salir"))) {
-                api.exigirAdministrador();
-            }
+            // Archivos: el controlador exige el permiso y sincroniza, igual que para el escritorio.
             if (metodo.equals("GET") && ruta.equals("respaldo")) {
-                descargar(intercambio, servicio.respaldo(), "application/octet-stream",
-                        nombreArchivo(servicio.getCampeonato().getNombreCampeonato()) + ".dat");
+                descargar(intercambio, api.respaldo());
             } else if (metodo.equals("GET") && ruta.equals("exportar/historial")) {
-                descargar(intercambio, servicio.textoHistorial().getBytes(StandardCharsets.UTF_8), "text/plain; charset=utf-8",
-                        nombreArchivo(servicio.getCampeonato().getNombreCampeonato()) + ".txt");
+                descargar(intercambio, api.historialEnTexto());
             } else if (metodo.equals("POST") && ruta.equals("respaldo")) {
-                servicio.abrirRespaldo(intercambio.getRequestBody().readAllBytes());
-                responder(intercambio, 200, api.respuesta("Se abrió «" + servicio.getCampeonato().getNombreCampeonato() + "»."));
+                responder(intercambio, 200, api.abrirRespaldo(intercambio.getRequestBody().readAllBytes()));
             } else if (metodo.equals("POST") && ruta.equals("salir")) {
+                api.exigirAdministrador();
                 responder(intercambio, 200, Presentador.mapa("ok", true));
                 new Thread(() -> {
                     detener();
@@ -227,10 +215,10 @@ public class ServidorWeb {
         enviar(intercambio, codigo, TIPOS.get("json"), Json.escribir(datos).getBytes(StandardCharsets.UTF_8));
     }
 
-    private void descargar(HttpExchange intercambio, byte[] datos, String tipo, String nombre) throws IOException {
+    private void descargar(HttpExchange intercambio, ApiControlador.Descarga descarga) throws IOException {
         intercambio.getResponseHeaders().set("Content-Disposition",
-                "attachment; filename*=UTF-8''" + URLEncoder.encode(nombre, StandardCharsets.UTF_8).replace("+", "%20"));
-        enviar(intercambio, 200, tipo, datos);
+                "attachment; filename*=UTF-8''" + URLEncoder.encode(descarga.nombre(), StandardCharsets.UTF_8).replace("+", "%20"));
+        enviar(intercambio, 200, descarga.tipo(), descarga.datos());
     }
 
     private void enviar(HttpExchange intercambio, int codigo, String tipo, byte[] datos) throws IOException {
@@ -242,10 +230,5 @@ public class ServidorWeb {
         try (OutputStream salida = intercambio.getResponseBody()) {
             salida.write(datos);
         }
-    }
-
-    private static String nombreArchivo(String nombre) {
-        String limpio = nombre.trim().replaceAll("[^a-zA-Z0-9-_]+", "_");
-        return limpio.isEmpty() ? "campeonato" : limpio;
     }
 }
