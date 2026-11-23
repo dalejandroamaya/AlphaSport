@@ -24,7 +24,7 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
 
     public static final Path ARCHIVO = Path.of("db.properties");
     /** Version del esquema que necesita el programa (la ultima de database/migraciones). */
-    public static final int VERSION_ESQUEMA = 4;
+    public static final int VERSION_ESQUEMA = 5;
 
     /** Datos de conexion. */
     public record Configuracion(String host, int puerto, String base, String usuario, String clave) {
@@ -189,6 +189,9 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
                     ? "Dos jugadores del campeonato tienen el mismo documento. Cada jugador debe tener el suyo: revise los documentos."
                     : e.getMessage() != null && e.getMessage().contains("jugadores_dorsal_unico")
                     ? "Dos jugadores del mismo equipo tienen el mismo dorsal." : "Error en la base de datos: " + e.getMessage(), e);
+            // Dos registros con el mismo usuario o correo al mismo tiempo: la llave UNIQUE frena el segundo.
+            case "23505" -> new PersistenciaException(e.getMessage() != null && e.getMessage().contains("usuarios_")
+                    ? "Ese nombre de usuario o correo ya está registrado. Elija otro." : "Error en la base de datos: " + e.getMessage(), e);
             default -> new PersistenciaException("Error en la base de datos: " + e.getMessage(), e);
         };
     }

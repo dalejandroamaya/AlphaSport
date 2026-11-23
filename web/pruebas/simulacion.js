@@ -217,5 +217,35 @@ if (typeof Calificaciones !== 'undefined') {
   if (!ok) fallos++;
 }
 
-log(fallos === 0 ? 'TODO BIEN' : 'FALLOS: ' + fallos);
-if (enNode) process.exit(fallos === 0 ? 0 : 1);
+// Cuentas (cuentas.js, web sola): reglas del registro iguales a Java y hash PBKDF2 de WebCrypto en el mismo formato.
+async function probarCuentas() {
+  if (typeof Cuentas === 'undefined') return; // en Node no se carga cuentas.js
+  const base = { tipo: 'ORGANIZADOR', nombre: '  Ana   Torres ', usuario: ' Ana.Torres ', correo: ' Ana@Correo.COM ', clave: 'clave1234', confirmacion: 'clave1234' };
+  const error = cambios => { try { Cuentas.validarRegistro(Object.assign({}, base, cambios)); return ''; } catch (e) { return e.message; } };
+  const limpio = Cuentas.validarRegistro(base);
+  const valido = limpio.usuario === 'ana.torres' && limpio.correo === 'ana@correo.com' && limpio.nombre === 'Ana Torres' && limpio.rol === 'ORGANIZADOR';
+  const reglas = error({ clave: 'abc123', confirmacion: 'abc123' }).includes('entre 8 y 128')
+    && error({ clave: 'solamenteletras', confirmacion: 'solamenteletras' }).includes('letras y números')
+    && error({ clave: '1234567890', confirmacion: '1234567890' }).includes('letras y números')
+    && error({ confirmacion: 'clave12345' }).includes('no coinciden')
+    && error({ usuario: 'lu' }).includes('entre 3 y 30') && error({ usuario: 'josé' }).includes('sin tilde')
+    && error({ usuario: '.ana' }).includes('empezar con una letra') && error({ nombre: 'A' }).includes('Escriba su nombre')
+    && error({ correo: 'ana@correo' }).includes('correo válido') && error({ correo: '' }).includes('Escriba su correo');
+  const roles = ['ADMINISTRADOR', 'ADMIN', 'VISITANTE', 'organizador', '', undefined].every(tipo => error({ tipo }).includes('tipo de cuenta'))
+    && error({ tipo: 'AFICIONADO' }) === '';
+  const h = await Cuentas.hash('clave1234'), otro = await Cuentas.hash('clave1234');
+  // Hash hecho por ClavesPbkdf2 de Java (1000 iteraciones): la web lo reconoce, así el formato es el mismo.
+  const deJava = 'pbkdf2_sha256$1000$Vvg0pgsk9IEHmALymDeIbQ$SGYFdGJv0B3g3YDoVg0/FGAGKKTWHOdizcX9SFRQ3IU';
+  const hash = h.startsWith('pbkdf2_sha256$100000$') && !h.includes('clave1234') && h !== otro
+    && await Cuentas.coincide('clave1234', h) && !(await Cuentas.coincide('Clave1234', h)) && !(await Cuentas.coincide('clave1234', 'clave1234'))
+    && await Cuentas.coincide('clave1234', deJava) && !(await Cuentas.coincide('otra1234', deJava));
+  const ok = valido && reglas && roles && hash;
+  if (!ok) log(`  valido=${valido} reglas=${reglas} roles=${roles} hash=${hash}`);
+  log('Cuentas de la web sola (registro y claves con hash):', ok ? 'correcto' : 'MAL');
+  if (!ok) fallos++;
+}
+
+probarCuentas().catch(e => { log('Cuentas: ERROR', e.message); fallos++; }).finally(() => {
+  log(fallos === 0 ? 'TODO BIEN' : 'FALLOS: ' + fallos);
+  if (enNode) process.exit(fallos === 0 ? 0 : 1);
+});

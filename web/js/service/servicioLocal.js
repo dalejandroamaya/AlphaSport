@@ -598,10 +598,10 @@ function crearServicioLocal() {
 
   /* ---------------------------------------------------------------- sesión y permisos (igual que ApiControlador) */
 
-  /** Cuentas demostrativas, como AutenticacionService en Java (sin base de datos). */
-  const CUENTAS = { admin: { clave: '123', rol: 'ADMINISTRADOR' }, visitante: { clave: '321', rol: 'VISITANTE' } };
-  /** Acciones que no exigen ser administrador. Todo lo demás sí (lista blanca). */
-  const RUTAS_PUBLICAS = new Set(['login', 'login/visitante', 'logout']);
+  /** Acciones que no exigen ser organizador. Todo lo demás sí (lista blanca). */
+  const RUTAS_PUBLICAS = new Set(['registro', 'login', 'logout']);
+  /** Hash de una clave que nadie usa: con un usuario que no existe se hace el mismo trabajo (como en Java). */
+  let hashFicticio = null;
 
   let usuario = Almacen.sesion.cargar();
   if (usuario && !ROLES[usuario.rol]) usuario = null;
@@ -630,13 +630,30 @@ function crearServicioLocal() {
   const fallo = e => ({ ok: false, codigo: e.codigo || 'ERROR', error: e.message });
 
   const comandos = {
-    login: d => {
-      const nombre = String(d.usuario || '').trim().toLowerCase();
-      const cuenta = CUENTAS[nombre];
-      if (!cuenta || cuenta.clave !== d.clave) throw new ErrorRegla('Usuario o contraseña incorrectos.', 'LOGIN');
+    // Cuentas de este navegador (Almacen.cuentas), con la clave en hash PBKDF2 (Cuentas.hash).
+    registro: async d => {
+      let datos;
+      try {
+        datos = Cuentas.validarRegistro(d);
+      } catch (e) {
+        throw new ErrorRegla(e.message);
+      }
+      const cuentas = Almacen.cuentas.listar();
+      if (cuentas.some(c => c.usuario === datos.usuario)) throw new ErrorRegla('Ese nombre de usuario ya está en uso. Elija otro.');
+      if (cuentas.some(c => c.correo === datos.correo)) throw new ErrorRegla('Ese correo ya está registrado. Inicie sesión o use otro correo.');
+      const claveHash = await Cuentas.hash(datos.clave);
+      Almacen.cuentas.guardar([...cuentas, { usuario: datos.usuario, nombre: datos.nombre, correo: datos.correo, rol: datos.rol, claveHash }]);
+      abrirSesion(datos.usuario, datos.rol);
+      return 'Cuenta creada. ¡Le damos la bienvenida a AlphaSport!';
+    },
+    login: async d => {
+      const nombre = Cuentas.normalizar(d.usuario);
+      const cuenta = Almacen.cuentas.listar().find(c => c.usuario === nombre);
+      if (!cuenta) hashFicticio = hashFicticio || await Cuentas.hash(String(Math.random()));
+      const coincide = await Cuentas.coincide(typeof d.clave === 'string' ? d.clave : '', cuenta ? cuenta.claveHash : hashFicticio);
+      if (!cuenta || !coincide || !ROLES[cuenta.rol]) throw new ErrorRegla('Usuario o contraseña incorrectos.', 'LOGIN');
       abrirSesion(nombre, cuenta.rol);
     },
-    'login/visitante': () => abrirSesion('visitante', 'VISITANTE'),
     logout: () => {
       usuario = null;
       Almacen.sesion.eliminar();
@@ -810,7 +827,7 @@ function crearServicioLocal() {
   function noticiasJson() {
     const admin = !!(usuario && ROLES[usuario.rol].puedeEditar);
     const noticia = n => ({
-      id: n.id, titulo: n.titulo, cuerpo: n.cuerpo, autor: n.autor, deVisitante: n.rolAutor === 'VISITANTE', fecha: n.fecha,
+      id: n.id, titulo: n.titulo, cuerpo: n.cuerpo, autor: n.autor, deVisitante: ['AFICIONADO', 'VISITANTE'].includes(n.rolAutor), fecha: n.fecha, // VISITANTE: noticias guardadas antes del cambio
       imagen: n.imagenRuta || '', aprobado: n.aprobado, comentarios: n.comentarios.map(x => Object.assign({}, x))
     });
     return { publicadas: noticias.publicadas().map(noticia), pendientes: admin ? noticias.pendientes().map(noticia) : [], puedeModerar: admin };
@@ -880,7 +897,7 @@ function crearServicioLocal() {
       try {
         if (RUTAS_VISITANTE.has(ruta)) exigirSesion();                  // cualquiera con sesión: proponer y comentar
         else if (!RUTAS_PUBLICAS.has(ruta)) exigirAdministrador();      // toda acción que modifica datos pasa por aquí
-        const mensaje = comando(cuerpo) || null;
+        const mensaje = (await comando(cuerpo)) || null; // registro y login esperan el hash de WebCrypto
         if (ruta === 'logout') return { ok: true };
         if (ruta.startsWith('noticia/') || ruta.startsWith('comentario/')) {
           return { ok: true, mensaje, estado: estado(), sesion: sesion(), noticias: noticiasJson() };

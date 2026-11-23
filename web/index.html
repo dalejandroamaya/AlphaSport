@@ -14,15 +14,45 @@
 
   <section id="login" class="login" hidden>
     <button class="btn fantasma icono tema-login" data-tema-alternar aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
-    <form id="formLogin" class="login-tarjeta vidrio">
+    <div class="login-tarjeta vidrio">
       <img class="logo-login" src="img/logo-texto.png" alt="AlphaSport">
       <p class="login-lema">Gestión profesional de campeonatos de fútbol</p>
-      <label class="campo">Usuario<input id="loginUsuario" autocomplete="username" required autofocus></label>
-      <label class="campo">Contraseña<input id="loginClave" type="password" autocomplete="current-password" required></label>
-      <p id="loginError" class="error" role="alert" hidden>Usuario o contraseña incorrectos.</p>
-      <button class="btn primario ancho" type="submit">Entrar al estadio</button>
-      <button class="btn fantasma ancho" type="button" id="btnVisitante">Entrar como visitante (solo lectura)</button>
-    </form>
+      <div class="pestanas-mini pestanas-acceso" role="tablist" aria-label="Acceso">
+        <button type="button" role="tab" id="tabEntrar" data-acceso="entrar" class="activa" aria-selected="true" aria-controls="formLogin">Iniciar sesión</button>
+        <button type="button" role="tab" id="tabRegistro" data-acceso="registro" aria-selected="false" aria-controls="formRegistro">Registrarse</button>
+      </div>
+      <form id="formLogin" class="form-acceso" role="tabpanel" aria-labelledby="tabEntrar">
+        <label class="campo">Usuario<input id="loginUsuario" autocomplete="username" required autofocus></label>
+        <label class="campo">Contraseña<input id="loginClave" type="password" autocomplete="current-password" required></label>
+        <p id="loginError" class="error" role="alert" hidden>Usuario o contraseña incorrectos.</p>
+        <button class="btn primario ancho" type="submit">Entrar al estadio</button>
+        <p class="login-cambio">¿Aún no tiene cuenta? <button type="button" class="enlace-acceso" data-acceso="registro">Regístrese</button></p>
+      </form>
+      <form id="formRegistro" class="form-acceso" role="tabpanel" aria-labelledby="tabRegistro" novalidate hidden>
+        <fieldset class="tipos-cuenta">
+          <legend class="campo">Tipo de cuenta</legend>
+          <label class="tipo-cuenta">
+            <input type="radio" name="tipoCuenta" value="ORGANIZADOR">
+            <span><b>Organizador</b><small>Crea y gestiona torneos, equipos, partidos y noticias.</small></span>
+          </label>
+          <label class="tipo-cuenta">
+            <input type="radio" name="tipoCuenta" value="AFICIONADO">
+            <span><b>Aficionado</b><small>Sigue resultados y noticias, comenta y califica a los jugadores.</small></span>
+          </label>
+        </fieldset>
+        <label class="campo">Nombre<input id="regNombre" autocomplete="name" maxlength="80" required></label>
+        <label class="campo">Usuario<input id="regUsuario" autocomplete="username" maxlength="30" required spellcheck="false" autocapitalize="none">
+          <small class="pista-campo">De 3 a 30 caracteres: letras sin tilde, números, punto, guion o guion bajo.</small></label>
+        <label class="campo">Correo<input id="regCorreo" type="email" autocomplete="email" maxlength="120" required></label>
+        <label class="campo">Contraseña<input id="regClave" type="password" autocomplete="new-password" maxlength="128" required>
+          <small class="pista-campo">Mínimo 8 caracteres, con letras y números.</small></label>
+        <label class="campo">Confirmar contraseña<input id="regConfirmacion" type="password" autocomplete="new-password" maxlength="128" required></label>
+        <p id="registroError" class="error" role="alert" hidden></p>
+        <button class="btn primario ancho" type="submit">Crear cuenta</button>
+        <p id="avisoCuentasLocales" class="login-cambio" hidden>En la versión web sola, las cuentas se guardan solo en este navegador.</p>
+        <p class="login-cambio">¿Ya tiene cuenta? <button type="button" class="enlace-acceso" data-acceso="entrar">Inicie sesión</button></p>
+      </form>
+    </div>
     <p class="credito-foto"><span class="noche">Foto: <a href="https://unsplash.com/photos/an-empty-stadium-with-a-soccer-field-at-night-pitDMdAjynU" target="_blank" rel="noopener">Josemar Duarte · Unsplash</a></span><span class="dia">Foto: <a href="https://unsplash.com/photos/green-and-brown-football-stadium-under-blue-sky-during-daytime-wbdrpnbn_DE" target="_blank" rel="noopener">Miguel Ramírez · Unsplash</a></span></p>
   </section>
 
@@ -561,6 +591,7 @@
   <script src="js/service/noticias.js"></script>
   <script src="js/service/calificaciones.js"></script>
   <script src="js/service/reglasVotacion.js"></script>
+  <script src="js/service/cuentas.js"></script>
   <script src="js/service/servicioLocal.js"></script>
   <script src="js/service/servicioRemoto.js"></script>
   <script src="js/ui/cancha.js"></script>

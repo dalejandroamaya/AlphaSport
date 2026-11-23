@@ -107,17 +107,32 @@ classDiagram
     Aplicacion --> ApiControlador
 ```
 
-## Roles y permisos (sin base de datos)
+## Cuentas, roles y permisos
 
-| Rol | Puede | Vistas |
-|---|---|---|
-| **Administrador** (`admin` / `123`) | Crear, editar y eliminar todo | Todas |
-| **Visitante** (`visitante` / `visitante` o «Entrar como visitante») | Solo consultar | Partidos, Posiciones, Llaves, Estadísticas (sin Equipos ni Reglas) |
+La pantalla de entrada tiene dos pestañas: **Iniciar sesión** y **Registrarse**. Al registrarse, la persona elige su tipo de cuenta. No hay cuentas de demostración ni entrada anónima.
 
-- `model.Rol` dice qué puede hacer cada rol (`puedeEditar()`); `model.Usuario` es quien inició sesión.
-- `service.AutenticacionService` valida las cuentas (hoy en memoria; en la Fase 3 se cambia por un repositorio).
-- **La regla real está en el servidor**: cada ruta de los módulos `Rutas*` declara el `Permiso` que exige y `ApiControlador` lo revisa antes de ejecutarla; cada `Rol` es un conjunto de permisos. Solo `login`, `login/visitante` y `logout` son públicas. Cada navegador tiene su sesión (`SesionService`, cookie `HttpOnly` y `SameSite`); el respaldo y la exportación también pasan por el controlador.
+| Rol (`model.Rol`) | Antes se llamaba | Puede | Vistas |
+|---|---|---|---|
+| **Organizador** (`ORGANIZADOR`) | Administrador | Crear, editar y eliminar: campeonato, equipos, partidos, votaciones, noticias e historial | Todas menos Votaciones (no vota: ya influye al registrar el partido) |
+| **Aficionado** (`AFICIONADO`) | Visitante | Ver resultados y noticias, comentar, proponer noticias y calificar jugadores | Partidos, Votaciones, Posiciones, Llaves, Estadísticas y Noticias (sin Equipos ni Reglas) |
+
+En el resto de este documento, «administrador» es el Organizador y «visitante» es el Aficionado.
+
+```
+Registrarse ─► RutasSesion «registro» ─► SesionService.registrar ─► AutenticacionService.registrar
+                                                                      │ valida y hace el hash (ClavesPbkdf2)
+                                                                      ▼
+                                          RepositorioUsuarios.crear ─► PostgresRepositorioUsuarios (tabla usuarios)
+```
+
+- **Registro** (`AutenticacionService.registrar`): usuario de 3 a 30 caracteres (letras sin tilde, números, `.`, `-`, `_`; empieza con letra o número), nombre de 2 a 80, correo con formato `algo@dominio.ext`, contraseña de 8 a 128 caracteres con letras y números, y su confirmación. Usuario y correo se guardan en minúsculas: son únicos sin importar mayúsculas. El tipo de cuenta solo puede ser `ORGANIZADOR` o `AFICIONADO`: cualquier otro valor enviado por el cliente se rechaza. Al crear la cuenta se abre su sesión.
+- **Mensajes:** si el inicio de sesión falla, siempre «Usuario o contraseña incorrectos.», exista o no el usuario, y con el mismo trabajo (se compara contra un hash ficticio). En el registro sí se dice si el usuario o el correo ya están en uso.
+- **Claves:** solo se guarda el hash PBKDF2-SHA256 (`pbkdf2_sha256$iteraciones$sal$hash`). `CuentaUsuario` y `SolicitudRegistro` no muestran claves ni hash en `toString()`, y ninguna respuesta JSON las incluye.
+- **Persistencia:** `PostgresRepositorioUsuarios` usa SQL básico con `PreparedStatement`: `SELECT` para buscar o saber si un usuario o correo existe, y luego `INSERT`, todo en una transacción. Si dos personas registran el mismo usuario al mismo tiempo, la llave `UNIQUE` rechaza la segunda. `RepositorioUsuariosEnMemoria` queda para las pruebas (con las cuentas de prueba `admin` / `123` y `visitante` / `321`).
+- **Web sola:** `cuentas.js` tiene las mismas reglas y hace el hash con WebCrypto (PBKDF2-SHA256, 100 000 iteraciones, mismo formato que Java). Las cuentas se guardan en el navegador (`Almacen.cuentas`) y solo sirven ahí.
+- **La regla real está en el servicio**: cada ruta de los módulos `Rutas*` declara el `Permiso` que exige y `ApiControlador` lo revisa antes de ejecutarla; cada `Rol` es un conjunto de permisos. Solo `registro`, `login` y `logout` son públicas. Cada navegador tiene su sesión (`SesionService`, cookie `HttpOnly` y `SameSite`); el respaldo y la exportación también pasan por el controlador.
 - Las interfaces solo **ocultan**: escritorio con `Aplicacion.puedeEditar()`, `soloAdmin(...)` y `puedeVer(vista)`; web con el atributo `data-solo-admin` y `puedeVer()` en `app.js`.
+- **Pendiente:** hoy hay un solo campeonato en curso (`ACTUAL`) para toda la aplicación, así que todos los Organizadores gestionan el mismo. Para que cada uno tenga los suyos haría falta `torneos.organizador_id` (llave foránea a `usuarios`) y que el servicio cargue el campeonato del usuario de la sesión. Tampoco hay recuperar contraseña, verificar correo ni cambiar de rol.
 
 ## Detalle de partido
 
@@ -278,7 +293,8 @@ Pestaña **Calificaciones** en el detalle de un partido terminado (la ven los do
 
 ```mermaid
 flowchart LR
-    A[Login] --> B{¿Hay campeonato guardado?}
+    R[Registrarse: Organizador o Aficionado] --> A
+    A[Iniciar sesión] --> B{¿Hay campeonato guardado?}
     B -- No --> C[Nuevo campeonato: formato, reglas y desempates]
     B -- Sí --> D[Panel principal]
     C --> D
@@ -311,6 +327,6 @@ ApiControlador ──► CampeonatoService ──► RepositorioCampeonato ─�
 - **Historial:** cada campeonato archivado es una copia completa (`ARCHIVADO`) que no cambia con el actual.
 - **`ConsultasDAO`** lee las vistas (tabla de posiciones, última alineación, votaciones activas y notas). La prueba comprueba que dan lo mismo que los cálculos del programa.
 - **Seguridad:** todas las consultas usan parámetros; la contraseña solo está en `db.properties` (ignorado por Git).
-- **Pendiente para el siguiente sprint:** el login sigue en `AutenticacionService`; la tabla `usuarios` ya existe.
+- **Cuentas:** `PostgresRepositorioUsuarios` guarda y lee la tabla `usuarios` (ver «Cuentas, roles y permisos»). La migración 005 cambió sus roles a `ORGANIZADOR` y `AFICIONADO`.
 
 Prueba: `PruebaPostgres` (en un esquema temporal que se borra al final).

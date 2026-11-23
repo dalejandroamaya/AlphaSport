@@ -25,7 +25,7 @@ Las tres tienen las mismas funciones, el mismo diseño («Estadio bajo reflector
 - Nombres y descripciones de los formatos en lenguaje sencillo.
 - **Posiciones específicas** al armar la plantilla, agrupadas por línea: Portero; Defensa central, Líbero, Laterales y Carrileros; Mediocampista defensivo, central y ofensivo, Interiores y Volantes; Mediapunta, Extremos, Segundo delantero y Delantero centro.
 - **Cambios durante el partido**: en el partido se anota el minuto, quién sale y quién entra (por ejemplo, minuto 66: sale el 11 y entra el 7). El minuto se conserva para anotar seguido varios cambios hechos a la vez. Un jugador sustituido no puede volver a entrar.
-- **Roles**: `admin` / `123` es el administrador (crea, edita y elimina). `visitante` / `321`, o el botón «Entrar como visitante», es de solo lectura: no ve Equipos ni Reglas, y al tocar un partido abre su detalle. Los permisos se validan en el servicio (Java y JavaScript), no solo en la pantalla.
+- **Cuentas y roles**: la pantalla de entrada tiene **Iniciar sesión** y **Registrarse**. Al registrarse se elige el tipo de cuenta: **Organizador** (crea y gestiona torneos; antes «administrador») o **Aficionado** (ve resultados y noticias, comenta y califica jugadores; antes «visitante»: no ve Equipos ni Reglas, y al tocar un partido abre su detalle). La cuenta se guarda en PostgreSQL con la clave en hash; en la web sola, solo en ese navegador. Ya no hay cuentas de demostración ni entrada anónima. Los permisos se validan en el servicio (Java y JavaScript), no solo en la pantalla.
 - **Formación táctica** por equipo en cada partido (4-4-2, 4-3-3, 4-2-3-1, 4-5-1, 4-1-4-1, 3-5-2, 3-4-3, 5-3-2, 5-4-1). Se puede elegir antes de jugar.
 - **XI inicial**: en el partido se marcan los 11 titulares de cada equipo (o toda la plantilla si tiene menos). El botón «Dorsales más bajos» los elige de un clic. En los cambios, «Sale» muestra solo a los que están en la cancha y «Entra» solo a los suplentes que no han entrado. No se pueden anotar cambios sin el XI inicial, y el detalle del partido muestra las alineaciones.
 - Estado **«En juego»**: el marcador, las tarjetas y los cambios se guardan en vivo mientras se juega. Ese partido no cuenta en la tabla hasta que pasa a «Jugado».
@@ -48,7 +48,7 @@ Las tres tienen las mismas funciones, el mismo diseño («Estadio bajo reflector
    - **AlphaSport Escritorio (JavaFX)**: abre la ventana del programa.
    - **AlphaSport Web (navegador)**: abre la interfaz en el navegador. Para cerrar: menú **Archivo → Cerrar programa** o Ctrl+C en la terminal.
    - **Prueba automatica (SimulacionFormatos)**: debe terminar en `TODO BIEN`.
-4. Usuario `admin`, contraseña `123`.
+4. La primera vez pulse **Registrarse** y cree su cuenta (Organizador para gestionar torneos). Antes, ejecute las migraciones que falten (ver [README_DB.md](README_DB.md)).
 
 JavaFX 21 ya viene en la carpeta `lib/` (Windows) y VS Code lo usa automáticamente.
 

@@ -207,6 +207,9 @@
 /* ------------------------------------------------------------------ login */
 .login-tarjeta { -fx-padding: 34 32 30 32; }
 .logo-login { -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 22, 0, 0, 12); }
+/* Registro: pista bajo el campo y tarjetas Organizador / Aficionado (estilo de .tarjeta-formato). */
+.pista-campo { -fx-font-size: 12px; }
+.pestanas-acceso .tarjeta-formato .formato-nombre { -fx-font-size: 15px; }
 
 /* ------------------------------------------------------------------ estructura */
 .barra-lateral { -fx-padding: 22 14; }

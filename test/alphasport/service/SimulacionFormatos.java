@@ -64,6 +64,7 @@ public class SimulacionFormatos {
         probarPermisos();
         probarServidorWeb();
         probarClaves();
+        probarRegistro();
         probarOrdenPorLinea();
         probarDocumentoUnico();
         probarCalificaciones();
@@ -213,7 +214,7 @@ public class SimulacionFormatos {
             boolean json = fotoAna.equals(anaJson.get("foto")) && FotosService.esNombreValido((String) eqJson.get("escudo"));
             // el visitante no puede cambiar fotos, pero si verlas; sin sesion no se ven
             api.ejecutar("logout", java.util.Map.of());
-            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("login", java.util.Map.of("usuario", "visitante", "clave", "321")); // cuenta de prueba (aficionado)
             boolean permisos = rechaza(() -> api.ejecutar("jugador/foto", java.util.Map.of("equipo", idEquipo, "jugador", idBeto, "imagen", apaisada)))
                     && rechaza(() -> api.ejecutar("equipo/escudo", java.util.Map.of("id", idEquipo, "imagen", "")))
                     && api.foto(fotoAna) != null;
@@ -574,7 +575,7 @@ public class SimulacionFormatos {
     private static void probarPermisos() {
         boolean correcto;
         try {
-            alphasport.model.Rol admin = alphasport.model.Rol.ADMINISTRADOR, visitante = alphasport.model.Rol.VISITANTE;
+            alphasport.model.Rol admin = alphasport.model.Rol.ORGANIZADOR, visitante = alphasport.model.Rol.AFICIONADO;
             boolean roles = admin.puede(alphasport.model.Permiso.GESTIONAR_CAMPEONATO) && !admin.puede(alphasport.model.Permiso.VOTAR_JUGADORES)
                     && visitante.puede(alphasport.model.Permiso.VOTAR_JUGADORES) && !visitante.puede(alphasport.model.Permiso.MODERAR_NOTICIAS)
                     && admin.puedeEditar() && !visitante.puedeEditar();
@@ -596,7 +597,7 @@ public class SimulacionFormatos {
                     && codigo.apply(() -> api.ejecutar("noticia/comentar", java.util.Map.of("id", 1, "autor", "A", "texto", "Hola"))).equals("LOGIN");
             // [L1] Respaldo y exportacion pasan por el controlador: tambien exigen sesion y permiso.
             boolean archivos = codigo.apply(api::respaldo).equals("LOGIN") && codigo.apply(api::historialEnTexto).equals("LOGIN");
-            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("login", java.util.Map.of("usuario", "visitante", "clave", "321")); // cuenta de prueba (aficionado)
             @SuppressWarnings("unchecked")
             List<String> permisosVisitante = (List<String>) api.sesion().get("permisos");
             archivos &= codigo.apply(() -> api.abrirRespaldo(new byte[0])).equals("PERMISO");
@@ -610,10 +611,10 @@ public class SimulacionFormatos {
             boolean comoAdmin = codigo.apply(() -> api.ejecutar("calificacion/votar", java.util.Map.of("partido", 1, "jugador", 1, "valor", 7,
                     "dispositivo", "x"))).equals("PERMISO") && api.getNoticias().pendientes().size() == 1
                     && ((java.util.Map<?, ?>) api.consultar("noticias").get("noticias")).toString().contains("Propuesta de prueba");
-            // [M2] Cada modulo registra sus rutas con su permiso: solo entrar y salir son publicas.
+            // [M2] Cada modulo registra sus rutas con su permiso: solo registrarse, entrar y salir son publicas.
             java.util.Map<String, alphasport.model.Permiso> acciones = api.permisosDeAcciones();
             boolean rutas = acciones.size() >= 29 && acciones.entrySet().stream().filter(e -> e.getValue() == null).map(java.util.Map.Entry::getKey)
-                    .sorted().toList().equals(List.of("login", "login/visitante", "logout"))
+                    .sorted().toList().equals(List.of("login", "logout", "registro"))
                     && acciones.get("calificacion/votar") == alphasport.model.Permiso.VOTAR_JUGADORES
                     && acciones.get("comentario/eliminar") == alphasport.model.Permiso.MODERAR_NOTICIAS
                     && acciones.get("partido") == alphasport.model.Permiso.GESTIONAR_CAMPEONATO
@@ -655,13 +656,13 @@ public class SimulacionFormatos {
             // Dos navegadores: el administrador y un visitante, cada uno con su cookie.
             var admin = pedir(cliente, base, "POST", "login", "{\"usuario\":\"admin\",\"clave\":\"123\"}", null, base);
             String cookieAdmin = admin.headers().firstValue("Set-Cookie").orElse("");
-            var visita = pedir(cliente, base, "POST", "login/visitante", "{}", null, base);
+            var visita = pedir(cliente, base, "POST", "login", "{\"usuario\":\"visitante\",\"clave\":\"321\"}", null, base);
             String cookieVisita = visita.headers().firstValue("Set-Cookie").orElse("");
             String tokenAdmin = cookieAdmin.replaceFirst(";.*$", ""), tokenVisita = cookieVisita.replaceFirst(";.*$", "");
             boolean cookies = cookieAdmin.startsWith(alphasport.ui.ServidorWeb.COOKIE + "=") && cookieAdmin.contains("HttpOnly")
                     && cookieAdmin.contains("SameSite=Strict") && !tokenAdmin.equals(tokenVisita) && tokenAdmin.length() > 30;
-            boolean separadas = pedir(cliente, base, "GET", "sesion", null, tokenAdmin, base).body().contains("\"ADMINISTRADOR\"")
-                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"VISITANTE\"")
+            boolean separadas = pedir(cliente, base, "GET", "sesion", null, tokenAdmin, base).body().contains("\"ORGANIZADOR\"")
+                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"AFICIONADO\"")
                     && pedir(cliente, base, "POST", "division/agregar", "{}", tokenVisita, base).body().contains("\"PERMISO\"");
             // Otra pagina no puede usar la sesion del administrador, y solo se atiende con el Host de esta maquina.
             var ajena = pedir(cliente, base, "POST", "nuevo", "{}", tokenAdmin, "http://pagina-ajena.example");
@@ -672,7 +673,7 @@ public class SimulacionFormatos {
             var salir = pedir(cliente, base, "POST", "logout", "{}", tokenAdmin, base);
             boolean cerrada = salir.headers().firstValue("Set-Cookie").orElse("").contains("Max-Age=0")
                     && pedir(cliente, base, "GET", "estado", null, tokenAdmin, base).body().contains("\"LOGIN\"")
-                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"VISITANTE\"")
+                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"AFICIONADO\"")
                     && cliente.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/")).build(),
                             java.net.http.HttpResponse.BodyHandlers.ofString()).statusCode() == 200;
             correcto = sinSesion && cookies && separadas && origen && cerrada;
@@ -729,10 +730,10 @@ public class SimulacionFormatos {
                     && !rapido.coincide("secreta", "$2a$06$bcrypt-no-soportado") && h.length() <= 255;
             // Otro repositorio de cuentas (como sera la tabla usuarios) sin cambiar el servicio.
             AutenticacionService propia = new AutenticacionService(new alphasport.persistence.RepositorioUsuariosEnMemoria(List.of(
-                    new alphasport.model.CuentaUsuario("ana", "Ana", alphasport.model.Rol.ADMINISTRADOR, rapido.hash("clave-de-ana")))), rapido);
+                    new alphasport.model.CuentaUsuario("ana", "Ana", alphasport.model.Rol.ORGANIZADOR, rapido.hash("clave-de-ana")))), rapido);
             boolean repositorio = propia.iniciarSesion("  ANA ", "clave-de-ana").puedeEditar()
                     && rechaza(() -> propia.iniciarSesion("ana", "otra")) && rechaza(() -> propia.iniciarSesion("admin", "123"));
-            // Las cuentas de demostracion siguen entrando con sus claves de siempre.
+            // Las cuentas de prueba (solo en memoria, para las pruebas) entran con sus claves.
             AutenticacionService demo = new AutenticacionService();
             boolean demostracion = demo.iniciarSesion("admin", "123").puedeEditar() && !demo.iniciarSesion("visitante", "321").puedeEditar()
                     && rechaza(() -> demo.iniciarSesion("admin", "321")) && rechaza(() -> demo.iniciarSesion("nadie", "123"));
@@ -747,6 +748,106 @@ public class SimulacionFormatos {
         System.out.println("Claves con hash y cuentas por repositorio: " + (correcto ? "correcto" : "MAL"));
         if (!correcto) {
             fallos++;
+        }
+    }
+
+    /**
+     * Registro de cuentas Organizador y Aficionado: validaciones, usuario o correo repetidos, rol que no se puede
+     * forzar, inicio de sesion y permisos, por el servicio y por la ruta «registro» de ApiControlador.
+     */
+    private static void probarRegistro() {
+        boolean correcto;
+        try {
+            ClavesPbkdf2 rapido = new ClavesPbkdf2(1000);
+            alphasport.persistence.RepositorioUsuariosEnMemoria cuentas = new alphasport.persistence.RepositorioUsuariosEnMemoria();
+            AutenticacionService auth = new AutenticacionService(cuentas, rapido);
+            java.util.function.BiFunction<String, String[], AutenticacionService.SolicitudRegistro> solicitud = (tipo, d) ->
+                    new AutenticacionService.SolicitudRegistro(d[0], d[1], d[2], d[3], d[4], tipo);
+            String[] ana = {"  Ana.Torres ", "  Ana   Torres ", " Ana@Correo.COM ", "clave1234", "clave1234"};
+            // Registro valido: usuario y correo en minusculas, nombre sin espacios de mas, la clave solo como hash.
+            alphasport.model.Usuario u = auth.registrar(solicitud.apply("ORGANIZADOR", ana));
+            alphasport.model.CuentaUsuario guardada = cuentas.buscar("ANA.TORRES").orElseThrow();
+            boolean valido = u.getNombre().equals("ana.torres") && u.getRol() == alphasport.model.Rol.ORGANIZADOR && u.puedeEditar()
+                    && guardada.correo().equals("ana@correo.com") && guardada.nombre().equals("Ana Torres")
+                    && !guardada.claveHash().contains("clave1234") && rapido.coincide("clave1234", guardada.claveHash())
+                    && !guardada.toString().contains(guardada.claveHash()) && !solicitud.apply("AFICIONADO", ana).toString().contains("clave1234");
+            // Usuario o correo repetidos, sin importar mayusculas ni espacios.
+            boolean repetidos = mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO",
+                    new String[]{"ANA.TORRES", "Otra", "otra@correo.com", "clave1234", "clave1234"}))).contains("usuario ya está en uso")
+                    && mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO",
+                    new String[]{"otra", "Otra", " ANA@correo.com", "clave1234", "clave1234"}))).contains("correo ya está registrado")
+                    && cuentas.existeUsuario("Ana.Torres") && cuentas.existeCorreo("ANA@CORREO.COM") && !cuentas.existeCorreo("");
+            // Contraseña debil o mal confirmada, y datos que no sirven.
+            java.util.function.Function<String[], String> error = d -> mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO", d)));
+            boolean debil = error.apply(new String[]{"luis", "Luis", "luis@x.co", "abc123", "abc123"}).contains("entre 8 y 128")
+                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "solamenteletras", "solamenteletras"}).contains("letras y números")
+                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "1234567890", "1234567890"}).contains("letras y números")
+                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "clave1234", "clave12345"}).contains("no coinciden")
+                    && error.apply(new String[]{"lu", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("entre 3 y 30")
+                    && error.apply(new String[]{"josé", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("sin tilde")
+                    && error.apply(new String[]{".luis", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("empezar con una letra")
+                    && error.apply(new String[]{"luis", "L", "luis@x.co", "clave1234", "clave1234"}).contains("Escriba su nombre")
+                    && error.apply(new String[]{"luis", "Luis", "luis@x", "clave1234", "clave1234"}).contains("correo válido")
+                    && error.apply(new String[]{"luis", "Luis", "", "clave1234", "clave1234"}).contains("Escriba su correo")
+                    && !cuentas.existeUsuario("luis");
+            // El rol solo puede ser ORGANIZADOR o AFICIONADO: nunca otro valor enviado por el cliente.
+            String[] luis = {"luis", "Luis", "luis@x.co", "futbol2026", "futbol2026"};
+            boolean rolInvalido = true;
+            for (String tipo : new String[]{"ADMINISTRADOR", "ADMIN", "VISITANTE", "organizador", "", null, "ORGANIZADOR "}) {
+                rolInvalido &= mensaje(() -> auth.registrar(solicitud.apply(tipo, luis))).contains("tipo de cuenta");
+            }
+            rolInvalido &= !cuentas.existeUsuario("luis");
+            // Inicio de sesion: correcto, y el mismo mensaje con clave mala o usuario inexistente.
+            String malaClave = mensaje(() -> auth.iniciarSesion("ana.torres", "otra1234"));
+            boolean login = auth.iniciarSesion(" ANA.torres ", "clave1234").getRol() == alphasport.model.Rol.ORGANIZADOR
+                    && malaClave.equals("Usuario o contraseña incorrectos.") && malaClave.equals(mensaje(() -> auth.iniciarSesion("nadie", "otra1234")))
+                    && mensaje(() -> auth.iniciarSesion("ana.torres", null)).equals(malaClave);
+            // Por la ruta «registro»: abre la sesion, la respuesta no trae claves ni hash, y un Aficionado no gestiona torneos.
+            CampeonatoService servicio = new CampeonatoService(new alphasport.persistence.ArchivoRepositorioCampeonato(
+                    java.nio.file.Files.createTempDirectory("alphasport-registro")), new alphasport.persistence.ArchivoRepositorioHistorial(
+                    java.nio.file.Files.createTempDirectory("alphasport-registro")));
+            alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, auth);
+            java.util.Map<String, Object> r = api.ejecutar("registro", java.util.Map.of("tipo", "AFICIONADO", "nombre", "Luis Pérez",
+                    "usuario", "Luis", "correo", "luis@x.co", "clave", "futbol2026", "confirmacion", "futbol2026"));
+            String json = alphasport.ui.Json.escribir(r);
+            boolean ruta = r.get("sesion").toString().contains("rol=AFICIONADO") && !json.contains("futbol2026") && !json.contains("pbkdf2")
+                    && api.getUsuarioActual().getNombre().equals("luis")
+                    && "PERMISO".equals(codigoDe(() -> api.ejecutar("nuevo", java.util.Map.of("nombre", "Copa", "formato", "LIGA"))))
+                    && !servicio.hayCampeonato();
+            api.ejecutar("logout", java.util.Map.of());
+            boolean forzado = mensaje(() -> api.ejecutar("registro", java.util.Map.of("tipo", "ADMINISTRADOR", "nombre", "Hack",
+                    "usuario", "hack", "correo", "h@x.co", "clave", "clave1234", "confirmacion", "clave1234"))).contains("tipo de cuenta")
+                    && api.getUsuarioActual() == null && !cuentas.existeUsuario("hack");
+            api.ejecutar("login", java.util.Map.of("usuario", "ana.torres", "clave", "clave1234"));
+            // El Organizador sí pasa el permiso de gestionar (la ruta lo deja seguir) y puede crear el torneo.
+            boolean organizador = !"PERMISO".equals(codigoDe(() -> api.ejecutar("nuevo", java.util.Map.of("nombre", "Copa", "formato", "LIGA"))))
+                    && api.getUsuarioActual().puede(alphasport.model.Permiso.GESTIONAR_CAMPEONATO);
+            servicio.crear("Copa de Ana", TipoFormato.LIGA, new ConfiguracionTorneo(), false);
+            organizador &= servicio.hayCampeonato();
+            correcto = valido && repetidos && debil && rolInvalido && login && ruta && forzado && organizador;
+            if (!correcto) {
+                System.out.println("  valido=" + valido + " repetidos=" + repetidos + " debil=" + debil + " rolInvalido=" + rolInvalido
+                        + " login=" + login + " ruta=" + ruta + " forzado=" + forzado + " organizador=" + organizador);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Registro de cuentas Organizador y Aficionado: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /** Codigo de la ReglaNegocioException que lanza la accion (null si no lanza ninguna). */
+    private static String codigoDe(Accion accion) {
+        try {
+            accion.correr();
+            return null;
+        } catch (ReglaNegocioException e) {
+            return e.getCodigo();
+        } catch (Exception e) {
+            return "otra excepcion: " + e;
         }
     }
 
@@ -942,7 +1043,7 @@ public class SimulacionFormatos {
             api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", resultado, "accion", "guardar", "confirmado", false));
             boolean adminNoVota = rechaza(() -> api.ejecutar("calificacion/votar", java.util.Map.of("partido", p.getId(), "jugador", xiLocal.get(0), "valor", 8, "dispositivo", "dispositivo-A1")));
             api.ejecutar("logout", java.util.Map.of());
-            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("login", java.util.Map.of("usuario", "visitante", "clave", "321")); // cuenta de prueba (aficionado)
             java.util.function.Supplier<Integer> abiertas = () -> ((List<?>) api.consultar("votaciones/dispositivo-A1").get("votaciones")).size();
             boolean votacion = adminNoVota && p.getHorasVotacion() == 48 && abiertas.get() == 1;
             java.util.Map<String, Object> votado = api.ejecutar("calificacion/votar", java.util.Map.of("partido", p.getId(), "dispositivo", "dispositivo-A1",
@@ -1403,7 +1504,7 @@ public class SimulacionFormatos {
             alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService(), noticias);
             String png = "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(
                     new byte[]{(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10, 0, 0, 0, 0});
-            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("login", java.util.Map.of("usuario", "visitante", "clave", "321")); // cuenta de prueba (aficionado)
             java.util.Map<String, Object> propuesta = api.ejecutar("noticia/proponer", java.util.Map.of(
                     "titulo", "Golazo en la final", "cuerpo", "Un visitante cuenta el gol del partido.", "autor", "Ana", "imagen", png));
             java.util.Map<String, Object> vistaVisitante = (java.util.Map<String, Object>) propuesta.get("noticias");
@@ -1425,7 +1526,7 @@ public class SimulacionFormatos {
             api.ejecutar("noticia/guardar", java.util.Map.of("titulo", "Comunicado oficial", "cuerpo", "La fecha 3 se juega el sábado."));
             boolean publicadas = noticias.publicadas().size() == 2 && noticias.pendientes().isEmpty()
                     && noticias.publicadas().stream().allMatch(alphasport.model.Noticia::isAprobado);
-            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("login", java.util.Map.of("usuario", "visitante", "clave", "321")); // cuenta de prueba (aficionado)
             api.ejecutar("noticia/comentar", java.util.Map.of("id", id, "autor", "Pedro",
                     "texto", "Que IDIOTAAA el arbitro, un hp. La pera del juez y el calculo bien."));
             String guardado = noticias.buscar(id).getComentarios().get(0).getTexto();

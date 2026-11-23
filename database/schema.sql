@@ -11,18 +11,19 @@ CREATE TABLE esquema_version (
     version      INTEGER PRIMARY KEY,
     aplicada_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO esquema_version (version) VALUES (4);
+INSERT INTO esquema_version (version) VALUES (5);
 
 -- ---------------------------------------------------------------- usuarios
--- Base para el login y el modulo Fantasy del siguiente sprint.
+-- Cuentas creadas con «Registrarse»: usuario y correo en minusculas (unicos sin importar mayusculas).
 CREATE TABLE usuarios (
     id              SERIAL PRIMARY KEY,
     nombre          VARCHAR(80)  NOT NULL,
     username        VARCHAR(40)  NOT NULL UNIQUE,
     email           VARCHAR(120) UNIQUE,
     password_hash   VARCHAR(255) NOT NULL,
-    rol             VARCHAR(10)  NOT NULL DEFAULT 'VISITANTE' CHECK (rol IN ('ADMIN', 'VISITANTE')),
-    fecha_registro  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    rol             VARCHAR(12)  NOT NULL DEFAULT 'AFICIONADO' CONSTRAINT usuarios_rol_check CHECK (rol IN ('ORGANIZADOR', 'AFICIONADO')),
+    fecha_registro  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT usuarios_minusculas CHECK (username = LOWER(username) AND (email IS NULL OR email = LOWER(email)))
 );
 
 -- ---------------------------------------------------------------- torneos
@@ -326,7 +327,7 @@ CREATE TABLE noticias (
     titulo       VARCHAR(120) NOT NULL,
     cuerpo       VARCHAR(4000) NOT NULL,
     autor        VARCHAR(80)  NOT NULL,
-    rol_autor    VARCHAR(10)  NOT NULL CHECK (rol_autor IN ('ADMIN', 'VISITANTE')),
+    rol_autor    VARCHAR(10)  NOT NULL CHECK (rol_autor IN ('ADMIN', 'VISITANTE')),  -- ADMIN = organizador; VISITANTE = aficionado
     usuario_id   INTEGER      REFERENCES usuarios (id) ON DELETE SET NULL,
     fecha        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     imagen_ruta  VARCHAR(255),

@@ -47,9 +47,14 @@ public class SesionService {
         return abrir(autenticacion.iniciarSesion(nombre, clave));
     }
 
-    /** Acceso de solo lectura sin contraseña (boton «Entrar como visitante»). Devuelve el token. */
-    public String entrarComoVisitante() {
-        return abrir(autenticacion.entrarComoVisitante());
+    /**
+     * Crea la cuenta y abre su sesion: tras registrarse se entra directo.
+     *
+     * @return el token de la sesion
+     * @throws ReglaNegocioException si algun dato no sirve o el usuario o el correo ya estan en uso.
+     */
+    public String registrar(AutenticacionService.SolicitudRegistro datos) throws alphasport.persistence.PersistenciaException {
+        return abrir(autenticacion.registrar(datos));
     }
 
     private String abrir(Usuario usuario) {
