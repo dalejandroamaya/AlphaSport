@@ -738,6 +738,11 @@ public final class PruebaPostgres {
         boolean cuentas = contar(db, "SELECT COUNT(*) FROM usuarios") == 2
                 && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'admin' AND rol = 'ORGANIZADOR'") == 1
                 && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'ana' AND email = 'ana@correo.com' AND rol = 'AFICIONADO' AND password_hash = 'y'") == 1;
+        // 006: varios en curso, cada torneo con el Organizador mas antiguo como dueno, y la noticia en el campeonato en curso.
+        cuentas &= contar(db, "SELECT COUNT(*) FROM torneos WHERE propietario_id = (SELECT id FROM usuarios WHERE username = 'admin')")
+                == contar(db, "SELECT COUNT(*) FROM torneos") && contar(db, "SELECT COUNT(*) FROM torneos") == 2
+                && contar(db, "SELECT COUNT(*) FROM noticias n JOIN torneos t ON t.id = n.torneo_id WHERE t.situacion = 'ACTUAL'") == 1
+                && contar(db, "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'torneos_un_actual'") == 0;
         boolean igual = cuentas && foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 2; // el campeonato y su copia
         // Una persona por jugador, compartida por el campeonato en curso y su copia del historial.
         int jugadores = contar(db, "SELECT COUNT(*) FROM jugadores j JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ACTUAL'");
@@ -821,6 +826,11 @@ public final class PruebaPostgres {
 
     /** Deja la base como la creaba la primera version de schema.sql. */
     private static void volverAVersionCero(ConexionDB db) throws Exception {
+        // Como antes de la 006: un solo campeonato en curso, torneos sin dueno y noticias sin campeonato.
+        sql(db, "ALTER TABLE noticias DROP COLUMN torneo_id");
+        sql(db, "ALTER TABLE torneos DROP COLUMN propietario_id");
+        sql(db, "CREATE UNIQUE INDEX torneos_un_actual ON torneos (situacion) WHERE situacion = 'ACTUAL'");
+        sql(db, "INSERT INTO noticias (titulo, cuerpo, autor, rol_autor, aprobado) VALUES ('Noticia anterior', 'Cuerpo', 'Ana', 'ADMIN', TRUE)");
         // usuarios como antes de la 005: roles ADMIN y VISITANTE, y usuario o correo con mayusculas.
         sql(db, "ALTER TABLE usuarios DROP CONSTRAINT usuarios_minusculas");
         sql(db, "ALTER TABLE usuarios DROP CONSTRAINT usuarios_rol_check");
