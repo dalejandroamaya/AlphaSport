@@ -1,6 +1,7 @@
 package alphasport.persistence.postgres;
 
 import alphasport.persistence.PersistenciaException;
+import alphasport.persistence.UnidadDeTrabajo;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -19,7 +20,7 @@ import java.util.Properties;
  * Mantiene una sola conexion abierta y la reutiliza (se vuelve a abrir si se cae). Todo el trabajo se hace
  * dentro de una transaccion: {@link #ejecutar} confirma si todo salio bien y deshace todo si algo falla.
  */
-public final class ConexionDB implements AutoCloseable {
+public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
 
     public static final Path ARCHIVO = Path.of("db.properties");
     /** Version del esquema que necesita el programa (la ultima de database/migraciones). */
@@ -47,6 +48,8 @@ public final class ConexionDB implements AutoCloseable {
     private final Configuracion configuracion;
     private final String esquema;
     private Connection conexion;
+    /** Conexion de la transaccion abierta (null = ninguna): un trabajo dentro de otro se une a ella. */
+    private Connection enCurso;
 
     public ConexionDB(Configuracion configuracion) {
         this(configuracion, null);
@@ -87,9 +90,21 @@ public final class ConexionDB implements AutoCloseable {
         return configuracion;
     }
 
-    /** Hace el trabajo en una transaccion: confirma al final o deshace todo si hay un error. */
+    /**
+     * Hace el trabajo en una transaccion: confirma al final o deshace todo si hay un error. Dentro de otra
+     * transaccion de este mismo hilo (una unidad de trabajo) el trabajo se une a ella: se confirma o se deshace
+     * con todo lo demas. Mientras dura, los demas hilos esperan.
+     */
     public synchronized <T> T ejecutar(Trabajo<T> trabajo) throws PersistenciaException {
+        if (enCurso != null) {
+            try {
+                return trabajo.hacer(enCurso);
+            } catch (SQLException e) {
+                throw traducir(e); // la transaccion de afuera lo deshace todo
+            }
+        }
         Connection con = abierta();
+        enCurso = con;
         try {
             T resultado = trabajo.hacer(con);
             con.commit();
@@ -100,7 +115,14 @@ public final class ConexionDB implements AutoCloseable {
         } catch (PersistenciaException | RuntimeException e) {
             deshacer(con);
             throw e;
+        } finally {
+            enCurso = null;
         }
+    }
+
+    @Override
+    public <T> T enTransaccion(UnidadDeTrabajo.Paso<T> paso) throws PersistenciaException {
+        return ejecutar(con -> paso.hacer());
     }
 
     /** Comprueba que se puede conectar, que ya se ejecuto schema.sql y que no faltan migraciones. */

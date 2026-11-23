@@ -13,6 +13,7 @@ import alphasport.persistence.RepositorioCampeonato;
 import alphasport.persistence.RepositorioFotosEnMemoria;
 import alphasport.persistence.RepositorioHistorial;
 import alphasport.persistence.Serializacion;
+import alphasport.persistence.UnidadDeTrabajo;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -29,6 +30,12 @@ public class CampeonatoService {
 
     private final RepositorioCampeonato repositorio;
     private final RepositorioHistorial historial;
+    /** Agrupa las escrituras de una accion (partido y notas, historial y campeonato nuevo) en una transaccion. */
+    private final UnidadDeTrabajo unidad;
+    /** > 0 mientras se hace una accion dentro de la unidad de trabajo. */
+    private int enCurso;
+    /** true si la accion en curso ya escribio algo (si falla, hay que volver a lo guardado). */
+    private boolean escribio;
     /** [REQ-07] Reloj para la hora de cierre de los partidos y la ventana de votacion (las pruebas lo adelantan). */
     private final Clock reloj;
     /** Fotos de jugadores y escudos (por defecto en memoria; Arranque pone la carpeta datos/imagenes). */
@@ -41,9 +48,19 @@ public class CampeonatoService {
     }
 
     public CampeonatoService(RepositorioCampeonato repositorio, RepositorioHistorial historial, Clock reloj) {
+        this(repositorio, historial, reloj, UnidadDeTrabajo.DIRECTA);
+    }
+
+    /** Con PostgreSQL, {@code unidad} es la misma ConexionDB de los repositorios. */
+    public CampeonatoService(RepositorioCampeonato repositorio, RepositorioHistorial historial, UnidadDeTrabajo unidad) {
+        this(repositorio, historial, Clock.systemDefaultZone(), unidad);
+    }
+
+    public CampeonatoService(RepositorioCampeonato repositorio, RepositorioHistorial historial, Clock reloj, UnidadDeTrabajo unidad) {
         this.repositorio = repositorio;
         this.historial = historial;
         this.reloj = reloj;
+        this.unidad = unidad;
     }
 
     public void usarFotos(FotosService fotos) {
@@ -159,14 +176,17 @@ public class CampeonatoService {
             }
             movimientos = ascensosYDescensos(nuevaDivision);
         }
-        siguienteTorneoCorto(nombre);
-        for (Equipo e : campeonato.getEquipos()) { // la copia conserva los ids de los equipos
-            if (nuevaDivision.containsKey(e.getId())) {
-                e.setDivision(nuevaDivision.get(e.getId()));
+        String resumen = movimientos;
+        return enUnaTransaccion(() -> {
+            siguienteTorneoCorto(nombre);
+            for (Equipo e : campeonato.getEquipos()) { // la copia conserva los ids de los equipos
+                if (nuevaDivision.containsKey(e.getId())) {
+                    e.setDivision(nuevaDivision.get(e.getId()));
+                }
             }
-        }
-        guardar();
-        return movimientos;
+            guardar();
+            return resumen;
+        });
     }
 
     /**
@@ -228,11 +248,13 @@ public class CampeonatoService {
         } catch (IllegalStateException e) {
             throw new ReglaNegocioException(e.getMessage());
         }
-        guardar();
-        if (campeonato.isTerminado()) {
-            archivarActual();
-        }
-        return mensaje;
+        return enUnaTransaccion(() -> {
+            guardar();
+            if (campeonato.isTerminado()) {
+                archivar();
+            }
+            return mensaje;
+        });
     }
 
     public void agregarEquipo(String nombre) throws PersistenciaException {
@@ -466,8 +488,11 @@ public class CampeonatoService {
         }
         motor.aplicarEdicion(partido, datos, afecta);
         ReglasVotacion.marcarFinal(partido, reloj.millis()); // [REQ-07] abre (o descarta) la votacion del publico
-        guardar();
-        guardarNotas(idPartido);
+        enUnaTransaccion(() -> {
+            guardar();
+            guardarNotas(idPartido);
+            return null;
+        });
     }
 
     /** Deja en la base de datos las notas del partido tal como las calcula CalculadoraCalificaciones. */
@@ -479,7 +504,7 @@ public class CampeonatoService {
                 notas.add(new NotaJugador(n.idJugador(), n.notaSistema(), n.votos(), n.promedioPublico(), n.notaFinal(), n.mvp()));
             }
         }
-        repositorio.guardarNotas(idPartido, notas);
+        persistir(() -> repositorio.guardarNotas(idPartido, notas));
     }
 
     /** [REQ-07] Calificaciones de un partido; {@code dispositivo} sirve para mostrar el voto propio (puede ser null). */
@@ -497,8 +522,11 @@ public class CampeonatoService {
     public CalificacionesPartido votarJugadores(int idPartido, Map<Integer, Integer> notas, String dispositivo) throws PersistenciaException {
         exigirCampeonato();
         ReglasVotacion.votar(campeonato, buscarPartido(idPartido), notas, dispositivo, reloj.millis());
-        guardar();
-        guardarNotas(idPartido);
+        enUnaTransaccion(() -> {
+            guardar();
+            guardarNotas(idPartido);
+            return null;
+        });
         return calificaciones(idPartido, dispositivo);
     }
 
@@ -555,9 +583,11 @@ public class CampeonatoService {
         if (campeonato.getFechaArchivo() == null || campeonato.isTerminado()) {
             campeonato.setFechaArchivo(LocalDate.now().toString());
         }
-        historial.archivar(campeonato);
-        guardar();
-        return true;
+        return enUnaTransaccion(() -> {
+            persistir(() -> historial.archivar(campeonato));
+            guardar();
+            return true;
+        });
     }
 
     /**
@@ -565,9 +595,12 @@ public class CampeonatoService {
      * ids: lo que apunta a sus jugadores y partidos (notas, votos y, mas adelante, el Fantasy) sigue valiendo.
      */
     private void reemplazarPor(Campeonato nuevo) throws PersistenciaException {
-        boolean archivado = archivar();
-        usar(nuevo);
-        persistir(() -> repositorio.reemplazar(nuevo, archivado));
+        enUnaTransaccion(() -> {
+            boolean archivado = archivar();
+            usar(nuevo);
+            persistir(() -> repositorio.reemplazar(nuevo, archivado));
+            return null;
+        });
     }
 
     public List<Campeonato> historial() {
@@ -652,15 +685,47 @@ public class CampeonatoService {
 
     /** Si no se pudo guardar, se descarta el cambio y se vuelve a lo que esta guardado. */
     private void persistir(Escritura escritura) throws PersistenciaException {
+        if (enCurso > 0) {
+            escribio = true; // si falla, lo deshace y lo recupera enUnaTransaccion
+            escritura.ejecutar();
+            return;
+        }
         try {
             escritura.ejecutar();
         } catch (PersistenciaException e) {
-            try {
-                usar(repositorio.existe() ? repositorio.cargar() : null);
-            } catch (PersistenciaException sinConexion) {
-                e.addSuppressed(sinConexion); // sin conexion: se sincroniza en la siguiente accion
+            volverALoGuardado(e);
+            throw e;
+        }
+    }
+
+    /**
+     * Hace las escrituras de una accion en una sola transaccion: se guardan todas o ninguna. Si algo falla
+     * despues de escribir, la base de datos queda como estaba y el campeonato se vuelve a leer, porque el
+     * que esta en memoria (y lo que el repositorio sabe de el) ya tenia el cambio.
+     */
+    private <T> T enUnaTransaccion(UnidadDeTrabajo.Paso<T> paso) throws PersistenciaException {
+        if (enCurso > 0) {
+            return paso.hacer(); // ya dentro de una: se une a ella
+        }
+        enCurso++;
+        escribio = false;
+        try {
+            return unidad.enTransaccion(paso);
+        } catch (PersistenciaException | RuntimeException e) {
+            if (escribio) {
+                volverALoGuardado(e);
             }
             throw e;
+        } finally {
+            enCurso--;
+        }
+    }
+
+    private void volverALoGuardado(Exception error) {
+        try {
+            usar(repositorio.existe() ? repositorio.cargar() : null);
+        } catch (PersistenciaException sinConexion) {
+            error.addSuppressed(sinConexion); // sin conexion: se sincroniza en la siguiente accion
         }
     }
 

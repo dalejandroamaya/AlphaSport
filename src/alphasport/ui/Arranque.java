@@ -46,7 +46,7 @@ public final class Arranque {
             System.exit(1);
         }
         CampeonatoService servicio = new CampeonatoService(
-                new PostgresRepositorioCampeonato(conexion()), new PostgresRepositorioHistorial(conexion()));
+                new PostgresRepositorioCampeonato(conexion()), new PostgresRepositorioHistorial(conexion()), conexion());
         servicio.usarFotos(new FotosService(new ArchivoRepositorioFotos(CARPETA_DATOS)));
         servicio.cargarGuardado();
         return servicio;

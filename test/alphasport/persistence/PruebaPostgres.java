@@ -65,6 +65,7 @@ public final class PruebaPostgres {
         probar("Temporadas: el campeonato anterior pasa al historial con sus ids", PruebaPostgres::probarTemporadas);
         probar("W.O.: sin notas ni votación, y vuelve a la normalidad al borrarlo", PruebaPostgres::probarWalkover);
         probar("Dos programas a la vez: sincronización y conflictos", PruebaPostgres::probarDosProgramas);
+        probar("Una transacción: el partido no queda guardado sin sus notas", PruebaPostgres::probarUnaTransaccion);
         probar("Historial: copias que no cambian con el campeonato actual", PruebaPostgres::probarHistorial);
         probar("Noticias y comentarios", PruebaPostgres::probarNoticias);
         probar("Migración de los archivos anteriores", PruebaPostgres::probarMigracion);
@@ -139,7 +140,7 @@ public final class PruebaPostgres {
     }
 
     private static CampeonatoService servicio(ConexionDB db) throws PersistenciaException {
-        CampeonatoService s = new CampeonatoService(new PostgresRepositorioCampeonato(db), new PostgresRepositorioHistorial(db));
+        CampeonatoService s = new CampeonatoService(new PostgresRepositorioCampeonato(db), new PostgresRepositorioHistorial(db), db);
         s.cargarGuardado();
         return s;
     }
@@ -311,6 +312,64 @@ public final class PruebaPostgres {
         d.setCambios(new ArrayList<>(List.of(new alphasport.model.Cambio(p.getIdLocal(), 66, loc.get(10), loc.get(12)))));
         s.programarVotacion(d, 48);
         s.guardarPartido(p.getId(), d, false);
+    }
+
+    /** El partido (o el voto) y sus notas se guardan juntos: si las notas fallan, no queda nada a medias. */
+    private static boolean probarUnaTransaccion(ConexionDB db) throws Exception {
+        liga(db, 4);
+        boolean[] fallar = {true};
+        PostgresRepositorioCampeonato repositorio = new PostgresRepositorioCampeonato(db) {
+            @Override
+            public void guardarNotas(int idPartido, List<NotaJugador> notas) throws PersistenciaException {
+                super.guardarNotas(idPartido, notas); // escribe y despues falla: tambien se deshace
+                if (fallar[0]) {
+                    throw new PersistenciaException("Falla simulada al guardar las notas", null);
+                }
+            }
+        };
+        CampeonatoService s = new CampeonatoService(repositorio, new PostgresRepositorioHistorial(db), db);
+        s.cargarGuardado();
+        int idPartido = s.getCampeonato().getPartidos().get(0).getId();
+        String antes = foto(s);
+        int version = contar(db, "SELECT version FROM torneos WHERE situacion = 'ACTUAL'");
+        boolean falla = falla(PersistenciaException.class, () -> jugarCompleto(s, s.buscarPartido(idPartido)));
+        // Ni el resultado ni las notas: la base y el programa quedan como antes.
+        boolean nada = contar(db, "SELECT version FROM torneos WHERE situacion = 'ACTUAL'") == version
+                && contar(db, "SELECT COUNT(*) FROM eventos_partido") == 0 && contar(db, "SELECT COUNT(*) FROM alineaciones") == 0
+                && contar(db, "SELECT COUNT(*) FROM calificaciones_partido") == 0
+                && foto(servicio(db)).equals(antes) && foto(s).equals(antes) && !s.buscarPartido(idPartido).isJugado();
+        // La siguiente accion funciona: el programa no se quedo con datos que la base no tiene.
+        fallar[0] = false;
+        jugarCompleto(s, s.buscarPartido(idPartido));
+        int notas = contar(db, "SELECT COUNT(*) FROM calificaciones_partido");
+        boolean despues = servicio(db).buscarPartido(idPartido).isJugado() && notas > 0 && seLeeIgual(db, s);
+        // Igual con el voto del publico: no queda sin su nota.
+        int portero = s.buscarPartido(idPartido).getTitularesVisitante().get(0);
+        String notasAntes = notasDe(db);
+        fallar[0] = true;
+        boolean voto = falla(PersistenciaException.class, () -> s.votarJugador(idPartido, portero, 7, "dispositivo-U1"))
+                && contar(db, "SELECT COUNT(*) FROM votos_publico") == 0 && notasDe(db).equals(notasAntes)
+                && s.calificaciones(idPartido, null).local().stream().allMatch(n -> n.votos() == 0)
+                && s.calificaciones(idPartido, null).visitante().stream().allMatch(n -> n.votos() == 0);
+        fallar[0] = false;
+        s.votarJugador(idPartido, portero, 7, "dispositivo-U1");
+        voto &= contar(db, "SELECT COUNT(*) FROM votos_publico") == 1 && !notasDe(db).equals(notasAntes) && seLeeIgual(db, s);
+        if (!(falla && nada && despues && voto)) {
+            System.out.println("  falla=" + falla + " nada=" + nada + " despues=" + despues + " voto=" + voto);
+        }
+        return falla && nada && despues && voto;
+    }
+
+    private static String notasDe(ConexionDB db) throws PersistenciaException {
+        return db.ejecutar(con -> {
+            try (var st = con.createStatement(); var rs = st.executeQuery("SELECT jugador_id, votos, nota_final FROM calificaciones_partido ORDER BY jugador_id")) {
+                StringBuilder texto = new StringBuilder();
+                while (rs.next()) {
+                    texto.append(rs.getInt(1)).append(':').append(rs.getInt(2)).append(':').append(rs.getString(3)).append(' ');
+                }
+                return texto.toString();
+            }
+        });
     }
 
     private static boolean probarPartido(ConexionDB db) throws Exception {
