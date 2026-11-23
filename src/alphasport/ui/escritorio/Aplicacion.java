@@ -428,48 +428,80 @@ public class Aplicacion extends Application {
         error.setVisible(true);
     }
 
+    /** Pantalla de entrada: pestañas «Iniciar sesión» y «Registrarse» en la misma tarjeta. */
     void mostrarLogin() {
         ImageView logo = new ImageView(imagen("logo-texto.png"));
-        logo.setFitWidth(260);
+        logo.setFitWidth(240);
         logo.setPreserveRatio(true);
         logo.setSmooth(true);
         logo.getStyleClass().add("logo-login");
+
+        // ---- Iniciar sesión
         TextField usuario = new TextField();
         usuario.setPromptText("Usuario");
         PasswordField clave = new PasswordField();
         clave.setPromptText("Contraseña");
-        Label error = etiqueta("", "error");
-        error.setVisible(false);
+        Label error = errorAcceso();
         Button entrar = boton("Entrar al estadio", "primario", "ancho");
         entrar.setDefaultButton(true);
         entrar.setMaxWidth(Double.MAX_VALUE);
-        entrar.setOnAction(e -> {
-            try {
-                api.ejecutar("login", mapa("usuario", usuario.getText(), "clave", clave.getText()));
-                mostrarPrincipal();
-            } catch (Exception | Error ex) {
-                // Nunca falla en silencio: si algo se rompe al entrar (por ejemplo, el programa quedó mal
-                // compilado y lanza «Unresolved compilation problem»), se muestra aquí en vez de no hacer nada.
-                mostrarErrorLogin(error, ex);
-            }
+        entrar.setOnAction(e -> entrarConCuenta(error, "login", mapa("usuario", usuario.getText(), "clave", clave.getText()), clave));
+        VBox formEntrar = formularioAcceso(campoAcceso("Usuario", usuario), campoAcceso("Contraseña", clave), error, entrar);
+
+        // ---- Registrarse: primero el tipo de cuenta (sin elegir ninguno por defecto)
+        ToggleGroup tipos = new ToggleGroup();
+        HBox opcionesTipo = new HBox(10, tipoCuenta(tipos, "ORGANIZADOR", "Organizador", "Crea y gestiona torneos, equipos, partidos y noticias."),
+                tipoCuenta(tipos, "AFICIONADO", "Aficionado", "Sigue resultados y noticias, comenta y califica a los jugadores."));
+        TextField nombre = new TextField();
+        nombre.setPromptText("Su nombre");
+        TextField nuevoUsuario = new TextField();
+        nuevoUsuario.setPromptText("Ej.: ana.torres");
+        TextField correo = new TextField();
+        correo.setPromptText("nombre@correo.com");
+        PasswordField nuevaClave = new PasswordField();
+        nuevaClave.setPromptText("Mínimo 8 caracteres, con letras y números");
+        PasswordField confirmacion = new PasswordField();
+        confirmacion.setPromptText("Repita la contraseña");
+        Label errorRegistro = errorAcceso();
+        Button crear = boton("Crear cuenta", "primario", "ancho");
+        crear.setMaxWidth(Double.MAX_VALUE);
+        // El tipo elegido viaja tal cual: el servicio solo acepta ORGANIZADOR o AFICIONADO y valida todo lo demás.
+        crear.setOnAction(e -> entrarConCuenta(errorRegistro, "registro", mapa(
+                "tipo", tipos.getSelectedToggle() == null ? "" : tipos.getSelectedToggle().getUserData(),
+                "nombre", nombre.getText(), "usuario", nuevoUsuario.getText(), "correo", correo.getText(),
+                "clave", nuevaClave.getText(), "confirmacion", confirmacion.getText()), nuevaClave, confirmacion));
+        VBox formRegistro = formularioAcceso(campoAcceso("Tipo de cuenta", opcionesTipo), campoAcceso("Nombre", nombre),
+                campoAcceso("Usuario", nuevoUsuario, "De 3 a 30 caracteres: letras sin tilde, números, punto, guion o guion bajo."),
+                campoAcceso("Correo", correo), campoAcceso("Contraseña", nuevaClave), campoAcceso("Confirmar contraseña", confirmacion),
+                errorRegistro, crear);
+
+        javafx.scene.control.Tab tabEntrar = new javafx.scene.control.Tab("Iniciar sesión", formEntrar);
+        javafx.scene.control.Tab tabRegistro = new javafx.scene.control.Tab("Registrarse");
+        javafx.scene.control.TabPane pestanas = new javafx.scene.control.TabPane(tabEntrar, tabRegistro);
+        pestanas.setTabClosingPolicy(javafx.scene.control.TabPane.TabClosingPolicy.UNAVAILABLE);
+        pestanas.getStyleClass().addAll("detalle-pestanas", "pestanas-acceso");
+        pestanas.getSelectionModel().selectedItemProperty().addListener((o, antes, ahora) -> {
+            // Solo la pestaña elegida tiene contenido: así la tarjeta mide lo que su formulario, no lo del más alto.
+            tabEntrar.setContent(ahora == tabEntrar ? formEntrar : null);
+            tabRegistro.setContent(ahora == tabRegistro ? formRegistro : null);
+            // Enter crea la cuenta en «Registrarse» y entra en «Iniciar sesión».
+            entrar.setDefaultButton(ahora == tabEntrar);
+            crear.setDefaultButton(ahora == tabRegistro);
+            javafx.application.Platform.runLater(() -> (ahora == tabEntrar ? usuario : nombre).requestFocus());
         });
-        Button visitante = boton("Entrar como visitante (solo lectura)", "fantasma", "ancho");
-        visitante.setMaxWidth(Double.MAX_VALUE);
-        visitante.setOnAction(e -> {
-            try {
-                api.ejecutar("login/visitante", mapa());
-                mostrarPrincipal();
-            } catch (Exception | Error ex) {
-                mostrarErrorLogin(error, ex);
-            }
-        });
-        VBox tarjeta = new VBox(12, logo, etiqueta("Gestión profesional de campeonatos de fútbol", "sutil", "centro"),
-                etiqueta("Usuario", "campo-titulo"), usuario, etiqueta("Contraseña", "campo-titulo"), clave, error, entrar, visitante);
-        tarjeta.setAlignment(Pos.CENTER);
-        tarjeta.getChildren().stream().filter(x -> x.getStyleClass().contains("campo-titulo"))
-                .forEach(x -> ((Label) x).setMaxWidth(Double.MAX_VALUE));
+
+        VBox tarjeta = new VBox(10, logo, etiqueta("Gestión profesional de campeonatos de fútbol", "sutil", "centro"), pestanas);
+        tarjeta.setAlignment(Pos.TOP_CENTER);
         tarjeta.getStyleClass().addAll("vidrio", "login-tarjeta");
-        tarjeta.setMaxSize(440, Region.USE_PREF_SIZE);
+        tarjeta.setMaxSize(480, Region.USE_PREF_SIZE);
+        tarjeta.setMinHeight(Region.USE_PREF_SIZE); // en una ventana baja se desplaza, no se aplasta
+        // El registro es más alto que la ventana pequeña: la tarjeta se desplaza en vez de cortarse.
+        StackPane centrada = new StackPane(tarjeta);
+        centrada.setPadding(new Insets(24, 16, 24, 16));
+        ScrollPane desplazable = new ScrollPane(centrada);
+        desplazable.setFitToWidth(true);
+        desplazable.setFitToHeight(true);
+        desplazable.getStyleClass().add("desplazable");
         Button tema = botonTema("");
         tema.getStyleClass().add("icono-solo");
         StackPane.setAlignment(tema, Pos.TOP_RIGHT);
@@ -477,11 +509,76 @@ public class Aplicacion extends Application {
         Label credito = etiqueta(claro ? "Foto: Miguel Ramírez · Unsplash" : "Foto: Josemar Duarte · Unsplash", "credito-foto");
         StackPane.setAlignment(credito, Pos.BOTTOM_RIGHT);
         StackPane.setMargin(credito, new Insets(0, 16, 12, 0));
-        StackPane fondo = new StackPane(tarjeta, tema, credito);
+        StackPane fondo = new StackPane(desplazable, tema, credito);
         fondo.getStyleClass().add("login");
         ponerRaiz(fondo);
         entrada(tarjeta, 350);
         usuario.requestFocus();
+    }
+
+    /** Envía «login» o «registro»; si sale bien abre la aplicación, si no muestra el error. Borra las claves escritas. */
+    private void entrarConCuenta(Label error, String ruta, Map<String, Object> datos, PasswordField... claves) {
+        try {
+            Map<String, Object> r = api.ejecutar(ruta, datos);
+            for (PasswordField c : claves) {
+                c.clear();
+            }
+            mostrarPrincipal();
+            aviso(s(r, "mensaje"));
+        } catch (Exception | Error ex) {
+            // Nunca falla en silencio: si algo se rompe al entrar (por ejemplo, el programa quedó mal
+            // compilado y lanza «Unresolved compilation problem»), se muestra aquí en vez de no hacer nada.
+            mostrarErrorLogin(error, ex);
+        }
+    }
+
+    private static Label errorAcceso() {
+        Label error = etiqueta("", "error");
+        error.setVisible(false);
+        error.managedProperty().bind(error.visibleProperty());
+        error.setMaxWidth(Double.MAX_VALUE);
+        return error;
+    }
+
+    private static VBox formularioAcceso(Node... nodos) {
+        VBox form = new VBox(12, nodos);
+        form.setPadding(new Insets(16, 0, 0, 0));
+        return form;
+    }
+
+    /** Título del campo, el control y, si hay, una pista debajo. */
+    private static VBox campoAcceso(String titulo, Node control, String... pista) {
+        Label t = etiqueta(titulo, "campo-titulo");
+        t.setMaxWidth(Double.MAX_VALUE);
+        VBox campo = new VBox(5, t, control);
+        for (String p : pista) {
+            campo.getChildren().add(etiqueta(p, "sutil", "pista-campo"));
+        }
+        return campo;
+    }
+
+    /** Tarjeta del tipo de cuenta, con el mismo estilo que las de los formatos de campeonato. */
+    private static ToggleButton tipoCuenta(ToggleGroup grupo, String rol, String titulo, String descripcion) {
+        Label nombre = etiqueta(titulo, "formato-nombre");
+        Label texto = etiqueta(descripcion, "formato-desc");
+        // Ancho fijo para que la descripción baje de línea en vez de cortarse con «...».
+        nombre.setPrefWidth(160);
+        texto.setPrefWidth(160);
+        VBox contenido = new VBox(4, nombre, texto);
+        ToggleButton t = new ToggleButton();
+        t.setGraphic(contenido);
+        t.setUserData(rol);
+        t.setToggleGroup(grupo);
+        t.setAlignment(Pos.TOP_LEFT);
+        t.getStyleClass().add("tarjeta-formato");
+        t.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(t, Priority.ALWAYS);
+        t.setPrefWidth(200);
+        // Alto fijo, como las tarjetas de formato: un texto que baja de línea no calcula bien su alto dentro del botón.
+        t.setMinHeight(120);
+        t.setPrefHeight(120);
+        t.setMaxHeight(120);
+        return t;
     }
 
     /* ---------------------------------------------------------------- estructura principal */

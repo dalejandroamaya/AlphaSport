@@ -3,11 +3,11 @@ package alphasport.ui;
 import alphasport.persistence.ArchivoRepositorioFotos;
 import alphasport.persistence.ImagenesEnDisco;
 import alphasport.persistence.PersistenciaException;
-import alphasport.persistence.RepositorioUsuariosEnMemoria;
 import alphasport.persistence.postgres.ConexionDB;
 import alphasport.persistence.postgres.PostgresRepositorioCampeonato;
 import alphasport.persistence.postgres.PostgresRepositorioHistorial;
 import alphasport.persistence.postgres.PostgresRepositorioNoticias;
+import alphasport.persistence.postgres.PostgresRepositorioUsuarios;
 import alphasport.service.AutenticacionService;
 import alphasport.service.CampeonatoService;
 import alphasport.service.ClavesPbkdf2;
@@ -53,11 +53,11 @@ public final class FabricaAplicacion implements AutoCloseable {
     }
 
     /**
-     * Cuentas para iniciar sesion: por ahora las de demostracion. Con el login, aqui se pasara el repositorio
-     * de la tabla usuarios; nada mas cambia.
+     * Cuentas para registrarse e iniciar sesion: las de la tabla usuarios de PostgreSQL, con las claves en hash
+     * PBKDF2. Ya no hay cuentas de demostracion.
      */
-    public AutenticacionService autenticacion() {
-        return new AutenticacionService(RepositorioUsuariosEnMemoria.demostracion(), new ClavesPbkdf2());
+    public AutenticacionService autenticacion() throws PersistenciaException {
+        return new AutenticacionService(new PostgresRepositorioUsuarios(conexion()), new ClavesPbkdf2());
     }
 
     public NoticiasService noticias() throws PersistenciaException {

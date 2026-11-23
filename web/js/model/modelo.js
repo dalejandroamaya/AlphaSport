@@ -47,10 +47,10 @@ const ESTADOS = { PENDIENTE: 'Pendiente', EN_JUEGO: 'En juego', JUGADO: 'Jugado'
 const FORMACIONES = ['4-4-2', '4-3-3', '4-2-3-1', '4-5-1', '4-1-4-1', '3-5-2', '3-4-3', '5-3-2', '5-4-1'];
 const FORMACION_POR_DEFECTO = '4-4-2';
 
-/* Roles del sistema: cada rol sabe si puede editar (igual que model.Rol en Java). */
+/* Tipos de cuenta: cada rol sabe si puede editar (igual que model.Rol en Java). */
 const ROLES = {
-  ADMINISTRADOR: { nombre: 'Administrador', puedeEditar: true },
-  VISITANTE: { nombre: 'Visitante', puedeEditar: false }
+  ORGANIZADOR: { nombre: 'Organizador', puedeEditar: true },
+  AFICIONADO: { nombre: 'Aficionado', puedeEditar: false }
 };
 
 const LLAVE_GANADORES = 'Ganadores';

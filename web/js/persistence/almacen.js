@@ -8,6 +8,7 @@ const Almacen = (() => {
   const CLAVE_SESION = 'alphasport.usuario';
   const CLAVE_NOTICIAS = 'alphasport.noticias';
   const CLAVE_DISPOSITIVO = 'alphasport.dispositivo';
+  const CLAVE_CUENTAS = 'alphasport.cuentas';
   let dispositivo = null;
 
   const leer = (clave, defecto) => {
@@ -37,6 +38,11 @@ const Almacen = (() => {
     noticias: {
       cargar: () => leer(CLAVE_NOTICIAS, []),
       guardar: lista => escribir(CLAVE_NOTICIAS, lista)
+    },
+    // Cuentas registradas en este navegador (web sola): {usuario, nombre, correo, rol, claveHash}. Nunca la clave.
+    cuentas: {
+      listar: () => { const l = leer(CLAVE_CUENTAS, []); return Array.isArray(l) ? l.filter(c => c && typeof c.usuario === 'string') : []; },
+      guardar: lista => escribir(CLAVE_CUENTAS, lista)
     },
     // Usuario con sesión abierta ({usuario, rol}); se recuerda al recargar la página.
     sesion: {

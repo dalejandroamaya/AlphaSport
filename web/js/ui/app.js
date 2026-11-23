@@ -146,7 +146,10 @@ async function iniciar() {
   const r = await servicio.sesion();
   S = r && r.ok ? r.sesion : null;
   if (S) mostrarApp();
-  else $('login').hidden = false;
+  else {
+    $('login').hidden = false;
+    mostrarAcceso('entrar');
+  }
 }
 
 async function entrar(e) {
@@ -154,21 +157,66 @@ async function entrar(e) {
   await iniciarSesion('login', { usuario: $('loginUsuario').value, clave: $('loginClave').value });
 }
 
-async function entrarComoVisitante() {
-  await iniciarSesion('login/visitante', {});
-}
-
-async function iniciarSesion(ruta, cuerpo) {
-  const r = await servicio.ejecutar(ruta, cuerpo);
-  if (r.ok) olvidarVotaciones(); // otra sesión: sin las notas a medio elegir de la anterior
-  $('loginError').hidden = r.ok;
-  if (!r.ok) {
-    $('loginError').textContent = r.error;
+/** Crea la cuenta y entra. Valida aquí con las mismas reglas que el servicio, que igual vuelve a validar. */
+async function registrarse(e) {
+  e.preventDefault();
+  const tipo = document.querySelector('input[name="tipoCuenta"]:checked');
+  const cuerpo = {
+    tipo: tipo ? tipo.value : '', nombre: $('regNombre').value, usuario: $('regUsuario').value,
+    correo: $('regCorreo').value, clave: $('regClave').value, confirmacion: $('regConfirmacion').value
+  };
+  try {
+    Cuentas.validarRegistro(cuerpo);
+  } catch (error) {
+    mostrarErrorAcceso('registroError', error.message);
     return;
   }
+  await iniciarSesion('registro', cuerpo, 'registroError');
+}
+
+async function iniciarSesion(ruta, cuerpo, idError = 'loginError') {
+  const boton = document.querySelector(`#${idError === 'loginError' ? 'formLogin' : 'formRegistro'} button[type=submit]`);
+  boton.disabled = true; // el hash de la clave tarda un momento: evita enviar dos veces
+  let r;
+  try {
+    r = await servicio.ejecutar(ruta, cuerpo);
+  } finally {
+    boton.disabled = false;
+  }
+  if (!r.ok) {
+    mostrarErrorAcceso(idError, r.error);
+    return;
+  }
+  olvidarVotaciones(); // otra sesión: sin las notas a medio elegir de la anterior
   S = r.sesion;
-  $('loginClave').value = '';
+  limpiarAcceso();
   mostrarApp();
+  if (r.mensaje) aviso(r.mensaje);
+}
+
+function mostrarErrorAcceso(id, texto) {
+  $(id).textContent = texto || '';
+  $(id).hidden = !texto;
+}
+
+/** Borra las contraseñas escritas y los errores de las dos pestañas de acceso. */
+function limpiarAcceso() {
+  ['loginClave', 'regClave', 'regConfirmacion'].forEach(id => { $(id).value = ''; });
+  mostrarErrorAcceso('loginError', '');
+  mostrarErrorAcceso('registroError', '');
+}
+
+/** Muestra «Iniciar sesión» o «Registrarse». */
+function mostrarAcceso(cual) {
+  const registro = cual === 'registro';
+  $('formLogin').hidden = registro;
+  $('formRegistro').hidden = !registro;
+  $('tabEntrar').classList.toggle('activa', !registro);
+  $('tabRegistro').classList.toggle('activa', registro);
+  $('tabEntrar').setAttribute('aria-selected', String(!registro));
+  $('tabRegistro').setAttribute('aria-selected', String(registro));
+  $('avisoCuentasLocales').hidden = !servicio || servicio.modo === 'java';
+  (registro ? document.querySelector('input[name="tipoCuenta"]') : $('loginUsuario')).focus();
 }
 
 function volverAlLogin(motivo) {
@@ -176,9 +224,9 @@ function volverAlLogin(motivo) {
   document.querySelectorAll('dialog[open]').forEach(d => d.close());
   $('app').hidden = true;
   $('login').hidden = false;
-  $('loginClave').value = '';
-  $('loginError').textContent = motivo || '';
-  $('loginError').hidden = !motivo;
+  limpiarAcceso();
+  mostrarAcceso('entrar');
+  mostrarErrorAcceso('loginError', motivo);
 }
 
 async function cerrarSesion() {
@@ -2277,7 +2325,8 @@ function conectarEventos() {
   editorReglas = editorCriterios($('criteriosReglas'));
   editorNuevo = editorCriterios($('criteriosNuevo'));
   $('formLogin').addEventListener('submit', entrar);
-  $('btnVisitante').addEventListener('click', entrarComoVisitante);
+  $('formRegistro').addEventListener('submit', registrarse);
+  document.querySelectorAll('[data-acceso]').forEach(b => b.addEventListener('click', () => mostrarAcceso(b.dataset.acceso)));
   // Detalle del partido (cara a cara, racha y alineaciones)
   document.querySelectorAll('[data-dp]').forEach(b => b.addEventListener('click', () => { detallePestana = b.dataset.dp; dibujarDetalle(); }));
   conectarVotaciones(); // [REQ-07] votaciones.js

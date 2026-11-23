@@ -73,6 +73,7 @@ public final class PruebaPostgres {
         probar("Documento único también en la base de datos", PruebaPostgres::probarDocumentoUnico);
         probar("Ascensos y descensos al pasar de temporada", PruebaPostgres::probarAscensos);
         probar("Migraciones del esquema (database/migraciones)", PruebaPostgres::probarMigraciones);
+        probar("Cuentas: registro e inicio de sesión en la tabla usuarios", PruebaPostgres::probarCuentas);
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
         System.exit(fallos == 0 ? 0 : 1);
     }
@@ -226,9 +227,13 @@ public final class PruebaPostgres {
         boolean completas = tablas.containsAll(List.of("usuarios", "torneos", "divisiones", "equipos", "jugadores", "partidos", "alineaciones",
                 "eventos_partido", "noticias", "comentarios", "votos_publico", "calificaciones_partido", "v_tabla_posiciones",
                 "v_ultima_alineacion", "v_votaciones_activas", "v_calificaciones"));
-        sql(db, "INSERT INTO usuarios (nombre, username, password_hash, rol) VALUES ('A', 'a', 'x', 'ADMIN')");
+        sql(db, "INSERT INTO usuarios (nombre, username, password_hash, rol) VALUES ('A', 'a', 'x', 'ORGANIZADOR')");
         boolean restricciones = falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash) VALUES ('B', 'a', 'x')"))
                 && falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash, rol) VALUES ('B', 'b', 'x', 'JEFE')"))
+                && falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash, rol) VALUES ('B', 'b', 'x', 'ADMIN')"))
+                && falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash) VALUES ('B', 'Bea', 'x')"))
+                && !falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash) VALUES ('C', 'c', 'x')"))
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'c' AND rol = 'AFICIONADO'") == 1 // rol por defecto
                 && falla(PersistenciaException.class, () -> sql(db, "INSERT INTO comentarios (noticia_id, autor, texto) VALUES (99, 'a', 'b')"));
         return completas && restricciones;
     }
@@ -236,15 +241,8 @@ public final class PruebaPostgres {
     private static boolean probarSeed(ConexionDB db) throws Exception {
         script(db, "database/seed.sql");
         CampeonatoService s = servicio(db);
-        // Las claves de demostracion quedan como hash, en el formato que valida AutenticacionService.
-        alphasport.service.ClavesPbkdf2 claves = new alphasport.service.ClavesPbkdf2();
-        String hashAdmin = db.ejecutar(con -> {
-            try (var st = con.createStatement(); var rs = st.executeQuery("SELECT password_hash FROM usuarios WHERE username = 'admin'")) {
-                return rs.next() ? rs.getString(1) : null;
-            }
-        });
-        boolean usuarios = claves.coincide("123", hashAdmin) && !claves.coincide("321", hashAdmin) && !hashAdmin.contains("123")
-                && contar(db, "SELECT COUNT(*) FROM usuarios") == 2;
+        // Sin cuentas de demostracion: cada persona se registra desde la app.
+        boolean usuarios = contar(db, "SELECT COUNT(*) FROM usuarios") == 0;
         boolean leido = s.getCampeonato().getEquipos().size() == 6 && s.getCampeonato().getEquipos().stream().allMatch(e -> e.getJugadores().size() == 16)
                 && contar(db, "SELECT COUNT(*) FROM jugadores WHERE es_capitan") == 6;
         s.avanzar(); // el torneo de prueba se puede iniciar y seguir usando
@@ -736,7 +734,11 @@ public final class PruebaPostgres {
             script(db, m.toString());
         }
         db.verificar();
-        boolean igual = foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 2; // el campeonato y su copia
+        // 005: las cuentas siguen ahi con el rol nuevo, y en minusculas.
+        boolean cuentas = contar(db, "SELECT COUNT(*) FROM usuarios") == 2
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'admin' AND rol = 'ORGANIZADOR'") == 1
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'ana' AND email = 'ana@correo.com' AND rol = 'AFICIONADO' AND password_hash = 'y'") == 1;
+        boolean igual = cuentas && foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 2; // el campeonato y su copia
         // Una persona por jugador, compartida por el campeonato en curso y su copia del historial.
         int jugadores = contar(db, "SELECT COUNT(*) FROM jugadores j JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ACTUAL'");
         boolean personas = jugadores > 0 && contar(db, "SELECT COUNT(*) FROM personas") == jugadores
@@ -751,12 +753,64 @@ public final class PruebaPostgres {
         for (Path m : archivos) {
             script(db, m.toString()); // repetirlas no cambia nada
         }
-        igual &= foto(servicio(db)).equals(antes) && contar(db, "SELECT MAX(version) FROM esquema_version") == ConexionDB.VERSION_ESQUEMA
+        igual &= foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM usuarios") == 2
+                && contar(db, "SELECT MAX(version) FROM esquema_version") == ConexionDB.VERSION_ESQUEMA
                 && archivos.size() == ConexionDB.VERSION_ESQUEMA;
         if (!(anterior && avisa && igual && personas)) {
             System.out.println("  anterior=" + anterior + " avisa=" + avisa + " igual=" + igual + " personas=" + personas);
         }
         return anterior && avisa && igual && personas;
+    }
+
+    /**
+     * PostgresRepositorioUsuarios: registro (SELECT y luego INSERT), usuario o correo repetidos sin importar
+     * mayusculas, la clave solo como hash, inicio de sesion, y lo mismo que la version en memoria.
+     */
+    private static boolean probarCuentas(ConexionDB db) throws Exception {
+        alphasport.service.ClavesPbkdf2 rapido = new alphasport.service.ClavesPbkdf2(1000);
+        alphasport.persistence.postgres.PostgresRepositorioUsuarios repo = new alphasport.persistence.postgres.PostgresRepositorioUsuarios(db);
+        alphasport.service.AutenticacionService auth = new alphasport.service.AutenticacionService(repo, rapido);
+        alphasport.model.Usuario ana = auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro(
+                " Ana.Torres ", "Ana Torres", "Ana@Correo.COM", "clave1234", "clave1234", "ORGANIZADOR"));
+        auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro("luis", "Luis", "luis@x.co", "futbol2026", "futbol2026", "AFICIONADO"));
+        // La fila: usuario y correo en minusculas, rol nuevo y la clave solo como hash.
+        boolean fila = ana.getNombre().equals("ana.torres") && contar(db, "SELECT COUNT(*) FROM usuarios") == 2
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'ana.torres' AND email = 'ana@correo.com' AND rol = 'ORGANIZADOR'"
+                        + " AND nombre = 'Ana Torres' AND password_hash LIKE 'pbkdf2_sha256$%' AND password_hash NOT LIKE '%clave1234%'") == 1
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'luis' AND rol = 'AFICIONADO'") == 1;
+        // Lectura y consultas sin importar mayusculas ni espacios.
+        alphasport.model.CuentaUsuario leida = repo.buscar("  ANA.TORRES ").orElseThrow();
+        boolean lectura = leida.rol() == alphasport.model.Rol.ORGANIZADOR && leida.correo().equals("ana@correo.com")
+                && repo.buscar("nadie").isEmpty() && repo.existeUsuario("Ana.Torres") && !repo.existeUsuario("otra")
+                && repo.existeCorreo(" ANA@correo.com") && !repo.existeCorreo("otra@x.co");
+        // Repetidos: el repositorio lo dice y no inserta; si se salta la consulta, la llave UNIQUE frena el INSERT.
+        boolean repetidos = repo.crear(new alphasport.model.CuentaUsuario("ANA.torres", "Otra", "otra@x.co", alphasport.model.Rol.AFICIONADO, "h"))
+                == RepositorioUsuarios.Alta.USUARIO_EN_USO
+                && repo.crear(new alphasport.model.CuentaUsuario("otra", "Otra", "ana@CORREO.com", alphasport.model.Rol.AFICIONADO, "h"))
+                == RepositorioUsuarios.Alta.CORREO_EN_USO
+                && contar(db, "SELECT COUNT(*) FROM usuarios") == 2;
+        boolean unico = falla(PersistenciaException.class, () -> sql(db,
+                "INSERT INTO usuarios (nombre, username, email, password_hash, rol) VALUES ('X', 'luis', 'z@x.co', 'h', 'AFICIONADO')"));
+        // Inicio de sesion contra la tabla.
+        boolean login = auth.iniciarSesion("ANA.TORRES", "clave1234").puedeEditar() && !auth.iniciarSesion("luis", "futbol2026").puedeEditar()
+                && falla(alphasport.service.ReglaNegocioException.class, () -> auth.iniciarSesion("luis", "otra1234"))
+                && falla(alphasport.service.ReglaNegocioException.class, () -> auth.iniciarSesion("nadie", "otra1234"));
+        // Un rol desconocido en la tabla no deja entrar (no se adivina un rol).
+        sql(db, "ALTER TABLE usuarios DROP CONSTRAINT usuarios_rol_check");
+        sql(db, "UPDATE usuarios SET rol = 'JEFE' WHERE username = 'luis'");
+        boolean rolRaro = falla(PersistenciaException.class, () -> repo.buscar("luis"));
+        // La version en memoria responde igual a las mismas preguntas.
+        RepositorioUsuariosEnMemoria memoria = new RepositorioUsuariosEnMemoria(List.of(leida));
+        boolean contratos = memoria.existeUsuario("ANA.TORRES") == repo.existeUsuario("ANA.TORRES")
+                && memoria.existeCorreo("ANA@correo.com") == repo.existeCorreo("ANA@correo.com")
+                && memoria.buscar("nadie").isEmpty() == repo.buscar("nadie").isEmpty()
+                && memoria.crear(new alphasport.model.CuentaUsuario("ana.torres", "x", "q@x.co", alphasport.model.Rol.AFICIONADO, "h"))
+                == RepositorioUsuarios.Alta.USUARIO_EN_USO;
+        if (!(fila && lectura && repetidos && unico && login && rolRaro && contratos)) {
+            System.out.println("  fila=" + fila + " lectura=" + lectura + " repetidos=" + repetidos + " unico=" + unico + " login=" + login
+                    + " rolRaro=" + rolRaro + " contratos=" + contratos);
+        }
+        return fila && lectura && repetidos && unico && login && rolRaro && contratos;
     }
 
     private static List<Path> migraciones() throws Exception {
@@ -767,6 +821,14 @@ public final class PruebaPostgres {
 
     /** Deja la base como la creaba la primera version de schema.sql. */
     private static void volverAVersionCero(ConexionDB db) throws Exception {
+        // usuarios como antes de la 005: roles ADMIN y VISITANTE, y usuario o correo con mayusculas.
+        sql(db, "ALTER TABLE usuarios DROP CONSTRAINT usuarios_minusculas");
+        sql(db, "ALTER TABLE usuarios DROP CONSTRAINT usuarios_rol_check");
+        sql(db, "ALTER TABLE usuarios ALTER COLUMN rol TYPE VARCHAR(10)");
+        sql(db, "ALTER TABLE usuarios ALTER COLUMN rol SET DEFAULT 'VISITANTE'");
+        sql(db, "ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check CHECK (rol IN ('ADMIN', 'VISITANTE'))");
+        sql(db, "INSERT INTO usuarios (nombre, username, email, password_hash, rol) VALUES ('Administrador', 'admin', 'admin@alphasport.local', 'x', 'ADMIN'),"
+                + " ('Ana', 'Ana', 'Ana@Correo.COM', 'y', 'VISITANTE')");
         sql(db, "DROP TABLE movimientos_division");
         sql(db, "ALTER TABLE jugadores DROP CONSTRAINT jugadores_documento_unico");
         sql(db, "ALTER TABLE jugadores DROP COLUMN persona_id");
