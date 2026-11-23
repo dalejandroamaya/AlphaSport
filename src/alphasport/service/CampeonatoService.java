@@ -539,10 +539,14 @@ public class CampeonatoService {
     }
 
     public List<Campeonato> historial() {
-        return historial.listar();
+        try {
+            return historial.listar();
+        } catch (PersistenciaException e) {
+            throw new ReglaNegocioException("CONEXION", e.getMessage());
+        }
     }
 
-    public void eliminarDelHistorial(String codigo) {
+    public void eliminarDelHistorial(String codigo) throws PersistenciaException {
         if (!historial.eliminar(codigo)) {
             throw new ReglaNegocioException("No se encontró ese campeonato en el historial.");
         }
