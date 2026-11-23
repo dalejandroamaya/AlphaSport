@@ -12,11 +12,29 @@ import java.util.Optional;
  */
 public interface RepositorioNoticias {
 
-    /** Las aprobadas, la mas reciente primero, con sus comentarios. */
-    List<Noticia> publicadas() throws PersistenciaException;
+    /**
+     * Las aprobadas de un campeonato (su codigo) y las generales, la mas reciente primero, con sus comentarios.
+     * {@code campeonato} null = todas.
+     */
+    List<Noticia> publicadas(String campeonato) throws PersistenciaException;
 
-    /** Las que esperan moderacion, la mas reciente primero. */
-    List<Noticia> pendientes() throws PersistenciaException;
+    /** Las que esperan moderacion de un campeonato y las generales, la mas reciente primero (null = todas). */
+    List<Noticia> pendientes(String campeonato) throws PersistenciaException;
+
+    /** Todas las aprobadas, de cualquier campeonato. */
+    default List<Noticia> publicadas() throws PersistenciaException {
+        return publicadas(null);
+    }
+
+    /** Todas las que esperan moderacion, de cualquier campeonato. */
+    default List<Noticia> pendientes() throws PersistenciaException {
+        return pendientes(null);
+    }
+
+    /** true si la noticia se muestra en ese campeonato: es suya o es general (null = todos). */
+    static boolean delCampeonato(Noticia n, String campeonato) {
+        return campeonato == null || n.getCampeonato() == null || campeonato.equals(n.getCampeonato());
+    }
 
     /** La noticia con sus comentarios, o vacio si no existe. */
     Optional<Noticia> buscar(int id) throws PersistenciaException;
