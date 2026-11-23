@@ -74,6 +74,7 @@ public final class PruebaPostgres {
         probar("Ascensos y descensos al pasar de temporada", PruebaPostgres::probarAscensos);
         probar("Migraciones del esquema (database/migraciones)", PruebaPostgres::probarMigraciones);
         probar("Cuentas: registro e inicio de sesión en la tabla usuarios", PruebaPostgres::probarCuentas);
+        probar("Varios campeonatos en curso: dueños, sin mezclar datos y terminar uno", PruebaPostgres::probarVariosCampeonatos);
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
         System.exit(fallos == 0 ? 0 : 1);
     }
@@ -780,6 +781,7 @@ public final class PruebaPostgres {
         auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro("luis", "Luis", "luis@x.co", "futbol2026", "futbol2026", "AFICIONADO"));
         // La fila: usuario y correo en minusculas, rol nuevo y la clave solo como hash.
         boolean fila = ana.getNombre().equals("ana.torres") && contar(db, "SELECT COUNT(*) FROM usuarios") == 2
+                && ana.getId() == contar(db, "SELECT id FROM usuarios WHERE username = 'ana.torres'") // la sesion lleva el id de la cuenta
                 && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'ana.torres' AND email = 'ana@correo.com' AND rol = 'ORGANIZADOR'"
                         + " AND nombre = 'Ana Torres' AND password_hash LIKE 'pbkdf2_sha256$%' AND password_hash NOT LIKE '%clave1234%'") == 1
                 && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'luis' AND rol = 'AFICIONADO'") == 1;
@@ -816,6 +818,117 @@ public final class PruebaPostgres {
                     + " rolRaro=" + rolRaro + " contratos=" + contratos);
         }
         return fila && lectura && repetidos && unico && login && rolRaro && contratos;
+    }
+
+    /**
+     * Varios campeonatos en curso en la base: cada torneo con su dueno, sus equipos, partidos, votos y noticias
+     * separados; otro programa ve lo mismo; un Organizador no toca lo de otro; terminar uno no cambia los demas;
+     * y un campeonato sin dueno se toma una sola vez.
+     */
+    private static boolean probarVariosCampeonatos(ConexionDB db) throws Exception {
+        alphasport.service.ClavesPbkdf2 rapido = new alphasport.service.ClavesPbkdf2(1000);
+        alphasport.service.AutenticacionService auth = new alphasport.service.AutenticacionService(
+                new alphasport.persistence.postgres.PostgresRepositorioUsuarios(db), rapido);
+        java.util.function.BiFunction<String, String, alphasport.model.Usuario> registrar = (usuario, tipo) -> {
+            try {
+                return auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro(usuario, usuario.toUpperCase(),
+                        usuario + "@x.co", "clave1234", "clave1234", tipo));
+            } catch (PersistenciaException e) {
+                throw new IllegalStateException(e);
+            }
+        };
+        alphasport.model.Usuario ana = registrar.apply("ana", "ORGANIZADOR"), beto = registrar.apply("beto", "ORGANIZADOR"),
+                luis = registrar.apply("luis", "AFICIONADO");
+        java.util.function.Supplier<alphasport.service.GestorCampeonatos> programa = () -> {
+            PostgresRepositorioHistorial historial = new PostgresRepositorioHistorial(db);
+            return new alphasport.service.GestorCampeonatos(new alphasport.persistence.postgres.PostgresRepositorioCampeonatos(db), historial,
+                    r -> new CampeonatoService(r, historial, db));
+        };
+        alphasport.service.GestorCampeonatos gestor = programa.get();
+        ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+        cfg.setSorteoAleatorio(false);
+        CampeonatoService ligaAna = gestor.crear(ana, "Liga Ana", TipoFormato.LIGA, cfg, null).servicio();
+        CampeonatoService copaAna = gestor.crear(ana, "Copa Ana", TipoFormato.ELIMINACION_DIRECTA, cfg, null).servicio();
+        CampeonatoService ligaBeto = gestor.crear(beto, "Liga Beto", TipoFormato.LIGA, cfg, null).servicio();
+        ligaAna.equipos().cargarDatosPrueba(11, 4, true);
+        copaAna.equipos().cargarDatosPrueba(22, 2, true);
+        ligaBeto.equipos().cargarDatosPrueba(33, 4, true);
+        String a = ligaAna.getCampeonato().getCodigo(), c = copaAna.getCampeonato().getCodigo(), b = ligaBeto.getCampeonato().getCodigo();
+        // Tres en curso, cada uno con su dueno en la fila.
+        java.util.function.ToIntFunction<String> duenoDe = codigo -> {
+            try {
+                return contar(db, "SELECT COALESCE(propietario_id, 0) FROM torneos WHERE situacion = 'ACTUAL' AND codigo = '" + codigo + "'");
+            } catch (PersistenciaException e) {
+                throw new IllegalStateException(e);
+            }
+        };
+        boolean filas = contar(db, "SELECT COUNT(*) FROM torneos WHERE situacion = 'ACTUAL'") == 3
+                && duenoDe.applyAsInt(a) == ana.getId() && duenoDe.applyAsInt(c) == ana.getId() && duenoDe.applyAsInt(b) == beto.getId();
+        // Otro programa (otro gestor) ve lo mismo, y cada Organizador solo lo suyo.
+        alphasport.service.GestorCampeonatos otro = programa.get();
+        java.util.function.Function<alphasport.model.Usuario, List<String>> nombres = u -> otro.activos(u).stream()
+                .map(alphasport.service.GestorCampeonatos.Resumen::nombre).toList();
+        boolean listado = nombres.apply(ana).equals(List.of("Liga Ana", "Copa Ana")) && nombres.apply(beto).equals(List.of("Liga Beto"))
+                && nombres.apply(luis).equals(List.of("Liga Ana", "Copa Ana", "Liga Beto"))
+                && otro.activos(luis).stream().filter(r -> r.codigo().equals(b)).findFirst().orElseThrow().organizador().equals("BETO")
+                && otro.paraLeer(a, luis).getCampeonato().getEquipos().size() == 4 && otro.paraLeer(c, luis).getCampeonato().getEquipos().size() == 2;
+        // Guardar uno no cambia la version (ni los datos) de los otros.
+        int versionBeto = contar(db, "SELECT version FROM torneos WHERE codigo = '" + b + "' AND situacion = 'ACTUAL'");
+        ligaAna.avanzar();
+        Partido jugado = ligaAna.getCampeonato().getPartidos().get(0);
+        jugarCompleto(ligaAna, jugado);
+        int titular = ligaAna.getCampeonato().buscarPartido(jugado.getId()).getTitularesLocal().get(0);
+        ligaAna.votacion().votarJugador(jugado.getId(), titular, 8, "dispositivo-P1");
+        boolean separados = contar(db, "SELECT version FROM torneos WHERE codigo = '" + b + "' AND situacion = 'ACTUAL'") == versionBeto
+                && contar(db, "SELECT COUNT(*) FROM partidos p JOIN torneos t ON t.id = p.torneo_id WHERE t.codigo = '" + b + "'") == 0
+                && contar(db, "SELECT COUNT(*) FROM votos_publico v JOIN partidos p ON p.id = v.partido_id JOIN torneos t ON t.id = p.torneo_id"
+                        + " WHERE t.codigo = '" + a + "'") > 0
+                && contar(db, "SELECT COUNT(*) FROM equipos e JOIN torneos t ON t.id = e.torneo_id WHERE t.codigo = '" + b + "'") == 4
+                && otro.paraLeer(a, luis).getCampeonato().getPartidos().stream().filter(Partido::isJugado).count() == 1
+                && otro.paraLeer(b, luis).getCampeonato().getPartidos().isEmpty();
+        // Permisos: Ana no gestiona ni ve lo de Beto; Luis lee todo y no cambia nada.
+        boolean permisos = codigoDe(() -> gestor.paraGestionar(b, ana)).equals("PERMISO") && codigoDe(() -> gestor.paraLeer(b, ana)).equals("PERMISO")
+                && codigoDe(() -> gestor.paraGestionar(a, luis)).equals("PERMISO") && codigoDe(() -> gestor.terminar(b, ana)).equals("PERMISO")
+                && gestor.paraLeer(b, luis) != null && codigoDe(() -> gestor.paraLeer("nada0000", luis)).equals("CAMPEONATO");
+        // Noticias por campeonato (noticias.torneo_id).
+        alphasport.service.NoticiasService noticias = new alphasport.service.NoticiasService(new PostgresRepositorioNoticias(db));
+        alphasport.model.Noticia propuesta = noticias.de(a).proponer("Para la liga de Ana", "Cuerpo de la noticia", "Luis", null);
+        boolean deAna = noticias.de(a).pendientes().size() == 1 && noticias.de(b).pendientes().isEmpty()
+                && contar(db, "SELECT COUNT(*) FROM noticias n JOIN torneos t ON t.id = n.torneo_id WHERE t.codigo = '" + a + "'") == 1
+                && codigoDe(() -> noticias.de(b).aprobar(propuesta.getId())).equals("REGLA");
+        // Terminar la liga de Ana: pasa al historial con sus ids; la copa de Ana y la liga de Beto siguen igual.
+        int idLigaAna = contar(db, "SELECT id FROM torneos WHERE codigo = '" + a + "' AND situacion = 'ACTUAL'");
+        gestor.terminar(a, ana);
+        boolean terminar = contar(db, "SELECT COUNT(*) FROM torneos WHERE situacion = 'ACTUAL'") == 2
+                && contar(db, "SELECT COUNT(*) FROM torneos WHERE id = " + idLigaAna + " AND situacion = 'ARCHIVADO'") == 1
+                && contar(db, "SELECT version FROM torneos WHERE codigo = '" + b + "' AND situacion = 'ACTUAL'") == versionBeto
+                && programa.get().historial(ana).stream().map(Campeonato::getNombreCampeonato).toList().equals(List.of("Liga Ana"))
+                && programa.get().historial(beto).isEmpty() && programa.get().activos(luis).size() == 2;
+        // Sin dueno (por ejemplo, el de seed.sql): se toma una sola vez.
+        sql(db, "UPDATE torneos SET propietario_id = NULL WHERE codigo = '" + c + "'");
+        alphasport.service.GestorCampeonatos tercero = programa.get();
+        boolean tomar = tercero.sinOrganizador(beto).size() == 1 && tercero.activos(ana).isEmpty()
+                && codigoDe(() -> tercero.paraGestionar(c, ana)).equals("PERMISO");
+        tercero.tomar(c, beto);
+        tomar &= codigoDe(() -> programa.get().tomar(c, ana)).equals("PERMISO") && duenoDe.applyAsInt(c) == beto.getId()
+                && programa.get().paraGestionar(c, beto) != null;
+        if (!(filas && listado && separados && permisos && deAna && terminar && tomar)) {
+            System.out.println("  filas=" + filas + " listado=" + listado + " separados=" + separados + " permisos=" + permisos + " deAna=" + deAna
+                    + " terminar=" + terminar + " tomar=" + tomar);
+        }
+        return filas && listado && separados && permisos && deAna && terminar && tomar;
+    }
+
+    /** Codigo de la ReglaNegocioException que lanza la accion (null si no lanza ninguna). */
+    private static String codigoDe(Accion accion) {
+        try {
+            accion.hacer();
+            return "NINGUNO";
+        } catch (alphasport.service.ReglaNegocioException e) {
+            return e.getCodigo();
+        } catch (Exception e) {
+            return "otra excepcion: " + e;
+        }
     }
 
     private static List<Path> migraciones() throws Exception {
