@@ -11,12 +11,14 @@ import java.util.Optional;
 public class RepositorioUsuariosEnMemoria implements RepositorioUsuarios {
 
     private final Map<String, CuentaUsuario> cuentas = new LinkedHashMap<>();
+    /** Id que recibe la siguiente cuenta (como el SERIAL de la tabla usuarios). */
+    private int siguienteId = 1;
 
     public RepositorioUsuariosEnMemoria() {
     }
 
     public RepositorioUsuariosEnMemoria(List<CuentaUsuario> cuentas) {
-        cuentas.forEach(c -> this.cuentas.put(RepositorioUsuarios.normalizar(c.usuario()), c));
+        cuentas.forEach(this::agregar);
     }
 
     /**
@@ -55,7 +57,14 @@ public class RepositorioUsuariosEnMemoria implements RepositorioUsuarios {
         if (existeCorreo(cuenta.correo())) {
             return Alta.CORREO_EN_USO;
         }
-        cuentas.put(RepositorioUsuarios.normalizar(cuenta.usuario()), cuenta);
+        agregar(cuenta);
         return Alta.CREADA;
+    }
+
+    /** Guarda la cuenta con su propio id (el que traiga, o el siguiente). */
+    private void agregar(CuentaUsuario cuenta) {
+        CuentaUsuario conId = cuenta.id() > 0 ? cuenta : cuenta.conId(siguienteId);
+        siguienteId = Math.max(siguienteId, conId.id()) + 1;
+        cuentas.put(RepositorioUsuarios.normalizar(conId.usuario()), conId);
     }
 }
