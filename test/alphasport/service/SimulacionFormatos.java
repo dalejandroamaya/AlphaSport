@@ -485,6 +485,27 @@ public class SimulacionFormatos {
             alphasport.model.Tarjeta tarde = new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(2), alphasport.model.Tarjeta.AMARILLA, 0);
             tarde.setMinuto(ReglasPartido.MINUTO_MAXIMO + 1);
             minuto.setTarjetas(new ArrayList<>(List.of(tarde)), p.getIdLocal());
+            // Doble amarilla: la segunda es expulsion, en el servicio y no solo en la pantalla.
+            java.util.function.Function<String[], Partido> conTarjetas = tipos -> {
+                Partido d = base.get();
+                ArrayList<alphasport.model.Tarjeta> lista = new ArrayList<>();
+                for (String tipo : tipos) {
+                    lista.add(new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(4), tipo, tipo.equals(alphasport.model.Tarjeta.ROJA) ? 1 : 0));
+                }
+                d.setTarjetas(lista, p.getIdLocal());
+                return d;
+            };
+            String a = alphasport.model.Tarjeta.AMARILLA, r = alphasport.model.Tarjeta.ROJA;
+            boolean dobleAmarilla = rechaza(() -> servicio.guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a}), false))
+                    && rechaza(() -> servicio.guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a, a, r}), false))
+                    && rechaza(() -> servicio.guardarPartido(p.getId(), conTarjetas.apply(new String[]{r, r}), false));
+            servicio.guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, r}), false); // asi la registran las pantallas
+            dobleAmarilla &= servicio.buscarPartido(p.getId()).getTarjetas().size() == 2;
+            servicio.guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a, r}), false);
+            dobleAmarilla &= servicio.buscarPartido(p.getId()).getTarjetas().size() == 3;
+            Partido limpio = base.get();
+            limpio.reiniciarResultado();
+            servicio.guardarPartido(p.getId(), limpio, false);
             boolean rechazos = rechaza(() -> servicio.guardarPartido(p.getId(), corto, false))
                     && rechaza(() -> servicio.guardarPartido(p.getId(), titularEntra, false))
                     && rechaza(() -> servicio.guardarPartido(p.getId(), golAjeno, false))
@@ -505,9 +526,9 @@ public class SimulacionFormatos {
             sede.setSede("Otra sede");
             servicio.guardarPartido(p.getId(), sede, false);
             boolean guarda = servicio.buscarPartido(p.getId()).getGoles().size() == 1 && servicio.buscarPartido(p.getId()).getSede().equals("Otra sede");
-            correcto = rechazos && guarda;
+            correcto = dobleAmarilla && rechazos && guarda;
             if (!correcto) {
-                System.out.println("  rechazos=" + rechazos + " guarda=" + guarda);
+                System.out.println("  dobleAmarilla=" + dobleAmarilla + " rechazos=" + rechazos + " guarda=" + guarda);
             }
         } catch (Exception e) {
             e.printStackTrace(System.out);

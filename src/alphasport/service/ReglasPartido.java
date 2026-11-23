@@ -132,6 +132,30 @@ public final class ReglasPartido {
             }
             minuto(t.getMinuto(), 0, "de la tarjeta");
         }
+        dobleAmarilla(datos.getTarjetas());
+    }
+
+    /**
+     * Cada jugador tiene a lo sumo una roja y dos amarillas, y la segunda amarilla es expulsion: quien tiene dos
+     * amarillas tiene que tener tambien su roja (asi lo registran las pantallas: la segunda se guarda como roja).
+     */
+    static void dobleAmarilla(List<Tarjeta> tarjetas) {
+        Map<Integer, List<Tarjeta>> porJugador = new HashMap<>();
+        tarjetas.forEach(t -> porJugador.computeIfAbsent(t.getIdJugador(), k -> new ArrayList<>()).add(t));
+        for (List<Tarjeta> delJugador : porJugador.values()) {
+            String nombre = delJugador.get(0).getNombreJugador();
+            long rojas = delJugador.stream().filter(Tarjeta::isRoja).count();
+            long amarillas = delJugador.size() - rojas;
+            if (rojas > 1) {
+                throw new ReglaNegocioException(nombre + " ya fue expulsado en este partido: tiene más de una roja.");
+            }
+            if (amarillas > 2) {
+                throw new ReglaNegocioException(nombre + " tiene " + amarillas + " amarillas: con la segunda ya queda expulsado.");
+            }
+            if (amarillas == 2 && rojas == 0) {
+                throw new ReglaNegocioException(nombre + " tiene dos amarillas: la segunda es expulsión. Regístrela como roja.");
+            }
+        }
     }
 
     /* ---------------------------------------------------------------- cambios */
