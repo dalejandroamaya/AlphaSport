@@ -213,7 +213,7 @@ public class SimulacionFormatos {
             boolean json = fotoAna.equals(anaJson.get("foto")) && FotosService.esNombreValido((String) eqJson.get("escudo"));
             // el visitante no puede cambiar fotos, pero si verlas; sin sesion no se ven
             api.ejecutar("logout", java.util.Map.of());
-            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("login", java.util.Map.of("usuario", "visitante", "clave", "321")); // cuenta de prueba (aficionado)
             boolean permisos = rechaza(() -> api.ejecutar("jugador/foto", java.util.Map.of("equipo", idEquipo, "jugador", idBeto, "imagen", apaisada)))
                     && rechaza(() -> api.ejecutar("equipo/escudo", java.util.Map.of("id", idEquipo, "imagen", "")))
                     && api.foto(fotoAna) != null;
@@ -596,7 +596,7 @@ public class SimulacionFormatos {
                     && codigo.apply(() -> api.ejecutar("noticia/comentar", java.util.Map.of("id", 1, "autor", "A", "texto", "Hola"))).equals("LOGIN");
             // [L1] Respaldo y exportacion pasan por el controlador: tambien exigen sesion y permiso.
             boolean archivos = codigo.apply(api::respaldo).equals("LOGIN") && codigo.apply(api::historialEnTexto).equals("LOGIN");
-            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("login", java.util.Map.of("usuario", "visitante", "clave", "321")); // cuenta de prueba (aficionado)
             @SuppressWarnings("unchecked")
             List<String> permisosVisitante = (List<String>) api.sesion().get("permisos");
             archivos &= codigo.apply(() -> api.abrirRespaldo(new byte[0])).equals("PERMISO");
@@ -613,7 +613,7 @@ public class SimulacionFormatos {
             // [M2] Cada modulo registra sus rutas con su permiso: solo registrarse, entrar y salir son publicas.
             java.util.Map<String, alphasport.model.Permiso> acciones = api.permisosDeAcciones();
             boolean rutas = acciones.size() >= 29 && acciones.entrySet().stream().filter(e -> e.getValue() == null).map(java.util.Map.Entry::getKey)
-                    .sorted().toList().equals(List.of("login", "login/visitante", "logout", "registro"))
+                    .sorted().toList().equals(List.of("login", "logout", "registro"))
                     && acciones.get("calificacion/votar") == alphasport.model.Permiso.VOTAR_JUGADORES
                     && acciones.get("comentario/eliminar") == alphasport.model.Permiso.MODERAR_NOTICIAS
                     && acciones.get("partido") == alphasport.model.Permiso.GESTIONAR_CAMPEONATO
@@ -655,7 +655,7 @@ public class SimulacionFormatos {
             // Dos navegadores: el administrador y un visitante, cada uno con su cookie.
             var admin = pedir(cliente, base, "POST", "login", "{\"usuario\":\"admin\",\"clave\":\"123\"}", null, base);
             String cookieAdmin = admin.headers().firstValue("Set-Cookie").orElse("");
-            var visita = pedir(cliente, base, "POST", "login/visitante", "{}", null, base);
+            var visita = pedir(cliente, base, "POST", "login", "{\"usuario\":\"visitante\",\"clave\":\"321\"}", null, base);
             String cookieVisita = visita.headers().firstValue("Set-Cookie").orElse("");
             String tokenAdmin = cookieAdmin.replaceFirst(";.*$", ""), tokenVisita = cookieVisita.replaceFirst(";.*$", "");
             boolean cookies = cookieAdmin.startsWith(alphasport.ui.ServidorWeb.COOKIE + "=") && cookieAdmin.contains("HttpOnly")
@@ -942,7 +942,7 @@ public class SimulacionFormatos {
             api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", resultado, "accion", "guardar", "confirmado", false));
             boolean adminNoVota = rechaza(() -> api.ejecutar("calificacion/votar", java.util.Map.of("partido", p.getId(), "jugador", xiLocal.get(0), "valor", 8, "dispositivo", "dispositivo-A1")));
             api.ejecutar("logout", java.util.Map.of());
-            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("login", java.util.Map.of("usuario", "visitante", "clave", "321")); // cuenta de prueba (aficionado)
             java.util.function.Supplier<Integer> abiertas = () -> ((List<?>) api.consultar("votaciones/dispositivo-A1").get("votaciones")).size();
             boolean votacion = adminNoVota && p.getHorasVotacion() == 48 && abiertas.get() == 1;
             java.util.Map<String, Object> votado = api.ejecutar("calificacion/votar", java.util.Map.of("partido", p.getId(), "dispositivo", "dispositivo-A1",
@@ -1403,7 +1403,7 @@ public class SimulacionFormatos {
             alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService(), noticias);
             String png = "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(
                     new byte[]{(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10, 0, 0, 0, 0});
-            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("login", java.util.Map.of("usuario", "visitante", "clave", "321")); // cuenta de prueba (aficionado)
             java.util.Map<String, Object> propuesta = api.ejecutar("noticia/proponer", java.util.Map.of(
                     "titulo", "Golazo en la final", "cuerpo", "Un visitante cuenta el gol del partido.", "autor", "Ana", "imagen", png));
             java.util.Map<String, Object> vistaVisitante = (java.util.Map<String, Object>) propuesta.get("noticias");
@@ -1425,7 +1425,7 @@ public class SimulacionFormatos {
             api.ejecutar("noticia/guardar", java.util.Map.of("titulo", "Comunicado oficial", "cuerpo", "La fecha 3 se juega el sábado."));
             boolean publicadas = noticias.publicadas().size() == 2 && noticias.pendientes().isEmpty()
                     && noticias.publicadas().stream().allMatch(alphasport.model.Noticia::isAprobado);
-            api.ejecutar("login/visitante", java.util.Map.of());
+            api.ejecutar("login", java.util.Map.of("usuario", "visitante", "clave", "321")); // cuenta de prueba (aficionado)
             api.ejecutar("noticia/comentar", java.util.Map.of("id", id, "autor", "Pedro",
                     "texto", "Que IDIOTAAA el arbitro, un hp. La pera del juez y el calculo bien."));
             String guardado = noticias.buscar(id).getComentarios().get(0).getTexto();

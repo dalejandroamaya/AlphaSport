@@ -57,11 +57,6 @@ public class SesionService {
         return abrir(autenticacion.registrar(datos));
     }
 
-    /** Acceso de solo lectura sin contraseña (boton «Entrar como visitante»). Devuelve el token. */
-    public String entrarComoVisitante() {
-        return abrir(autenticacion.entrarComoVisitante());
-    }
-
     private String abrir(Usuario usuario) {
         Instant ahora = reloj.instant();
         sesiones.values().removeIf(s -> !s.vence().isAfter(ahora)); // limpia las vencidas

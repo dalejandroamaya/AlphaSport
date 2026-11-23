@@ -95,11 +95,6 @@ public class AutenticacionService {
         return cuenta.comoUsuario();
     }
 
-    /** Acceso de solo lectura sin contraseña (boton «Entrar como visitante»). */
-    public Usuario entrarComoVisitante() {
-        return new Usuario("visitante", Rol.AFICIONADO);
-    }
-
     /* ---------------------------------------------------------------- validaciones */
 
     static String validarUsuario(String texto) {
