@@ -13,8 +13,16 @@ public class AlphaSportApp {
     private static final int PUERTO = 8080;
 
     public static void main(String[] args) throws Exception {
-        CampeonatoService servicio = Arranque.servicio();
-        ServidorWeb servidor = new ServidorWeb(Arranque.CARPETA_WEB, servicio, new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias()));
+        CampeonatoService servicio;
+        ServidorWeb servidor;
+        try {
+            servicio = Arranque.servicio();
+            servidor = new ServidorWeb(Arranque.CARPETA_WEB, servicio, new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias()));
+        } catch (alphasport.persistence.PersistenciaException e) {
+            System.err.println(e.getMessage());
+            System.exit(1);
+            return;
+        }
         int puerto = servidor.iniciar(PUERTO);
         String direccion = "http://127.0.0.1:" + puerto + "/";
         Runtime.getRuntime().addShutdownHook(new Thread(servidor::detener));

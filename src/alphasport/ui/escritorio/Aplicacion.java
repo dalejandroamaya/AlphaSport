@@ -146,6 +146,14 @@ public class Aplicacion extends Application {
             avisarSinDatos(e);
             return;
         }
+        // Si se pierde la conexión en medio de una consulta se avisa, en vez de fallar en silencio.
+        Thread.currentThread().setUncaughtExceptionHandler((hilo, e) -> {
+            if (e instanceof ReglaNegocioException) {
+                aviso(e.getMessage());
+            } else {
+                e.printStackTrace();
+            }
+        });
         catalogo = api.consultar("catalogo");
         dialogos = new Dialogos(this);
         Fotos.usar(this);
