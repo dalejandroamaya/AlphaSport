@@ -183,6 +183,30 @@ public class GestorCampeonatos {
         return new Creado(nuevo, movimientos);
     }
 
+    /**
+     * Abre un respaldo (.dat) como un campeonato mas del Organizador. Si ese campeonato ya esta en curso, entra
+     * como otro (con otro codigo): nunca reemplaza a uno que ya existe. Con un solo campeonato, lo reemplaza como antes.
+     */
+    public synchronized CampeonatoService abrirRespaldo(Usuario u, byte[] datos) throws PersistenciaException {
+        exigirUsuario(u);
+        if (!u.puede(Permiso.GESTIONAR_CAMPEONATO)) {
+            throw new ReglaNegocioException("PERMISO", "Su rol (" + u.getRol().getNombre() + ") no puede abrir respaldos.");
+        }
+        if (unico != null) {
+            unico.historial().abrirRespaldo(datos);
+            return unico;
+        }
+        Campeonato abierto = alphasport.persistence.Serializacion.desdeBytes(datos);
+        if (leerActivos().stream().anyMatch(a -> a.codigo().equals(abierto.getCodigo()))) {
+            abierto.setCodigo(null); // ya esta en curso: este entra como otro campeonato
+        }
+        CampeonatoService nuevo = fabrica.crear(repositorios.nuevo());
+        nuevo.contexto().asignarPropietario(u.getId()); // el respaldo de otro organizador queda de quien lo abre
+        nuevo.contexto().reemplazarPor(abierto);
+        abiertos.add(nuevo);
+        return nuevo;
+    }
+
     /** Termina un campeonato del Organizador: pasa al historial y deja de estar en curso. Los demas no se tocan. */
     public synchronized void terminar(String codigo, Usuario u) throws PersistenciaException {
         CampeonatoService s = paraGestionar(codigo, u);

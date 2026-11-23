@@ -4,7 +4,7 @@ import alphasport.persistence.ArchivoRepositorioFotos;
 import alphasport.persistence.ImagenesEnDisco;
 import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.postgres.ConexionDB;
-import alphasport.persistence.postgres.PostgresRepositorioCampeonato;
+import alphasport.persistence.postgres.PostgresRepositorioCampeonatos;
 import alphasport.persistence.postgres.PostgresRepositorioHistorial;
 import alphasport.persistence.postgres.PostgresRepositorioNoticias;
 import alphasport.persistence.postgres.PostgresRepositorioUsuarios;
@@ -12,7 +12,9 @@ import alphasport.service.AutenticacionService;
 import alphasport.service.CampeonatoService;
 import alphasport.service.ClavesPbkdf2;
 import alphasport.service.FotosService;
+import alphasport.service.GestorCampeonatos;
 import alphasport.service.NoticiasService;
+import alphasport.service.SesionService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -30,7 +32,8 @@ public final class FabricaAplicacion implements AutoCloseable {
 
     private final Path archivoConexion;
     private ConexionDB conexion;
-    private CampeonatoService servicio;
+    private GestorCampeonatos gestor;
+    private FotosService fotos;
     private NoticiasService noticias;
 
     /** Con la conexion de db.properties. */
@@ -67,24 +70,38 @@ public final class FabricaAplicacion implements AutoCloseable {
         return noticias;
     }
 
-    /** El servicio del campeonato con el campeonato guardado ya cargado. */
-    public CampeonatoService servicio() throws PersistenciaException {
-        if (servicio == null) {
+    /**
+     * Los campeonatos en curso (pueden ser varios, cada uno con su dueno). Cada uno se abre con su propio
+     * servicio, que comparte la conexion, el historial y la carpeta de fotos.
+     */
+    public GestorCampeonatos gestor() throws PersistenciaException {
+        if (gestor == null) {
             if (!Files.isRegularFile(CARPETA_WEB.resolve("index.html"))) {
                 throw new PersistenciaException("No se encontró la carpeta web/. Ejecute el programa desde la carpeta del proyecto.", null);
             }
-            CampeonatoService nuevo = new CampeonatoService(
-                    new PostgresRepositorioCampeonato(conexion()), new PostgresRepositorioHistorial(conexion()), conexion());
-            nuevo.usarFotos(new FotosService(new ArchivoRepositorioFotos(CARPETA_DATOS)));
-            nuevo.cargarGuardado();
-            servicio = nuevo;
+            ConexionDB db = conexion();
+            PostgresRepositorioHistorial historial = new PostgresRepositorioHistorial(db);
+            FotosService fotos = fotos();
+            gestor = new GestorCampeonatos(new PostgresRepositorioCampeonatos(db), historial, repositorio -> {
+                CampeonatoService s = new CampeonatoService(repositorio, historial, db);
+                s.usarFotos(fotos);
+                return s;
+            });
         }
-        return servicio;
+        return gestor;
+    }
+
+    /** Fotos de jugadores y escudos, en datos/imagenes (las comparten todos los campeonatos). */
+    private FotosService fotos() {
+        if (fotos == null) {
+            fotos = new FotosService(new ArchivoRepositorioFotos(CARPETA_DATOS));
+        }
+        return fotos;
     }
 
     /** El controlador que usan las dos interfaces (el escritorio lo usa directo; la web, por ServidorWeb). */
     public ApiControlador controlador() throws PersistenciaException {
-        return new ApiControlador(servicio(), autenticacion(), noticias());
+        return new ApiControlador(gestor(), new SesionService(autenticacion()), noticias(), fotos());
     }
 
     /** El servidor local de la version web. */
