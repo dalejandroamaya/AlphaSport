@@ -71,6 +71,7 @@ public final class PruebaPostgres {
         probar("Migración de los archivos anteriores", PruebaPostgres::probarMigracion);
         probar("Contratos: PostgreSQL, archivo y memoria responden igual", PruebaPostgres::probarContratos);
         probar("Documento único también en la base de datos", PruebaPostgres::probarDocumentoUnico);
+        probar("Ascensos y descensos al pasar de temporada", PruebaPostgres::probarAscensos);
         probar("Migraciones del esquema (database/migraciones)", PruebaPostgres::probarMigraciones);
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
         System.exit(fallos == 0 ? 0 : 1);
@@ -766,6 +767,7 @@ public final class PruebaPostgres {
 
     /** Deja la base como la creaba la primera version de schema.sql. */
     private static void volverAVersionCero(ConexionDB db) throws Exception {
+        sql(db, "DROP TABLE movimientos_division");
         sql(db, "ALTER TABLE jugadores DROP CONSTRAINT jugadores_documento_unico");
         sql(db, "ALTER TABLE jugadores DROP COLUMN persona_id");
         sql(db, "DROP TABLE personas");
@@ -831,6 +833,86 @@ public final class PruebaPostgres {
             System.out.println("  copia=" + copia + " reemplaza=" + reemplaza + " siguiente=" + siguiente + " respaldado=" + respaldado + " borrado=" + borrado);
         }
         return copia && reemplaza && siguiente && respaldado && borrado;
+    }
+
+    /* ---------------------------------------------------------------- ascensos y descensos */
+
+    /** Liga de 8 equipos en 2 divisiones con 1 ascenso, jugada hasta tener campeon. */
+    private static CampeonatoService ligaConDivisionesTerminada(ConexionDB db) throws Exception {
+        CampeonatoService s = servicio(db);
+        ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+        cfg.setSorteoAleatorio(false);
+        cfg.setDivisiones(2);
+        cfg.setAscensos(1);
+        s.crear("Temporada 1", TipoFormato.LIGA, cfg, false);
+        s.equipos().cargarDatosPrueba(11, 8, true);
+        s.avanzar();
+        Random azar = new Random(3);
+        while (!s.getCampeonato().isTerminado()) {
+            for (Partido p : new ArrayList<>(s.getCampeonato().getPartidos())) {
+                if (!p.isJugado()) {
+                    Partido d = copia(p);
+                    d.setEstado(EstadoPartido.JUGADO);
+                    d.setGolesLocal(azar.nextInt(4));
+                    d.setGolesVisitante(azar.nextInt(4));
+                    s.partidos().guardarPartido(p.getId(), d, true);
+                }
+            }
+            s.avanzar();
+        }
+        return s;
+    }
+
+    /**
+     * Al pasar de temporada (por «Siguiente temporada» o creando el nuevo campeonato con los mismos equipos) suben
+     * los primeros y bajan los ultimos de cada division; queda guardado por que, y los jugadores siguen siendo
+     * las mismas personas.
+     */
+    private static boolean probarAscensos(ConexionDB db) throws Exception {
+        boolean bien = true;
+        for (String camino : List.of("siguiente", "nuevo")) {
+            sql(db, "DELETE FROM torneos");
+            CampeonatoService s = ligaConDivisionesTerminada(db);
+            Campeonato antes = s.getCampeonato();
+            int primeroB = MotorCampeonato.ids(s.getMotor().tablaDeGrupo(0, 1)).get(0);
+            List<Integer> tablaA = MotorCampeonato.ids(s.getMotor().tablaDeGrupo(0, 0));
+            String sube = antes.nombreDe(primeroB), baja = antes.nombreDe(tablaA.get(tablaA.size() - 1));
+            String personas = personasPorDocumento(db, "ACTUAL");
+            String resumen = camino.equals("siguiente") ? s.siguienteTemporada("Temporada 2")
+                    : s.crear("Temporada 2", TipoFormato.LIGA, antes.getConfiguracion(), true);
+            CampeonatoService leido = servicio(db); // lo que quedo guardado
+            Campeonato c = leido.getCampeonato();
+            boolean movidos = c.getNombreCampeonato().equals("Temporada 2") && c.divisionDe(c.buscarEquipoPorNombre(sube)) == 0
+                    && c.divisionDe(c.buscarEquipoPorNombre(baja)) == 1 && resumen.contains("Suben a la Liga A: " + sube)
+                    && resumen.contains("Bajan a la Liga B: " + baja);
+            boolean constancia = c.getMovimientos().size() == 2 && c.getMovimientos().stream().anyMatch(m -> m.isAscenso()
+                    && m.nombreEquipo().equals(sube) && m.puesto() == 1 && m.temporadaAnterior().equals("Temporada 1")
+                    && m.idEquipo() == c.buscarEquipoPorNombre(sube).getId())
+                    && contar(db, "SELECT COUNT(*) FROM movimientos_division m JOIN torneos t ON t.id = m.torneo_id AND t.situacion = 'ACTUAL'") == 2;
+            boolean identidad = !personas.isEmpty() && personasPorDocumento(db, "ACTUAL").equals(personas)
+                    && personasPorDocumento(db, "ARCHIVADO").equals(personas)
+                    && leido.historial().listar().size() == 1;
+            if (!(movidos && constancia && identidad)) {
+                System.out.println("  " + camino + ": movidos=" + movidos + " constancia=" + constancia + " identidad=" + identidad + " " + resumen);
+            }
+            bien &= movidos && constancia && identidad;
+        }
+        return bien;
+    }
+
+    /** documento -> codigo de persona de los jugadores activos del torneo ACTUAL o ARCHIVADO. */
+    private static String personasPorDocumento(ConexionDB db, String situacion) throws PersistenciaException {
+        return db.ejecutar(con -> {
+            try (var st = con.createStatement(); var rs = st.executeQuery("SELECT j.documento, p.codigo FROM jugadores j"
+                    + " JOIN torneos t ON t.id = j.torneo_id AND t.situacion = '" + situacion + "' JOIN personas p ON p.id = j.persona_id"
+                    + " WHERE j.activo ORDER BY j.documento")) {
+                StringBuilder texto = new StringBuilder();
+                while (rs.next()) {
+                    texto.append(rs.getString(1)).append('=').append(rs.getString(2)).append(' ');
+                }
+                return texto.toString();
+            }
+        });
     }
 
     /* ---------------------------------------------------------------- documento unico */

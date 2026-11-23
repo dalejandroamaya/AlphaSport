@@ -11,7 +11,7 @@ CREATE TABLE esquema_version (
     version      INTEGER PRIMARY KEY,
     aplicada_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO esquema_version (version) VALUES (3);
+INSERT INTO esquema_version (version) VALUES (4);
 
 -- ---------------------------------------------------------------- usuarios
 -- Base para el login y el modulo Fantasy del siguiente sprint.
@@ -152,6 +152,20 @@ CREATE UNIQUE INDEX jugadores_un_capitan ON jugadores (equipo_id) WHERE es_capit
 -- Una persona juega una sola vez en cada torneo.
 CREATE UNIQUE INDEX jugadores_persona_unica ON jugadores (torneo_id, persona_id);
 CREATE INDEX jugadores_persona ON jugadores (persona_id);
+
+-- Ascensos y descensos con los que empezo cada temporada: de que division venia el equipo, a cual paso y en
+-- que puesto termino (constancia del paso de temporada).
+CREATE TABLE movimientos_division (
+    id                  SERIAL PRIMARY KEY,
+    torneo_id           INTEGER      NOT NULL REFERENCES torneos (id) ON DELETE CASCADE,  -- la temporada nueva
+    equipo_id           INTEGER      NOT NULL REFERENCES equipos (id) ON DELETE CASCADE,
+    division_anterior   INTEGER      NOT NULL CHECK (division_anterior >= 0),
+    division_nueva      INTEGER      NOT NULL CHECK (division_nueva >= 0),
+    puesto              INTEGER      NOT NULL CHECK (puesto >= 1),                         -- en su division, al cerrar la temporada
+    temporada_anterior  VARCHAR(200) NOT NULL,
+    UNIQUE (torneo_id, equipo_id),
+    CHECK (division_anterior <> division_nueva)
+);
 
 -- ---------------------------------------------------------------- fases
 CREATE TABLE fases (

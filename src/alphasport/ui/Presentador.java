@@ -120,7 +120,13 @@ public class Presentador {
                 "usaLlaves", motor.usaLlaves(),
                 "esLiga", c.getFormato() == TipoFormato.LIGA,
                 "divisiones", divisiones(c), "ascensos", c.getConfiguracion().getAscensos(),
-                "maximoDivisiones", ConfiguracionTorneo.MAXIMO_DIVISIONES);
+                "maximoDivisiones", ConfiguracionTorneo.MAXIMO_DIVISIONES,
+                // Ascensos y descensos con los que empezo esta temporada (trazabilidad del paso de temporada).
+                "movimientos", c.getMovimientos().stream().map(m -> (Object) mapa("equipo", m.idEquipo(), "nombre", m.nombreEquipo(),
+                        "ascenso", m.isAscenso(), "desde", ConfiguracionTorneo.nombreDivision(m.divisionAnterior()),
+                        "hasta", ConfiguracionTorneo.nombreDivision(m.divisionNueva()), "puesto", m.puesto(),
+                        "temporadaAnterior", m.temporadaAnterior())).toList(),
+                "resumenMovimientos", alphasport.model.MovimientoDivision.resumen(c.getMovimientos()));
     }
 
     /** [{indice, nombre, equipos}] de cada division; una sola si la liga no tiene divisiones. */

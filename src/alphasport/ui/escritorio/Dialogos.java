@@ -631,6 +631,10 @@ class Dialogos {
             }
             v.close();
             app.mostrarVista("equipos");
+            if (!cambiar && !s(r, "mensaje").isEmpty()) { // con los mismos equipos de una liga terminada: ascensos y descensos
+                mensaje("Ascensos y descensos", "Se creó el campeonato. Se aplicaron los ascensos y descensos de la temporada anterior.\n\n" + s(r, "mensaje"));
+                return;
+            }
             app.aviso(cambiar ? "Formato cambiado a «" + s(m(app.E, "campeonato"), "formatoNombre") + "». Se conservaron los equipos."
                     : "Campeonato creado. Ahora registre los equipos.");
         });

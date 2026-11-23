@@ -31,8 +31,9 @@ final class RutasCampeonato implements ModuloRutas {
                 .con(Permiso.VER, "historial", p -> presentador.historial(servicio.historial().listar()));
         Permiso gestionar = Permiso.GESTIONAR_CAMPEONATO;
         acciones.con(gestionar, "nuevo", p -> {
-            servicio.crear(p.texto("nombre"), TipoFormato.valueOf(p.texto("formato")), configuracion(p.objeto("config")), p.si("mismosEquipos"));
-            return p.listo(null);
+            String movimientos = servicio.crear(p.texto("nombre"), TipoFormato.valueOf(p.texto("formato")), configuracion(p.objeto("config")),
+                    p.si("mismosEquipos"));
+            return p.listo(movimientos.isEmpty() ? null : movimientos); // ascensos y descensos aplicados, si hubo
         }).con(gestionar, "cambiarFormato", p -> {
             servicio.cambiarFormato(p.texto("nombre"), TipoFormato.valueOf(p.texto("formato")), configuracion(p.objeto("config")));
             return p.listo(null);

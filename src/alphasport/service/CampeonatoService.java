@@ -3,6 +3,7 @@ package alphasport.service;
 import alphasport.model.Campeonato;
 import alphasport.model.ConfiguracionTorneo;
 import alphasport.model.Equipo;
+import alphasport.model.MovimientoDivision;
 import alphasport.model.Partido;
 import alphasport.model.TipoFormato;
 import alphasport.persistence.PersistenciaException;
@@ -126,7 +127,12 @@ public class CampeonatoService {
         return new EstadisticasCampeonato(ctx.campeonato());
     }
 
-    public void crear(String nombre, TipoFormato formato, ConfiguracionTorneo configuracion, boolean mismosEquipos)
+    /**
+     * Crea un campeonato nuevo. Con {@code mismosEquipos}, si el actual es una liga con divisiones que ya
+     * termino y el nuevo es una liga con las mismas divisiones, se aplican los ascensos y descensos igual que en
+     * {@link #siguienteTemporada}: devuelve el resumen ("" si no hubo).
+     */
+    public String crear(String nombre, TipoFormato formato, ConfiguracionTorneo configuracion, boolean mismosEquipos)
             throws PersistenciaException {
         if (nombre == null || nombre.isBlank()) {
             throw new ReglaNegocioException("Escriba el nombre del campeonato.");
@@ -135,10 +141,28 @@ public class CampeonatoService {
             throw new ReglaNegocioException("Escoja al menos un criterio de desempate.");
         }
         Campeonato nuevo = new Campeonato(nombre.trim(), formato, configuracion);
+        List<MovimientoDivision> movimientos = new ArrayList<>();
         if (mismosEquipos && ctx.campeonato() != null) {
-            nuevo.importarEquipos(ctx.campeonato().getEquipos());
+            Campeonato anterior = ctx.campeonato();
+            boolean mismaLiga = formato == TipoFormato.LIGA && configuracion.getDivisiones() == anterior.getConfiguracion().getDivisiones();
+            List<MovimientoDivision> calculados = mismaLiga && conAscensos(anterior) && anterior.isTerminado() ? movimientos() : List.of();
+            nuevo.importarEquipos(anterior.getEquipos());
+            // importarEquipos da ids nuevos: el movimiento se pasa al equipo del mismo nombre.
+            for (MovimientoDivision m : calculados) {
+                Equipo e = nuevo.buscarEquipoPorNombre(m.nombreEquipo());
+                if (e != null) {
+                    e.setDivision(m.divisionNueva());
+                    movimientos.add(m.conEquipo(e.getId()));
+                }
+            }
         }
+        nuevo.setMovimientos(movimientos);
         ctx.reemplazarPor(nuevo);
+        return MovimientoDivision.resumen(movimientos);
+    }
+
+    private static boolean conAscensos(Campeonato c) {
+        return c.getFormato() == TipoFormato.LIGA && c.tieneDivisiones() && c.getConfiguracion().getAscensos() > 0;
     }
 
     /**
@@ -180,59 +204,51 @@ public class CampeonatoService {
         if (ctx.campeonato().getFormato() != TipoFormato.TORNEO_CORTO && ctx.campeonato().getFormato() != TipoFormato.LIGA) {
             throw new ReglaNegocioException("La siguiente temporada solo existe en los formatos Liga y Apertura/Clausura.");
         }
-        java.util.Map<Integer, Integer> nuevaDivision = new java.util.HashMap<>();
-        String movimientos = "";
-        boolean conAscensos = ctx.campeonato().tieneDivisiones() && ctx.campeonato().getConfiguracion().getAscensos() > 0;
-        if (conAscensos) {
+        List<MovimientoDivision> movimientos = List.of();
+        if (conAscensos(ctx.campeonato())) {
             if (!ctx.campeonato().isTerminado()) {
                 throw new ReglaNegocioException("Termine la temporada (hasta tener campeón) para saber quién asciende y quién desciende.");
             }
-            movimientos = ascensosYDescensos(nuevaDivision);
+            movimientos = movimientos();
         }
-        String resumen = movimientos;
+        List<MovimientoDivision> aplicar = movimientos;
         return ctx.enUnaTransaccion(() -> {
             siguienteTorneoCorto(nombre);
-            for (Equipo e : ctx.campeonato().getEquipos()) { // la copia conserva los ids de los equipos
-                if (nuevaDivision.containsKey(e.getId())) {
-                    e.setDivision(nuevaDivision.get(e.getId()));
+            for (MovimientoDivision m : aplicar) { // la copia conserva los ids de los equipos
+                Equipo e = ctx.campeonato().buscarEquipo(m.idEquipo());
+                if (e != null) {
+                    e.setDivision(m.divisionNueva());
                 }
             }
+            ctx.campeonato().setMovimientos(aplicar); // constancia de por que cada equipo esta en su division
             ctx.guardar();
-            return resumen;
+            return MovimientoDivision.resumen(aplicar);
         });
     }
 
     /**
-     * Calcula a que division va cada equipo: los «ascensos» ultimos de cada division bajan
-     * y los primeros de la division de abajo suben. Devuelve el resumen para mostrar.
+     * Ascensos y descensos de la liga terminada: los «ascensos» ultimos de cada division bajan y los primeros de la
+     * division de abajo suben. Nunca se mueve a todos: cada division conserva al menos un equipo.
      */
-    private String ascensosYDescensos(java.util.Map<Integer, Integer> nuevaDivision) {
+    private List<MovimientoDivision> movimientos() {
         int indiceFase = 0;
         int divisiones = ctx.campeonato().getFases().get(indiceFase).getGrupos().size();
-        StringBuilder texto = new StringBuilder();
+        String temporada = ctx.campeonato().getNombreCampeonato();
+        List<MovimientoDivision> lista = new ArrayList<>();
         for (int d = 0; d + 1 < divisiones; d++) {
             List<Integer> arriba = MotorCampeonato.ids(ctx.motor().tablaDeGrupo(indiceFase, d));
             List<Integer> abajo = MotorCampeonato.ids(ctx.motor().tablaDeGrupo(indiceFase, d + 1));
-            // Nunca se mueve a todos: cada division conserva al menos un equipo.
             int k = Math.min(ctx.campeonato().getConfiguracion().getAscensos(), Math.min(arriba.size(), abajo.size()) - 1);
-            if (k <= 0) {
-                continue;
+            for (int i = 0; i < Math.max(0, k); i++) {
+                int sube = abajo.get(i);
+                lista.add(new MovimientoDivision(sube, ctx.campeonato().nombreDe(sube), d + 1, d, i + 1, temporada));
             }
-            List<Integer> bajan = arriba.subList(arriba.size() - k, arriba.size());
-            List<Integer> suben = abajo.subList(0, k);
-            for (int id : bajan) {
-                nuevaDivision.put(id, d + 1);
+            for (int i = arriba.size() - Math.max(0, k); i < arriba.size(); i++) {
+                int baja = arriba.get(i);
+                lista.add(new MovimientoDivision(baja, ctx.campeonato().nombreDe(baja), d, d + 1, i + 1, temporada));
             }
-            for (int id : suben) {
-                nuevaDivision.put(id, d);
-            }
-            texto.append(texto.length() == 0 ? "" : " ")
-                    .append("Suben a la ").append(alphasport.model.ConfiguracionTorneo.nombreDivision(d)).append(": ")
-                    .append(String.join(", ", suben.stream().map(ctx.campeonato()::nombreDe).toList()))
-                    .append(". Bajan a la ").append(alphasport.model.ConfiguracionTorneo.nombreDivision(d + 1)).append(": ")
-                    .append(String.join(", ", bajan.stream().map(ctx.campeonato()::nombreDe).toList())).append(".");
         }
-        return texto.toString();
+        return lista;
     }
 
     private void siguienteTorneoCorto(String nombre) throws PersistenciaException {
@@ -250,6 +266,7 @@ public class CampeonatoService {
         copia.setCodigo(null);
         copia.setFechaArchivo(null);
         copia.getEquipos().removeIf(Equipo::isRetirado);
+        copia.setMovimientos(List.of()); // los de la temporada anterior no son de esta
         ctx.reemplazarPor(copia);
     }
 

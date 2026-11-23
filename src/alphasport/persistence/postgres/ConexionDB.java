@@ -24,7 +24,7 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
 
     public static final Path ARCHIVO = Path.of("db.properties");
     /** Version del esquema que necesita el programa (la ultima de database/migraciones). */
-    public static final int VERSION_ESQUEMA = 3;
+    public static final int VERSION_ESQUEMA = 4;
 
     /** Datos de conexion. */
     public record Configuracion(String host, int puerto, String base, String usuario, String clave) {

@@ -186,7 +186,11 @@ function crearServicioLocal() {
         // Sin llaves (formato Liga) la interfaz oculta la sección «Llaves».
         usaLlaves: usaLlaves(c), esLiga: c.formato === 'LIGA',
         divisiones: Array.from({ length: c.formato === 'LIGA' ? numeroDivisiones(c) : 1 }, (_, d) => ({ indice: d, nombre: nombreDivision(d), equipos: equiposDeDivision(c, d).length })),
-        ascensos: c.config.ascensos == null ? 2 : c.config.ascensos, maximoDivisiones: MAXIMO_DIVISIONES
+        ascensos: c.config.ascensos == null ? 2 : c.config.ascensos, maximoDivisiones: MAXIMO_DIVISIONES,
+        // Ascensos y descensos con los que empezó esta temporada (como en Java).
+        movimientos: (c.movimientos || []).map(mv => ({ equipo: mv.idEquipo, nombre: mv.nombreEquipo, ascenso: mv.divisionNueva < mv.divisionAnterior,
+          desde: nombreDivision(mv.divisionAnterior), hasta: nombreDivision(mv.divisionNueva), puesto: mv.puesto, temporadaAnterior: mv.temporadaAnterior })),
+        resumenMovimientos: resumenMovimientos(c.movimientos)
       },
       equipos: c.equipos.map(e => ({
         id: e.id, nombre: e.nombre, estadio: e.estadio || '', retirado: !!e.retirado, division: divisionDe(c, e),
@@ -303,6 +307,34 @@ function crearServicioLocal() {
       posicion: j.posicion, foto: fotoValida(j.foto, 'jugador')
     }));
     if ('escudo' in d) equipo.escudo = fotoValida(d.escudo, 'escudo');
+  }
+
+  /* Ascensos y descensos al pasar de temporada: como CampeonatoService.movimientos y MovimientoDivision en Java. */
+  const conAscensos = camp => camp.formato === 'LIGA' && tieneDivisiones(camp) && (camp.config.ascensos == null ? 2 : camp.config.ascensos) > 0;
+  /** Los «ascensos» últimos de cada división bajan y los primeros de la de abajo suben (cada división conserva al menos un equipo). */
+  function movimientosDeLaTemporada() {
+    const k = c.config.ascensos == null ? 2 : c.config.ascensos, n = c.fases[0].grupos.length, lista = [];
+    for (let dv = 0; dv + 1 < n; dv++) {
+      const arriba = m.tablaDeGrupo(0, dv).map(f => f.id), abajo = m.tablaDeGrupo(0, dv + 1).map(f => f.id);
+      const cuantos = Math.max(0, Math.min(k, Math.min(arriba.length, abajo.length) - 1));
+      for (let i = 0; i < cuantos; i++) {
+        lista.push({ idEquipo: abajo[i], nombreEquipo: m.nombre(abajo[i]), divisionAnterior: dv + 1, divisionNueva: dv, puesto: i + 1, temporadaAnterior: c.nombre });
+      }
+      for (let i = arriba.length - cuantos; i < arriba.length; i++) {
+        lista.push({ idEquipo: arriba[i], nombreEquipo: m.nombre(arriba[i]), divisionAnterior: dv, divisionNueva: dv + 1, puesto: i + 1, temporadaAnterior: c.nombre });
+      }
+    }
+    return lista;
+  }
+  /** «Suben a la Liga A: X. Bajan a la Liga B: Y.» por cada par de divisiones. */
+  function resumenMovimientos(lista) {
+    const partes = [], ultima = Math.max(0, ...(lista || []).map(mv => Math.max(mv.divisionAnterior, mv.divisionNueva)));
+    for (let dv = 0; dv < ultima; dv++) {
+      const suben = (lista || []).filter(mv => mv.divisionNueva < mv.divisionAnterior && mv.divisionNueva === dv).map(mv => mv.nombreEquipo);
+      const bajan = (lista || []).filter(mv => mv.divisionNueva > mv.divisionAnterior && mv.divisionAnterior === dv).map(mv => mv.nombreEquipo);
+      if (suben.length || bajan.length) partes.push(`Suben a la ${nombreDivision(dv)}: ${suben.join(', ')}. Bajan a la ${nombreDivision(dv + 1)}: ${bajan.join(', ')}.`);
+    }
+    return partes.join(' ');
   }
 
   /* Documentos: como ReglasPlantilla en Java. Se guardan sin espacios de más y se comparan sin espacios ni mayúsculas. */
@@ -614,9 +646,20 @@ function crearServicioLocal() {
       if (!nombre) throw new ErrorRegla('Escriba el nombre del campeonato.');
       if (!d.config.criterios.length) throw new ErrorRegla('Escoja al menos un criterio de desempate.');
       const nuevo = nuevoCampeonato(nombre, d.formato, Object.assign(configuracionPorDefecto(), d.config));
-      if (d.mismosEquipos && c) importarEquipos(nuevo, c.equipos);
+      nuevo.movimientos = [];
+      if (d.mismosEquipos && c) {
+        // Como en Java: con los mismos equipos de una liga terminada (y las mismas divisiones) se aplican los ascensos y descensos.
+        const mismaLiga = d.formato === 'LIGA' && numeroDivisiones(nuevo) === numeroDivisiones(c);
+        const calculados = mismaLiga && conAscensos(c) && m.terminado() ? movimientosDeLaTemporada() : [];
+        importarEquipos(nuevo, c.equipos);
+        for (const mv of calculados) {
+          const e = nuevo.equipos.find(x => x.nombre === mv.nombreEquipo);
+          if (e) { e.division = mv.divisionNueva; nuevo.movimientos.push(Object.assign({}, mv, { idEquipo: e.id })); }
+        }
+      }
       archivarActual();
       usar(nuevo);
+      return resumenMovimientos(nuevo.movimientos);
     },
     cancelar: () => {
       exigir();
@@ -638,30 +681,20 @@ function crearServicioLocal() {
       const nombre = String(d.nombre || '').trim();
       if (!nombre) throw new ErrorRegla('Escriba el nombre del nuevo torneo.');
       if (c.formato !== 'TORNEO_CORTO' && c.formato !== 'LIGA') throw new ErrorRegla('La siguiente temporada solo existe en los formatos Liga y Apertura/Clausura.');
-      const nuevaDivision = new Map();
-      let movimientos = '';
-      const k = c.config.ascensos == null ? 2 : c.config.ascensos;
-      if (tieneDivisiones(c) && k > 0) {
+      let movimientos = [];
+      if (conAscensos(c)) {
         if (!m.terminado()) throw new ErrorRegla('Termine la temporada (hasta tener campeón) para saber quién asciende y quién desciende.');
-        const n = c.fases[0].grupos.length, partes = [];
-        for (let dv = 0; dv + 1 < n; dv++) {
-          const arriba = m.tablaDeGrupo(0, dv).map(f => f.id), abajo = m.tablaDeGrupo(0, dv + 1).map(f => f.id);
-          const cuantos = Math.min(k, Math.min(arriba.length, abajo.length) - 1); // cada división conserva al menos un equipo
-          if (cuantos <= 0) continue;
-          const bajan = arriba.slice(arriba.length - cuantos), suben = abajo.slice(0, cuantos);
-          bajan.forEach(id => nuevaDivision.set(id, dv + 1));
-          suben.forEach(id => nuevaDivision.set(id, dv));
-          partes.push(`Suben a la ${nombreDivision(dv)}: ${suben.map(id => m.nombre(id)).join(', ')}. Bajan a la ${nombreDivision(dv + 1)}: ${bajan.map(id => m.nombre(id)).join(', ')}.`);
-        }
-        movimientos = partes.join(' ');
+        movimientos = movimientosDeLaTemporada();
       }
       archivarActual();
       const copia = JSON.parse(JSON.stringify(c));
       Object.assign(copia, { nombre, partidos: [], fases: [], paso: 0, campeon: -1, semilla: Math.floor(Math.random() * 2147483647), codigo: nuevoCodigo(), fechaArchivo: null });
       copia.equipos = copia.equipos.filter(e => !e.retirado);
-      copia.equipos.forEach(e => { if (nuevaDivision.has(e.id)) e.division = nuevaDivision.get(e.id); });
+      // La copia conserva los ids de los equipos; queda constancia de por qué cada uno está en su división.
+      movimientos.forEach(mv => { const e = copia.equipos.find(x => x.id === mv.idEquipo); if (e) e.division = mv.divisionNueva; });
+      copia.movimientos = movimientos;
       usar(copia);
-      return movimientos;
+      return resumenMovimientos(movimientos);
     },
     'equipo/division': d => {
       exigirLigaSinIniciar();
