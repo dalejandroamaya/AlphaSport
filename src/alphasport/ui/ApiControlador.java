@@ -30,6 +30,9 @@ import java.util.Set;
 /**
  * Atiende las acciones de la interfaz web: convierte el JSON recibido en
  * llamadas al servicio y devuelve el estado actualizado.
+ * <p>
+ * Cada instancia es un cliente con su propia sesion (su token): el escritorio usa una, y el servidor web una
+ * por navegador con {@link #cliente(String)}. Los servicios se comparten.
  */
 public class ApiControlador {
 
@@ -37,6 +40,8 @@ public class ApiControlador {
     private final SesionService sesion;
     private final Presentador presentador;
     private final NoticiasService noticias;
+    /** Token de la sesion de este cliente (null = sin sesion). */
+    private String token;
 
     public ApiControlador(CampeonatoService servicio, AutenticacionService autenticacion, NoticiasService noticias) {
         this(servicio, new SesionService(autenticacion), noticias);
@@ -47,6 +52,24 @@ public class ApiControlador {
         this.sesion = sesion;
         this.noticias = noticias;
         this.presentador = new Presentador(servicio);
+    }
+
+    private ApiControlador(ApiControlador base, String token) {
+        this.servicio = base.servicio;
+        this.sesion = base.sesion;
+        this.noticias = base.noticias;
+        this.presentador = base.presentador;
+        this.token = token;
+    }
+
+    /** Otro cliente (por ejemplo, un navegador) con su propia sesion; comparte los servicios. */
+    public ApiControlador cliente(String token) {
+        return new ApiControlador(this, token);
+    }
+
+    /** Token de la sesion de este cliente; cambia al entrar y vuelve a null al salir. */
+    public String getToken() {
+        return token;
     }
 
     /** Sin servicio de noticias propio: noticias solo en memoria (pruebas). */
@@ -79,17 +102,17 @@ public class ApiControlador {
 
     /** Usuario con sesion abierta; null si nadie ha iniciado sesion. */
     public Usuario getUsuarioActual() {
-        return sesion.usuario();
+        return sesion.usuario(token);
     }
 
     /** Lanza LOGIN si no hay sesion. */
     public void exigirSesion() {
-        sesion.exigirSesion();
+        sesion.exigirSesion(token);
     }
 
     /** Lanza LOGIN si no hay sesion y PERMISO si el rol no tiene ese permiso. */
     public void exigir(Permiso permiso) {
-        sesion.exigir(permiso);
+        sesion.exigir(token, permiso);
     }
 
     /** Lanza PERMISO si el usuario no puede modificar datos. */
@@ -98,12 +121,12 @@ public class ApiControlador {
     }
 
     private boolean puede(Permiso permiso) {
-        return sesion.puede(permiso);
+        return sesion.puede(token, permiso);
     }
 
     /** Datos de la sesion para la interfaz: {usuario, rol, puedeEditar, permisos}. */
     public Map<String, Object> sesion() {
-        Usuario u = sesion.usuario();
+        Usuario u = sesion.usuario(token);
         return u == null ? null
                 : Presentador.mapa("usuario", u.getNombre(), "rol", u.getRol().name(),
                         "rolNombre", u.getRol().getNombre(), "puedeEditar", u.puedeEditar(),
@@ -151,10 +174,11 @@ public class ApiControlador {
         }
         String mensaje = null;
         switch (ruta) {
-            case "login" -> sesion.iniciar(texto(cuerpo, "usuario"), texto(cuerpo, "clave"));
-            case "login/visitante" -> sesion.entrarComoVisitante();
+            case "login" -> entrar(sesion.iniciar(texto(cuerpo, "usuario"), texto(cuerpo, "clave")));
+            case "login/visitante" -> entrar(sesion.entrarComoVisitante());
             case "logout" -> {
-                sesion.cerrar();
+                sesion.cerrar(token);
+                token = null;
                 return Presentador.mapa("ok", true);
             }
             case "nuevo" -> servicio.crear(texto(cuerpo, "nombre"), TipoFormato.valueOf(texto(cuerpo, "formato")),
@@ -186,6 +210,12 @@ public class ApiControlador {
             default -> throw new ReglaNegocioException("Ruta desconocida: " + ruta);
         }
         return respuesta(mensaje);
+    }
+
+    /** La sesion nueva reemplaza a la que tuviera este cliente. */
+    private void entrar(String nuevo) {
+        sesion.cerrar(token);
+        token = nuevo;
     }
 
     /* ---------------------------------------------------------------- [REQ-07] calificaciones */

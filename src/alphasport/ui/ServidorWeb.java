@@ -14,13 +14,23 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Servidor local: entrega la interfaz web (HTML, CSS, JS) y la API JSON en /api/.
  * Solo escucha en 127.0.0.1, asi que no es accesible desde otros equipos.
+ * <p>
+ * Cada navegador tiene su propia sesion: el token va en la cookie {@value #COOKIE} con HttpOnly (el JavaScript
+ * no la puede leer) y SameSite=Strict (otra pagina no la puede usar). Ademas la API solo responde si el
+ * Host es esta maquina (contra el «DNS rebinding») y las acciones (POST) solo si vienen de esta misma pagina.
  */
 public class ServidorWeb {
+
+    /** Nombre de la cookie de sesion. */
+    public static final String COOKIE = "alphasport_sesion";
 
     private static final Map<String, String> TIPOS = Map.of(
             "html", "text/html; charset=utf-8", "css", "text/css; charset=utf-8",
@@ -32,6 +42,7 @@ public class ServidorWeb {
     private final CampeonatoService servicio;
     private final ApiControlador api;
     private HttpServer servidor;
+    private int puerto;
 
     public ServidorWeb(Path carpetaWeb, CampeonatoService servicio, ApiControlador api) {
         this.carpetaWeb = carpetaWeb.toAbsolutePath().normalize();
@@ -46,6 +57,7 @@ public class ServidorWeb {
                 servidor.createContext("/api/", this::atenderApi);
                 servidor.createContext("/", this::atenderArchivo);
                 servidor.start();
+                this.puerto = puerto;
                 return puerto;
             } catch (BindException ocupado) {
                 servidor = null;
@@ -63,6 +75,15 @@ public class ServidorWeb {
     private void atenderApi(HttpExchange intercambio) throws IOException {
         String ruta = intercambio.getRequestURI().getPath().substring("/api/".length());
         String metodo = intercambio.getRequestMethod();
+        String problema = origenInvalido(intercambio);
+        if (problema != null) {
+            responder(intercambio, 403, Presentador.mapa("ok", false, "codigo", "ORIGEN", "error", problema));
+            return;
+        }
+        // Este navegador, con la sesion de su cookie. Si entra o sale, enviar() le manda la cookie nueva.
+        String token = tokenDeCookie(intercambio);
+        ApiControlador api = this.api.cliente(token);
+        intercambio.setAttribute(ATRIBUTO_CLIENTE, new Cliente(api, token));
         try {
             // Rutas que no pasan por api.ejecutar(): se validan aqui.
             if (ruta.equals("respaldo") || ruta.equals("exportar/historial")) {
@@ -139,6 +160,61 @@ public class ServidorWeb {
         enviar(intercambio, 200, TIPOS.getOrDefault(extension, "application/octet-stream"), Files.readAllBytes(archivo));
     }
 
+    /* ---------------------------------------------------------------- sesion y origen */
+
+    private static final String ATRIBUTO_CLIENTE = "alphasport.cliente";
+
+    /** Cliente de la peticion y el token con el que llego. */
+    private record Cliente(ApiControlador api, String tokenRecibido) {
+    }
+
+    /** Token de la cookie de sesion; null si no la trae. */
+    static String tokenDeCookie(HttpExchange intercambio) {
+        for (String cabecera : intercambio.getRequestHeaders().getOrDefault("Cookie", List.of())) {
+            for (String parte : cabecera.split(";")) {
+                String[] par = parte.trim().split("=", 2);
+                if (par.length == 2 && par[0].equals(COOKIE) && !par[1].isBlank()) {
+                    return par[1].trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Cookie para guardar el token (o borrarla si es null). */
+    static String cookie(String token) {
+        return COOKIE + "=" + (token == null ? "; Max-Age=0" : token) + "; Path=/; HttpOnly; SameSite=Strict";
+    }
+
+    /** Direcciones con las que se puede abrir este servidor. */
+    private Set<String> anfitriones() {
+        return Set.of("127.0.0.1:" + puerto, "localhost:" + puerto, "[::1]:" + puerto);
+    }
+
+    /**
+     * null si la peticion se puede atender; si no, por que se rechaza. El Host tiene que ser esta maquina y, en
+     * las acciones, el Origin (o Referer) esta misma pagina: asi otra pagina abierta en el navegador no puede
+     * enviar acciones con la sesion del administrador.
+     */
+    private String origenInvalido(HttpExchange intercambio) {
+        String host = intercambio.getRequestHeaders().getFirst("Host");
+        if (host == null || !anfitriones().contains(host.toLowerCase())) {
+            return "Abra AlphaSport con la dirección que muestra el programa (http://127.0.0.1:" + puerto + ").";
+        }
+        if (intercambio.getRequestMethod().equals("GET")) {
+            return null;
+        }
+        String origen = intercambio.getRequestHeaders().getFirst("Origin");
+        if (origen == null) {
+            String referer = intercambio.getRequestHeaders().getFirst("Referer");
+            origen = referer == null ? null : referer.replaceFirst("^(https?://[^/]+).*$", "$1");
+        }
+        if (origen == null || !anfitriones().contains(origen.toLowerCase().replaceFirst("^http://", ""))) {
+            return "Acción rechazada: no viene de la página de AlphaSport.";
+        }
+        return null;
+    }
+
     private void responder(HttpExchange intercambio, int codigo, Map<String, Object> datos) throws IOException {
         enviar(intercambio, codigo, TIPOS.get("json"), Json.escribir(datos).getBytes(StandardCharsets.UTF_8));
     }
@@ -150,6 +226,9 @@ public class ServidorWeb {
     }
 
     private void enviar(HttpExchange intercambio, int codigo, String tipo, byte[] datos) throws IOException {
+        if (intercambio.getAttribute(ATRIBUTO_CLIENTE) instanceof Cliente c && !Objects.equals(c.api().getToken(), c.tokenRecibido())) {
+            intercambio.getResponseHeaders().set("Set-Cookie", cookie(c.api().getToken())); // entro, cambio de usuario o salio
+        }
         intercambio.getResponseHeaders().set("Content-Type", tipo);
         intercambio.sendResponseHeaders(codigo, datos.length);
         try (OutputStream salida = intercambio.getResponseBody()) {

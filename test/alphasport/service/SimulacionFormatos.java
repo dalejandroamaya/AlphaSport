@@ -62,6 +62,7 @@ public class SimulacionFormatos {
         probarPreviaYResultado();
         probarReglasPartido();
         probarPermisos();
+        probarServidorWeb();
         probarCalificaciones();
         probarFotos();
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
@@ -614,6 +615,88 @@ public class SimulacionFormatos {
         System.out.println("Permisos por rol: " + (correcto ? "correcto" : "MAL"));
         if (!correcto) {
             fallos++;
+        }
+    }
+
+    /**
+     * [A2] El servidor web da una sesion a cada navegador (cookie HttpOnly y SameSite) y rechaza las acciones
+     * que no vienen de su propia pagina. Usa un puerto de pruebas (desde 18300), nunca el 8080 del programa.
+     */
+    private static void probarServidorWeb() {
+        boolean correcto;
+        alphasport.ui.ServidorWeb servidor = null;
+        try {
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-web")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-web")));
+            servidor = new alphasport.ui.ServidorWeb(java.nio.file.Path.of("web"), servicio,
+                    new alphasport.ui.ApiControlador(servicio, new AutenticacionService()));
+            int puerto = servidor.iniciar(18300);
+            String base = "http://127.0.0.1:" + puerto;
+            java.net.http.HttpClient cliente = java.net.http.HttpClient.newHttpClient();
+            // Sin cookie no hay sesion.
+            boolean sinSesion = pedir(cliente, base, "GET", "estado", null, null, base).body().contains("\"LOGIN\"");
+            // Dos navegadores: el administrador y un visitante, cada uno con su cookie.
+            var admin = pedir(cliente, base, "POST", "login", "{\"usuario\":\"admin\",\"clave\":\"123\"}", null, base);
+            String cookieAdmin = admin.headers().firstValue("Set-Cookie").orElse("");
+            var visita = pedir(cliente, base, "POST", "login/visitante", "{}", null, base);
+            String cookieVisita = visita.headers().firstValue("Set-Cookie").orElse("");
+            String tokenAdmin = cookieAdmin.replaceFirst(";.*$", ""), tokenVisita = cookieVisita.replaceFirst(";.*$", "");
+            boolean cookies = cookieAdmin.startsWith(alphasport.ui.ServidorWeb.COOKIE + "=") && cookieAdmin.contains("HttpOnly")
+                    && cookieAdmin.contains("SameSite=Strict") && !tokenAdmin.equals(tokenVisita) && tokenAdmin.length() > 30;
+            boolean separadas = pedir(cliente, base, "GET", "sesion", null, tokenAdmin, base).body().contains("\"ADMINISTRADOR\"")
+                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"VISITANTE\"")
+                    && pedir(cliente, base, "POST", "division/agregar", "{}", tokenVisita, base).body().contains("\"PERMISO\"");
+            // Otra pagina no puede usar la sesion del administrador, y solo se atiende con el Host de esta maquina.
+            var ajena = pedir(cliente, base, "POST", "nuevo", "{}", tokenAdmin, "http://pagina-ajena.example");
+            var sinOrigen = pedir(cliente, base, "POST", "nuevo", "{}", tokenAdmin, null);
+            boolean origen = ajena.statusCode() == 403 && ajena.body().contains("\"ORIGEN\"") && sinOrigen.statusCode() == 403
+                    && hostAjeno(puerto).startsWith("HTTP/1.1 403");
+            // Al salir se borra la cookie y el token deja de servir.
+            var salir = pedir(cliente, base, "POST", "logout", "{}", tokenAdmin, base);
+            boolean cerrada = salir.headers().firstValue("Set-Cookie").orElse("").contains("Max-Age=0")
+                    && pedir(cliente, base, "GET", "estado", null, tokenAdmin, base).body().contains("\"LOGIN\"")
+                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"VISITANTE\"")
+                    && cliente.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/")).build(),
+                            java.net.http.HttpResponse.BodyHandlers.ofString()).statusCode() == 200;
+            correcto = sinSesion && cookies && separadas && origen && cerrada;
+            if (!correcto) {
+                System.out.println("  sinSesion=" + sinSesion + " cookies=" + cookies + " separadas=" + separadas + " origen=" + origen + " cerrada=" + cerrada);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        } finally {
+            if (servidor != null) {
+                servidor.detener();
+            }
+        }
+        System.out.println("Servidor web: una sesión por navegador y control de origen: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    private static java.net.http.HttpResponse<String> pedir(java.net.http.HttpClient cliente, String base, String metodo, String ruta,
+            String cuerpo, String cookie, String origen) throws Exception {
+        var pedido = java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/api/" + ruta));
+        if (cookie != null) {
+            pedido.header("Cookie", cookie.contains("=") ? cookie : alphasport.ui.ServidorWeb.COOKIE + "=" + cookie);
+        }
+        if (origen != null) {
+            pedido.header("Origin", origen);
+        }
+        pedido.method(metodo, cuerpo == null ? java.net.http.HttpRequest.BodyPublishers.noBody()
+                : java.net.http.HttpRequest.BodyPublishers.ofString(cuerpo));
+        return cliente.send(pedido.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** Primera linea de la respuesta a una peticion con otro Host (como en un ataque de «DNS rebinding»). */
+    private static String hostAjeno(int puerto) throws Exception {
+        try (java.net.Socket s = new java.net.Socket("127.0.0.1", puerto)) {
+            s.getOutputStream().write(("GET /api/catalogo HTTP/1.1\r\nHost: pagina-ajena.example\r\nConnection: close\r\n\r\n")
+                    .getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            return new java.io.BufferedReader(new java.io.InputStreamReader(s.getInputStream(), java.nio.charset.StandardCharsets.US_ASCII)).readLine();
         }
     }
 
