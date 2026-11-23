@@ -40,6 +40,26 @@ SELECT MAX(version) FROM esquema_version;
 
 Si falta alguna, el programa lo avisa al abrir y no toca los datos.
 
+| Archivo | Versión | Qué cambia |
+|---|---|---|
+| `001_walkover.sql` | 1 | Partidos ganados por W.O. |
+| `002_personas.sql` | 2 | Tabla `personas`: el mismo jugador en todas las temporadas |
+| `003_documento_unico.sql` | 3 | Dos jugadores no pueden tener el mismo documento |
+| `004_movimientos_division.sql` | 4 | Ascensos y descensos de cada temporada |
+| `005_registro_usuarios.sql` | 5 | Registro de cuentas: roles `ORGANIZADOR` y `AFICIONADO`, usuario y correo en minúsculas |
+
+**Migración 005.** Cambia los roles de la tabla `usuarios` (`ADMIN` pasa a `ORGANIZADOR` y `VISITANTE` a `AFICIONADO`), agranda la columna `rol` (antes `VARCHAR(10)`) y deja el usuario y el correo en minúsculas, así «Ana» y «ana» son la misma cuenta. No borra ninguna fila. Las cuentas de demostración que haya creado un `seed.sql` anterior (`admin` y `visitante`) siguen en la tabla con el rol nuevo; si ya no las quiere, bórrelas a mano:
+
+```sql
+DELETE FROM usuarios WHERE username IN ('admin', 'visitante');
+```
+
+## Cuentas
+
+Ya no hay cuentas de demostración ni entrada como visitante: cada persona pulsa **Registrarse** en la pantalla de entrada y elige su tipo de cuenta. **Organizador** crea y gestiona torneos; **Aficionado** ve resultados y noticias, comenta y califica jugadores. La cuenta queda en la tabla `usuarios` (la clave solo como hash PBKDF2-SHA256, nunca la clave) y la próxima vez basta con **Iniciar sesión**. El primer Organizador es simplemente la primera persona que se registra con ese tipo.
+
+En la **web sola** (`web/index.html` sin Java) no hay base de datos: las cuentas se guardan en el navegador, con la clave en hash, y solo sirven en ese navegador.
+
 ## 3. Credenciales
 
 Cada quien tiene su propio archivo; Git lo ignora y **nunca se sube**:
@@ -86,9 +106,9 @@ Ejecute **Prueba de PostgreSQL (PruebaPostgres)**: debe terminar en `TODO BIEN`.
 | `partidos` | Fixture, previa, resultado y votación (`horas_votacion`, `finalizado_en`, `votacion_cerrada_en`) |
 | `alineaciones` | Titulares y suplentes de cada partido |
 | `eventos_partido` | Goles (con asistencia), autogoles, tarjetas y cambios |
-| `votos_publico`, `calificaciones_partido` | Votos de los visitantes y la última nota calculada |
+| `votos_publico`, `calificaciones_partido` | Votos de los aficionados y la última nota calculada |
 | `noticias`, `comentarios` | Noticias (`aprobado` = publicada) y sus comentarios |
-| `usuarios` | Lista para el login y el módulo Fantasy; el programa todavía no la usa |
+| `usuarios` | Cuentas creadas con **Registrarse**: usuario y correo únicos (en minúsculas), rol `ORGANIZADOR` o `AFICIONADO` y la clave en hash |
 
 `id` es la llave de la base y `numero` el id que usa el programa dentro de cada torneo.
 
