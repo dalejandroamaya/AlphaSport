@@ -52,6 +52,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
@@ -768,6 +769,10 @@ public class Aplicacion extends Application {
     void avanzar() {
         Map<String, Object> c = m(E, "campeonato");
         if (b(c, "terminado")) {
+            if (b(c, "puedeSiguiente")) {
+                siguienteTorneo(); // liga o torneo corto: la siguiente temporada aplica los ascensos y descensos
+                return;
+            }
             ejecutar("archivar", mapa());
             dialogos.nuevo(false, false);
             return;
@@ -781,7 +786,7 @@ public class Aplicacion extends Application {
         if (b(m(E, "campeonato"), "terminado")) {
             mostrarVista(l(E, "llaves").isEmpty() ? "posiciones" : "llaves");
             dialogos.verCampeon();
-            aviso("El campeonato quedó guardado en el historial. Use «Terminar e iniciar otro» para el siguiente.");
+            aviso("El campeonato quedó guardado en el historial. Use «" + textoTerminado(m(E, "campeonato")) + "» para el siguiente.");
         } else {
             if (iniciaba) {
                 mostrarVista("partidos");
@@ -805,7 +810,7 @@ public class Aplicacion extends Application {
         estado.setText(s(c, "estado"));
         boolean terminado = b(c, "terminado");
         chipEstado.setText(terminado ? "Terminado" : b(c, "iniciado") ? "En curso" : "Por iniciar");
-        btnAvanzar.setText(terminado ? "Terminar e iniciar otro" : b(c, "iniciado") ? "Cerrar ronda y avanzar" : "Iniciar campeonato");
+        btnAvanzar.setText(terminado ? textoTerminado(c) : b(c, "iniciado") ? "Cerrar ronda y avanzar" : "Iniciar campeonato");
         btnAvanzar.getStyleClass().remove("dorado");
         if (terminado) {
             btnAvanzar.getStyleClass().add("dorado");
@@ -967,6 +972,11 @@ public class Aplicacion extends Application {
             caja.getChildren().add(vacio("Todavía no hay equipos. Escriba un nombre arriba y pulse «Agregar»."));
             return caja;
         }
+        if (!s(c, "resumenMovimientos").isEmpty()) {
+            // Constancia del paso de temporada: quien subio y quien bajo.
+            caja.getChildren().add(etiqueta("Ascensos y descensos de «" + s(l(c, "movimientos").get(0), "temporadaAnterior") + "»: "
+                    + s(c, "resumenMovimientos"), "sutil"));
+        }
         List<Map<String, Object>> divisiones = l(c, "divisiones");
         if (divisiones.size() <= 1) {
             FlowPane grid = new FlowPane(16, 16);
@@ -1053,6 +1063,16 @@ public class Aplicacion extends Application {
         return s;
     }
 
+    /** Boton principal con el campeonato terminado: en una liga o torneo corto sigue la temporada siguiente. */
+    private static String textoTerminado(Map<String, Object> c) {
+        return b(c, "puedeSiguiente") ? "Iniciar la siguiente temporada" : "Terminar e iniciar otro";
+    }
+
+    /** Ascenso o descenso con el que el equipo empezo esta temporada (null si no tuvo). */
+    private Map<String, Object> movimientoDe(Map<String, Object> e) {
+        return l(m(E, "campeonato"), "movimientos").stream().filter(x -> n(x, "equipo") == n(e, "id")).findFirst().orElse(null);
+    }
+
     private Node tarjetaEquipo(Map<String, Object> e, int i, boolean iniciado) {
         Map<String, Object> dt = m(e, "dt");
         int jugadores = l(e, "jugadores").size();
@@ -1064,6 +1084,14 @@ public class Aplicacion extends Application {
         nombreFila.setAlignment(Pos.CENTER_LEFT);
         if (b(e, "retirado")) {
             nombreFila.getChildren().add(etiqueta("Retirado", "etiqueta", "etiqueta-retirado"));
+        }
+        Map<String, Object> movimiento = movimientoDe(e);
+        if (movimiento != null) {
+            Label marca = etiqueta(b(movimiento, "ascenso") ? "↑ Ascendió" : "↓ Descendió", "etiqueta",
+                    b(movimiento, "ascenso") ? "etiqueta-jugado" : "etiqueta-retirado");
+            Tooltip.install(marca, new Tooltip((b(movimiento, "ascenso") ? "Subió" : "Bajó") + " de la " + s(movimiento, "desde") + " a la "
+                    + s(movimiento, "hasta") + ": terminó " + n(movimiento, "puesto") + "° en «" + s(movimiento, "temporadaAnterior") + "»."));
+            nombreFila.getChildren().add(marca);
         }
         VBox datos = new VBox(4, nombreFila, dtTexto, estadioTexto);
         HBox.setHgrow(datos, Priority.ALWAYS);

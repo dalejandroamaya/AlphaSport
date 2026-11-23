@@ -70,6 +70,8 @@ public class EquiposService {
             throw new ReglaNegocioException("El equipo " + limpio + " ya existe.");
         }
         validarDorsales(jugadores);
+        jugadores.forEach(j -> j.setDocumento(ReglasPlantilla.limpiarDocumento(j.getDocumento())));
+        ReglasPlantilla.validarDocumentos(ctx.campeonato(), existente, jugadores); // un documento, un jugador
         Equipo equipo = existente;
         if (equipo == null) {
             ctx.exigirNoIniciado();
@@ -141,6 +143,10 @@ public class EquiposService {
                     : "Indique cuántos equipos de prueba crear.");
         }
         DatosPrueba.Resultado r = DatosPrueba.generar(semilla, pedidos, usados, sinPlantilla.size());
+        // La misma semilla da los mismos documentos: los que ya estan en el campeonato se cambian por otros libres.
+        Set<String> documentos = ReglasPlantilla.documentosEnUso(ctx.campeonato());
+        r.equipos().forEach(e -> documentosLibres(e.jugadores(), documentos));
+        r.plantillas().forEach(p -> documentosLibres(p, documentos));
         for (DatosPrueba.EquipoPrueba e : r.equipos()) {
             int division = ctx.campeonato().divisionConMenosEquipos(); // reparte los equipos entre las divisiones
             Equipo equipo = ctx.campeonato().agregarEquipo(e.nombre());
@@ -166,6 +172,17 @@ public class EquiposService {
             texto += " (no hay más nombres de prueba libres)";
         }
         return texto + ". Semilla " + semilla + ".";
+    }
+
+    /** Cambia los documentos ya usados por el siguiente numero libre (y los anota como usados). */
+    private static void documentosLibres(List<Jugador> jugadores, Set<String> usados) {
+        for (Jugador j : jugadores) {
+            String documento = j.getDocumento();
+            while (!usados.add(ReglasPlantilla.claveDocumento(documento))) {
+                documento = documento.matches("\\d{1,17}") ? String.valueOf(Long.parseLong(documento) + 1) : documento + "1";
+            }
+            j.setDocumento(documento);
+        }
     }
 
     private void asignarIds(List<Jugador> jugadores) {

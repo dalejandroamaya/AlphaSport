@@ -16,6 +16,33 @@ public class Jugador extends Persona {
     public static final String[] POSICIONES = java.util.Arrays.stream(GRUPOS_POSICIONES)
             .flatMap(g -> java.util.Arrays.stream(g).skip(1)).toArray(String[]::new);
 
+    /** Linea de una posicion que no esta en el catalogo: va al final de la plantilla. */
+    public static final int SIN_LINEA = GRUPOS_POSICIONES.length;
+
+    /**
+     * Orden natural de una plantilla: Porteria, Defensa, Mediocampo y Ataque (el orden de GRUPOS_POSICIONES);
+     * dentro de cada linea, por dorsal y luego por nombre.
+     */
+    public static final java.util.Comparator<Jugador> POR_LINEA = java.util.Comparator.comparingInt(Jugador::getLinea)
+            .thenComparingInt(Jugador::getDorsal)
+            .thenComparing(j -> j.getNombre() == null ? "" : j.getNombre(), String.CASE_INSENSITIVE_ORDER);
+
+    /**
+     * Linea de una posicion segun GRUPOS_POSICIONES: 0 Porteria, 1 Defensa, 2 Mediocampo, 3 Ataque; SIN_LINEA si
+     * no esta en el catalogo (sin distinguir mayusculas ni espacios alrededor).
+     */
+    public static int lineaDe(String posicion) {
+        String buscada = posicion == null ? "" : posicion.trim();
+        for (int g = 0; g < GRUPOS_POSICIONES.length; g++) {
+            for (int k = 1; k < GRUPOS_POSICIONES[g].length; k++) {
+                if (GRUPOS_POSICIONES[g][k].equalsIgnoreCase(buscada)) {
+                    return g;
+                }
+            }
+        }
+        return SIN_LINEA;
+    }
+
     private int id; // no cambia aunque se edite el dorsal (lo usan las tarjetas)
     private int dorsal;
     private String posicion;
@@ -55,6 +82,11 @@ public class Jugador extends Persona {
 
     public void setPosicion(String posicion) {
         this.posicion = posicion;
+    }
+
+    /** Linea de su posicion (ver {@link #lineaDe(String)}). */
+    public int getLinea() {
+        return lineaDe(posicion);
     }
 
     /** Foto tipo cedula del jugador ("" si no tiene). */

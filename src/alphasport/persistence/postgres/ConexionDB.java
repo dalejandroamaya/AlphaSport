@@ -24,7 +24,7 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
 
     public static final Path ARCHIVO = Path.of("db.properties");
     /** Version del esquema que necesita el programa (la ultima de database/migraciones). */
-    public static final int VERSION_ESQUEMA = 2;
+    public static final int VERSION_ESQUEMA = 4;
 
     /** Datos de conexion. */
     public record Configuracion(String host, int puerto, String base, String usuario, String clave) {
@@ -185,6 +185,10 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
                     + ". Revise db.properties.", e);
             case "3D000" -> new PersistenciaException("La base de datos " + configuracion.base() + " no existe. Créela en pgAdmin (ver README_DB.md).", e);
             case "42P01" -> new PersistenciaException("Faltan tablas en " + configuracion.base() + ". Ejecute database/schema.sql (ver README_DB.md).", e);
+            case "23P01" -> new PersistenciaException(e.getMessage() != null && e.getMessage().contains("jugadores_documento_unico")
+                    ? "Dos jugadores del campeonato tienen el mismo documento. Cada jugador debe tener el suyo: revise los documentos."
+                    : e.getMessage() != null && e.getMessage().contains("jugadores_dorsal_unico")
+                    ? "Dos jugadores del mismo equipo tienen el mismo dorsal." : "Error en la base de datos: " + e.getMessage(), e);
             default -> new PersistenciaException("Error en la base de datos: " + e.getMessage(), e);
         };
     }

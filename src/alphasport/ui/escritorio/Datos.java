@@ -10,6 +10,15 @@ import java.util.Map;
  */
 final class Datos {
 
+    /**
+     * Orden de una plantilla en pantalla (jugadores como mapas, tambien los que aun no se guardan): Porteria,
+     * Defensa, Mediocampo y Ataque, luego dorsal y nombre. La regla es la de Jugador.POR_LINEA.
+     */
+    static final java.util.Comparator<Map<String, Object>> POR_LINEA = java.util.Comparator
+            .comparingInt((Map<String, Object> j) -> alphasport.model.Jugador.lineaDe(s(j, "posicion")))
+            .thenComparingInt(j -> n(j, "dorsal"))
+            .thenComparing(j -> s(j, "nombre"), String.CASE_INSENSITIVE_ORDER);
+
     private Datos() {
     }
 
