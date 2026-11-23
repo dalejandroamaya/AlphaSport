@@ -599,7 +599,7 @@ function crearServicioLocal() {
   /* ---------------------------------------------------------------- sesión y permisos (igual que ApiControlador) */
 
   /** Cuentas demostrativas, como AutenticacionService en Java (sin base de datos). */
-  const CUENTAS = { admin: { clave: '123', rol: 'ADMINISTRADOR' }, visitante: { clave: '321', rol: 'VISITANTE' } };
+  const CUENTAS = { admin: { clave: '123', rol: 'ORGANIZADOR' }, visitante: { clave: '321', rol: 'AFICIONADO' } };
   /** Acciones que no exigen ser administrador. Todo lo demás sí (lista blanca). */
   const RUTAS_PUBLICAS = new Set(['login', 'login/visitante', 'logout']);
 
@@ -636,7 +636,7 @@ function crearServicioLocal() {
       if (!cuenta || cuenta.clave !== d.clave) throw new ErrorRegla('Usuario o contraseña incorrectos.', 'LOGIN');
       abrirSesion(nombre, cuenta.rol);
     },
-    'login/visitante': () => abrirSesion('visitante', 'VISITANTE'),
+    'login/visitante': () => abrirSesion('visitante', 'AFICIONADO'),
     logout: () => {
       usuario = null;
       Almacen.sesion.eliminar();
@@ -810,7 +810,7 @@ function crearServicioLocal() {
   function noticiasJson() {
     const admin = !!(usuario && ROLES[usuario.rol].puedeEditar);
     const noticia = n => ({
-      id: n.id, titulo: n.titulo, cuerpo: n.cuerpo, autor: n.autor, deVisitante: n.rolAutor === 'VISITANTE', fecha: n.fecha,
+      id: n.id, titulo: n.titulo, cuerpo: n.cuerpo, autor: n.autor, deVisitante: ['AFICIONADO', 'VISITANTE'].includes(n.rolAutor), fecha: n.fecha, // VISITANTE: noticias guardadas antes del cambio
       imagen: n.imagenRuta || '', aprobado: n.aprobado, comentarios: n.comentarios.map(x => Object.assign({}, x))
     });
     return { publicadas: noticias.publicadas().map(noticia), pendientes: admin ? noticias.pendientes().map(noticia) : [], puedeModerar: admin };

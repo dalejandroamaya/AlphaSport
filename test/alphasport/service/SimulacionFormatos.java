@@ -574,7 +574,7 @@ public class SimulacionFormatos {
     private static void probarPermisos() {
         boolean correcto;
         try {
-            alphasport.model.Rol admin = alphasport.model.Rol.ADMINISTRADOR, visitante = alphasport.model.Rol.VISITANTE;
+            alphasport.model.Rol admin = alphasport.model.Rol.ORGANIZADOR, visitante = alphasport.model.Rol.AFICIONADO;
             boolean roles = admin.puede(alphasport.model.Permiso.GESTIONAR_CAMPEONATO) && !admin.puede(alphasport.model.Permiso.VOTAR_JUGADORES)
                     && visitante.puede(alphasport.model.Permiso.VOTAR_JUGADORES) && !visitante.puede(alphasport.model.Permiso.MODERAR_NOTICIAS)
                     && admin.puedeEditar() && !visitante.puedeEditar();
@@ -660,8 +660,8 @@ public class SimulacionFormatos {
             String tokenAdmin = cookieAdmin.replaceFirst(";.*$", ""), tokenVisita = cookieVisita.replaceFirst(";.*$", "");
             boolean cookies = cookieAdmin.startsWith(alphasport.ui.ServidorWeb.COOKIE + "=") && cookieAdmin.contains("HttpOnly")
                     && cookieAdmin.contains("SameSite=Strict") && !tokenAdmin.equals(tokenVisita) && tokenAdmin.length() > 30;
-            boolean separadas = pedir(cliente, base, "GET", "sesion", null, tokenAdmin, base).body().contains("\"ADMINISTRADOR\"")
-                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"VISITANTE\"")
+            boolean separadas = pedir(cliente, base, "GET", "sesion", null, tokenAdmin, base).body().contains("\"ORGANIZADOR\"")
+                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"AFICIONADO\"")
                     && pedir(cliente, base, "POST", "division/agregar", "{}", tokenVisita, base).body().contains("\"PERMISO\"");
             // Otra pagina no puede usar la sesion del administrador, y solo se atiende con el Host de esta maquina.
             var ajena = pedir(cliente, base, "POST", "nuevo", "{}", tokenAdmin, "http://pagina-ajena.example");
@@ -672,7 +672,7 @@ public class SimulacionFormatos {
             var salir = pedir(cliente, base, "POST", "logout", "{}", tokenAdmin, base);
             boolean cerrada = salir.headers().firstValue("Set-Cookie").orElse("").contains("Max-Age=0")
                     && pedir(cliente, base, "GET", "estado", null, tokenAdmin, base).body().contains("\"LOGIN\"")
-                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"VISITANTE\"")
+                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"AFICIONADO\"")
                     && cliente.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/")).build(),
                             java.net.http.HttpResponse.BodyHandlers.ofString()).statusCode() == 200;
             correcto = sinSesion && cookies && separadas && origen && cerrada;
@@ -729,7 +729,7 @@ public class SimulacionFormatos {
                     && !rapido.coincide("secreta", "$2a$06$bcrypt-no-soportado") && h.length() <= 255;
             // Otro repositorio de cuentas (como sera la tabla usuarios) sin cambiar el servicio.
             AutenticacionService propia = new AutenticacionService(new alphasport.persistence.RepositorioUsuariosEnMemoria(List.of(
-                    new alphasport.model.CuentaUsuario("ana", "Ana", alphasport.model.Rol.ADMINISTRADOR, rapido.hash("clave-de-ana")))), rapido);
+                    new alphasport.model.CuentaUsuario("ana", "Ana", alphasport.model.Rol.ORGANIZADOR, rapido.hash("clave-de-ana")))), rapido);
             boolean repositorio = propia.iniciarSesion("  ANA ", "clave-de-ana").puedeEditar()
                     && rechaza(() -> propia.iniciarSesion("ana", "otra")) && rechaza(() -> propia.iniciarSesion("admin", "123"));
             // Las cuentas de demostracion siguen entrando con sus claves de siempre.

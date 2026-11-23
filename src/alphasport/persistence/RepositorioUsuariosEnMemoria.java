@@ -22,9 +22,9 @@ public class RepositorioUsuariosEnMemoria implements RepositorioUsuarios {
      */
     public static RepositorioUsuariosEnMemoria demostracion() {
         return new RepositorioUsuariosEnMemoria(List.of(
-                new CuentaUsuario("admin", "Administrador", Rol.ADMINISTRADOR,
+                new CuentaUsuario("admin", "Administrador", Rol.ORGANIZADOR,
                         "pbkdf2_sha256$600000$ORYWJGZO2MLaUsJJD1StqA$eJmZnrPDP4/FNdM4k5l/HEFmhFxS4qPKtrYueWmiJB8"),
-                new CuentaUsuario("visitante", "Visitante", Rol.VISITANTE,
+                new CuentaUsuario("visitante", "Visitante", Rol.AFICIONADO,
                         "pbkdf2_sha256$600000$sleF8gem07Djtx8KO31+QQ$YrnucN8AoK6aG/heRS6AhI4oRY2WAGF7eHy89aGrAc4")));
     }
 

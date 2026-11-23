@@ -47,6 +47,6 @@ public class AutenticacionService {
 
     /** Acceso de solo lectura sin contraseña (boton «Entrar como visitante»). */
     public Usuario entrarComoVisitante() {
-        return new Usuario("visitante", Rol.VISITANTE);
+        return new Usuario("visitante", Rol.AFICIONADO);
     }
 }

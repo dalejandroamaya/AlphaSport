@@ -79,7 +79,7 @@ function crearNoticiasLocal(ErrorRegla) {
     /** Visitante: queda pendiente (aprobado = false) hasta que el administrador la apruebe. */
     proponer(d) {
       const n = { id: sigNoticia, titulo: validarTitulo(d.titulo), cuerpo: validarCuerpo(d.cuerpo), autor: nombre(d.autor, 'Visitante'),
-        rolAutor: 'VISITANTE', fecha: ahora(), imagenRuta: validarImagen(d.imagen), aprobado: false, comentarios: [] };
+        rolAutor: 'AFICIONADO', fecha: ahora(), imagenRuta: validarImagen(d.imagen), aprobado: false, comentarios: [] };
       lista.push(n);
       guardar();
       sigNoticia++;
@@ -89,7 +89,7 @@ function crearNoticiasLocal(ErrorRegla) {
       const t = validarTitulo(d.titulo), c = validarCuerpo(d.cuerpo), foto = validarImagen(d.imagen);
       let n;
       if (d.id == null) {
-        n = { id: sigNoticia++, titulo: t, cuerpo: c, autor: 'Administración', rolAutor: 'ADMINISTRADOR', fecha: ahora(), imagenRuta: '', aprobado: true, comentarios: [] };
+        n = { id: sigNoticia++, titulo: t, cuerpo: c, autor: 'Administración', rolAutor: 'ORGANIZADOR', fecha: ahora(), imagenRuta: '', aprobado: true, comentarios: [] };
         lista.push(n);
       } else {
         n = buscar(d.id);

@@ -88,7 +88,7 @@ public class NoticiasService {
     /** El visitante propone una noticia: queda pendiente (aprobado = false) hasta que el administrador la apruebe. */
     public Noticia proponer(String titulo, String cuerpo, String autor, Imagen imagen) throws PersistenciaException {
         String nombre = limpiarNombre(autor, "Visitante");
-        Noticia n = new Noticia(0, validarTitulo(titulo), validarCuerpo(cuerpo), nombre, Rol.VISITANTE, ahora());
+        Noticia n = new Noticia(0, validarTitulo(titulo), validarCuerpo(cuerpo), nombre, Rol.AFICIONADO, ahora());
         if (imagen != null) {
             n.setImagenRuta(imagenes.guardar(imagen.datos(), imagen.extension()));
         }
@@ -125,7 +125,7 @@ public class NoticiasService {
         String t = validarTitulo(titulo), c = validarCuerpo(cuerpo);
         Noticia n;
         if (id == null) {
-            n = new Noticia(0, t, c, "Administración", Rol.ADMINISTRADOR, ahora());
+            n = new Noticia(0, t, c, "Administración", Rol.ORGANIZADOR, ahora());
         } else {
             n = buscar(id);
             n.setTitulo(t);

@@ -69,7 +69,7 @@ public class PostgresRepositorioNoticias implements RepositorioNoticias {
         conexion.ejecutar(con -> {
             n.setId(Sql.insertar(con, """
                     INSERT INTO noticias (titulo, cuerpo, autor, rol_autor, fecha, imagen_ruta, aprobado) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id""",
-                    n.getTitulo(), n.getCuerpo(), n.getAutor(), n.getRolAutor() == Rol.ADMINISTRADOR ? "ADMIN" : "VISITANTE",
+                    n.getTitulo(), n.getCuerpo(), n.getAutor(), n.getRolAutor() == Rol.ORGANIZADOR ? "ADMIN" : "VISITANTE", // nombres de la columna
                     momento(n.getFecha()), Sql.nulo(n.getImagenRuta()), n.isAprobado()));
             return null;
         });
@@ -110,7 +110,7 @@ public class PostgresRepositorioNoticias implements RepositorioNoticias {
 
     private static Noticia leer(java.sql.ResultSet rs) throws SQLException {
         Noticia n = new Noticia(rs.getInt("id"), rs.getString("titulo"), rs.getString("cuerpo"), rs.getString("autor"),
-                rs.getString("rol_autor").equals("ADMIN") ? Rol.ADMINISTRADOR : Rol.VISITANTE, texto(rs.getTimestamp("fecha")));
+                Rol.desdeGuardado(rs.getString("rol_autor")), texto(rs.getTimestamp("fecha")));
         n.setImagenRuta(Sql.texto(rs.getString("imagen_ruta")));
         n.setAprobado(rs.getBoolean("aprobado"));
         return n;

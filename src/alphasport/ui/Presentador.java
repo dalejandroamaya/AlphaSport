@@ -592,7 +592,7 @@ public class Presentador {
 
     private static Map<String, Object> noticia(alphasport.model.Noticia n) {
         return mapa("id", n.getId(), "titulo", n.getTitulo(), "cuerpo", n.getCuerpo(), "autor", n.getAutor(),
-                "deVisitante", n.getRolAutor() == alphasport.model.Rol.VISITANTE, "fecha", n.getFecha(),
+                "deVisitante", n.getRolAutor() == alphasport.model.Rol.AFICIONADO, "fecha", n.getFecha(),
                 "imagen", n.getImagenRuta(), "aprobado", n.isAprobado(),
                 "comentarios", n.getComentarios().stream().map(c -> mapa("id", c.getId(), "autor", c.getAutor(),
                         "texto", c.getTexto(), "fecha", c.getFecha())).collect(Collectors.toList()));

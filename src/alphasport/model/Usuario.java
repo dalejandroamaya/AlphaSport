@@ -21,8 +21,8 @@ public final class Usuario {
         return rol;
     }
 
-    public boolean esAdministrador() {
-        return rol == Rol.ADMINISTRADOR;
+    public boolean esOrganizador() {
+        return rol == Rol.ORGANIZADOR;
     }
 
     public boolean puedeEditar() {
