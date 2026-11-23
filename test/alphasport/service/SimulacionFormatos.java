@@ -287,13 +287,14 @@ public class SimulacionFormatos {
         try {
             // Reglas sueltas y limites.
             List<String> d = new ArrayList<>();
-            boolean reglas = CalculadoraCalificaciones.notaSistema(false, 0, 0, 0, 0, 0, d) == 6.0
-                    && CalculadoraCalificaciones.notaSistema(false, 2, 1, 1, 0, 0, d) == 8.0     // 6 + 2 + 0.5 - 0.5
-                    && CalculadoraCalificaciones.notaSistema(true, 0, 0, 0, 0, 0, d) == 7.5      // valla invicta
-                    && CalculadoraCalificaciones.notaSistema(true, 0, 0, 0, 0, 3, d) == 5.1      // 6 - 0.9
-                    && CalculadoraCalificaciones.notaSistema(false, 0, 0, 0, 3, 0, d) == 1.0     // 6 - 6 -> minimo 1.0
-                    && CalculadoraCalificaciones.notaSistema(false, 6, 0, 0, 0, 0, d) == 10.0    // 6 + 6 -> maximo 10.0
-                    && CalculadoraCalificaciones.redondear((7.0 + 9.5) / 2) == 8.3;             // 8.25 -> 8.3
+            ReglaPuntuacion nota = PuntuacionNotaPartido.REGLAS;
+            boolean reglas = nota.puntuar(new DesempenoJugador(false, true, 0, 0, 0, 0, 0), d) == 6.0
+                    && nota.puntuar(new DesempenoJugador(false, true, 2, 1, 1, 0, 0), d) == 8.0     // 6 + 2 + 0.5 - 0.5
+                    && nota.puntuar(new DesempenoJugador(true, true, 0, 0, 0, 0, 0), d) == 7.5      // valla invicta
+                    && nota.puntuar(new DesempenoJugador(true, true, 0, 0, 0, 0, 3), d) == 5.1      // 6 - 0.9
+                    && nota.puntuar(new DesempenoJugador(false, true, 0, 0, 0, 3, 0), d) == 1.0     // 6 - 6 -> minimo 1.0
+                    && nota.puntuar(new DesempenoJugador(false, true, 6, 0, 0, 0, 0), d) == 10.0    // 6 + 6 -> maximo 10.0
+                    && PuntuacionNotaPartido.redondear((7.0 + 9.5) / 2) == 8.3;                    // 8.25 -> 8.3
 
             RelojPrueba reloj = new RelojPrueba();
             CampeonatoService servicio = new CampeonatoService(
@@ -343,6 +344,7 @@ public class SimulacionFormatos {
                     && de.apply(n.local(), 4).notaSistema() == 5.5        // amarilla
                     && de.apply(n.local(), 5).notaSistema() == 4.0        // roja
                     && de.apply(n.visitante(), 1).notaSistema() == 5.4    // portero: 2 goles recibidos
+                    && otrasReglas(c, p)
                     && n.idMvp() == loc.get(8).getId();                   // el #9 (8.0) supera al portero (7.5)
             if (!sistema) {
                 System.out.println("  cierre=" + (p.getFinalizadoEn() == cierre) + " votacion=" + n.votacion() + " local="
@@ -544,6 +546,23 @@ public class SimulacionFormatos {
         ArrayList<Integer> ids = new ArrayList<>();
         jugadores.forEach(j -> ids.add(j.getId()));
         return ids;
+    }
+
+    /**
+     * [A7] Otro conjunto de puntos (como el del modo Fantasy) se enchufa sin tocar la calculadora: sin base,
+     * sin minimo ni maximo y con su propio desglose.
+     */
+    private static boolean otrasReglas(Campeonato c, Partido p) {
+        ReglaPuntuacion fantasy = (x, desglose) -> PuntuacionNotaPartido.sumar(desglose, "Gol", x.goles(), 4)
+                + PuntuacionNotaPartido.sumar(desglose, "Asistencia", x.asistencias(), 3)
+                + PuntuacionNotaPartido.sumar(desglose, "Tarjeta roja", x.rojas(), -3)
+                + (x.titular() ? 2 : 1);
+        CalificacionesPartido f = CalculadoraCalificaciones.calcular(c, p, p.getFinalizadoEn(), null, fantasy);
+        java.util.function.ToDoubleFunction<Integer> local = dorsal -> f.local().stream().filter(x -> x.dorsal() == dorsal)
+                .findFirst().orElseThrow().notaSistema();
+        return local.applyAsDouble(9) == 10.0 && local.applyAsDouble(8) == 5.0 && local.applyAsDouble(5) == -1.0
+                && f.local().stream().filter(x -> x.dorsal() == 9).findFirst().orElseThrow().desglose().contains("Gol ×2: +8.0")
+                && f.idMvp() == f.local().stream().filter(x -> x.dorsal() == 9).findFirst().orElseThrow().idJugador();
     }
 
     private interface Accion {

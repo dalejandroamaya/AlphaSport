@@ -9,40 +9,26 @@ import alphasport.model.Partido;
 import alphasport.model.Tarjeta;
 import alphasport.model.VotoJugador;
 import alphasport.service.CalificacionesPartido.Calificacion;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
- * [REQ-07] Reglas de la calificacion de jugadores (escala 1.0 a 10.0), enfoque hibrido:
+ * [REQ-07] Calificacion de los jugadores de un partido, enfoque hibrido:
  * <ol>
- * <li><b>Nota del sistema</b>: 6.0 de base para todo el que jugo (titular o ingresado de cambio);
- * gol +1.0, asistencia +0.5, amarilla -0.5, roja -2.0. El portero ademas suma +1.5 con la valla
- * invicta y resta 0.3 por cada gol recibido. Siempre queda entre 1.0 y 10.0.</li>
+ * <li><b>Nota del sistema</b>: la calcula una {@link ReglaPuntuacion} a partir del {@link DesempenoJugador}; por defecto
+ * {@link PuntuacionNotaPartido} (base 6.0, goles, asistencias, tarjetas y valla invicta, entre 1.0 y 10.0).</li>
  * <li><b>Voto del publico</b>: mientras la votacion esta abierta cada visitante califica a cada jugador del
  * 1 al 10, una sola vez por dispositivo (ver {@link ReglasVotacion}).</li>
  * <li><b>Nota final</b>: la del sistema si no hay votos; si los hay, (sistema + promedio del publico) / 2,
  * redondeada a 1 decimal. El MVP es el jugador con la nota final mas alta.</li>
  * </ol>
- * Solo tiene metodos estaticos; el resultado de {@link #calcular} es un {@link CalificacionesPartido}. La version web tiene su gemela en
- * web/js/service/calificaciones.js con las mismas reglas.
+ * Solo tiene metodos estaticos; el resultado de {@link #calcular} es un {@link CalificacionesPartido}. Para otro conjunto de
+ * puntos (Fantasy) basta con otra ReglaPuntuacion. La version web tiene su gemela en web/js/service/calificaciones.js.
  */
 public final class CalculadoraCalificaciones {
-
-    public static final double NOTA_BASE = 6.0;
-    public static final double PUNTOS_GOL = 1.0;
-    public static final double PUNTOS_ASISTENCIA = 0.5;
-    public static final double PUNTOS_AMARILLA = -0.5;
-    public static final double PUNTOS_ROJA = -2.0;
-    public static final double PUNTOS_VALLA_INVICTA = 1.5;
-    public static final double PUNTOS_GOL_RECIBIDO = -0.3;
-    public static final double NOTA_MINIMA = 1.0;
-    public static final double NOTA_MAXIMA = 10.0;
 
     private CalculadoraCalificaciones() {
     }
@@ -56,6 +42,12 @@ public final class CalculadoraCalificaciones {
      * @param dispositivo identificador del navegador o equipo que consulta (para mostrar su voto); puede ser null
      */
     public static CalificacionesPartido calcular(Campeonato campeonato, Partido partido, long ahora, String dispositivo) {
+        return calcular(campeonato, partido, ahora, dispositivo, PuntuacionNotaPartido.REGLAS);
+    }
+
+    /** Igual, con otras reglas para la nota del sistema. */
+    public static CalificacionesPartido calcular(Campeonato campeonato, Partido partido, long ahora, String dispositivo,
+            ReglaPuntuacion reglas) {
         String motivo = "";
         List<Calificacion> local = List.of();
         List<Calificacion> visitante = List.of();
@@ -64,8 +56,8 @@ public final class CalculadoraCalificaciones {
         } else if (partido.isWalkover()) {
             motivo = "Partido definido por W.O.: no se jugó, así que no hay calificaciones.";
         } else {
-            local = calificar(campeonato, partido, partido.getIdLocal(), dispositivo);
-            visitante = calificar(campeonato, partido, partido.getIdVisitante(), dispositivo);
+            local = calificar(campeonato, partido, partido.getIdLocal(), dispositivo, reglas);
+            visitante = calificar(campeonato, partido, partido.getIdVisitante(), dispositivo, reglas);
             if (local.isEmpty() && visitante.isEmpty()) {
                 motivo = "No se registró quién jugó (XI inicial, cambios, goles ni tarjetas): no hay a quién calificar.";
             }
@@ -108,81 +100,26 @@ public final class CalculadoraCalificaciones {
         return ids;
     }
 
-    private static List<Calificacion> calificar(Campeonato c, Partido p, int idEquipo, String dispositivo) {
+    private static List<Calificacion> calificar(Campeonato c, Partido p, int idEquipo, String dispositivo, ReglaPuntuacion reglas) {
         Equipo equipo = c.buscarEquipo(idEquipo);
-        Set<Integer> titulares = new LinkedHashSet<>(p.getTitularesDe(idEquipo));
-        int recibidos = p.getGolesDe(p.getRival(idEquipo));
         List<Calificacion> lista = new ArrayList<>();
         for (int id : participantes(c, p, idEquipo)) {
             Jugador j = equipo.getJugadores().stream().filter(x -> x.getId() == id).findFirst().orElseThrow();
-            boolean portero = DetallePartido.grupo(j) == 0;
-            int goles = (int) p.getGoles().stream().filter(g -> !g.isEnContra() && g.getIdAutor() == id).count();
-            int asistencias = (int) p.getGoles().stream().filter(g -> g.getIdAsistente() == id).count();
-            int amarillas = (int) p.getTarjetas().stream().filter(t -> t.getIdJugador() == id && !t.isRoja()).count();
-            int rojas = (int) p.getTarjetas().stream().filter(t -> t.getIdJugador() == id && t.isRoja()).count();
+            DesempenoJugador d = DesempenoJugador.de(p, idEquipo, id, DetallePartido.grupo(j) == 0);
             List<String> desglose = new ArrayList<>();
-            double nota = notaSistema(portero, goles, asistencias, amarillas, rojas, recibidos, desglose);
+            double nota = reglas.puntuar(d, desglose);
             List<VotoJugador> votos = p.getVotos().stream().filter(v -> v.getIdJugador() == id).toList();
             double promedio = votos.stream().mapToInt(VotoJugador::getValor).average().orElse(0);
-            double notaFinal = votos.isEmpty() ? nota : redondear((nota + promedio) / 2);
+            double notaFinal = votos.isEmpty() ? nota : PuntuacionNotaPartido.redondear((nota + promedio) / 2);
             int miVoto = dispositivo == null ? 0 : votos.stream().filter(v -> dispositivo.equals(v.getDispositivo()))
                     .mapToInt(VotoJugador::getValor).findFirst().orElse(0);
-            lista.add(new Calificacion(id, idEquipo, j.getNombre(), j.getDorsal(), j.getPosicion(), j.getFoto(), portero,
-                    titulares.contains(id), goles, asistencias, amarillas, rojas, portero ? recibidos : 0, nota,
-                    List.copyOf(desglose), votos.size(), redondear(promedio), notaFinal, false, miVoto));
+            lista.add(new Calificacion(id, idEquipo, j.getNombre(), j.getDorsal(), j.getPosicion(), j.getFoto(), d.portero(),
+                    d.titular(), d.goles(), d.asistencias(), d.amarillas(), d.rojas(), d.portero() ? d.golesRecibidos() : 0, nota,
+                    List.copyOf(desglose), votos.size(), PuntuacionNotaPartido.redondear(promedio), notaFinal, false, miVoto));
         }
         // Titulares primero y luego los que entraron; dentro de cada grupo, por dorsal.
         lista.sort(Comparator.comparing((Calificacion x) -> !x.titular()).thenComparingInt(Calificacion::dorsal));
         return lista;
-    }
-
-    /**
-     * Nota del sistema con su explicacion linea por linea en {@code desglose}
-     * (por ejemplo «Gol ×2: +2.0»). Publica para poder probar las reglas por separado.
-     */
-    public static double notaSistema(boolean portero, int goles, int asistencias, int amarillas, int rojas,
-            int golesRecibidos, List<String> desglose) {
-        double nota = NOTA_BASE;
-        desglose.add("Base por jugar: " + texto(NOTA_BASE));
-        nota += sumar(desglose, "Gol", goles, PUNTOS_GOL);
-        nota += sumar(desglose, "Asistencia", asistencias, PUNTOS_ASISTENCIA);
-        nota += sumar(desglose, "Tarjeta amarilla", amarillas, PUNTOS_AMARILLA);
-        nota += sumar(desglose, "Tarjeta roja", rojas, PUNTOS_ROJA);
-        if (portero) {
-            if (golesRecibidos == 0) {
-                nota += PUNTOS_VALLA_INVICTA;
-                desglose.add("Valla invicta: " + conSigno(PUNTOS_VALLA_INVICTA));
-            } else {
-                nota += sumar(desglose, "Gol recibido", golesRecibidos, PUNTOS_GOL_RECIBIDO);
-            }
-        }
-        double acotada = Math.max(NOTA_MINIMA, Math.min(NOTA_MAXIMA, nota));
-        if (acotada != nota) {
-            desglose.add(acotada == NOTA_MAXIMA ? "Ajustada al máximo: " + texto(NOTA_MAXIMA) : "Ajustada al mínimo: " + texto(NOTA_MINIMA));
-        }
-        return redondear(acotada);
-    }
-
-    private static double sumar(List<String> desglose, String concepto, int veces, double puntos) {
-        if (veces <= 0) {
-            return 0;
-        }
-        double total = veces * puntos;
-        desglose.add(concepto + (veces > 1 ? " ×" + veces : "") + ": " + conSigno(total));
-        return total;
-    }
-
-    /** Redondeo a 1 decimal «mitad hacia arriba» (8.45 -> 8.5), sin errores de coma flotante. */
-    public static double redondear(double valor) {
-        return BigDecimal.valueOf(valor).setScale(1, RoundingMode.HALF_UP).doubleValue();
-    }
-
-    private static String texto(double valor) {
-        return String.format(Locale.ROOT, "%.1f", redondear(valor));
-    }
-
-    private static String conSigno(double valor) {
-        return (valor >= 0 ? "+" : "−") + texto(Math.abs(valor));
     }
 
     /* ---------------------------------------------------------------- MVP */
