@@ -11,3 +11,7 @@ datos/
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# Credenciales locales de la base de datos (cada quien copia db.properties.example)
+db.properties
+.env

@@ -955,6 +955,7 @@ public class MotorCampeonato {
     public static void darWalkover(Partido p, int idLocal, int idGanador, String motivo) {
         p.reiniciarResultado();
         p.setEstado(EstadoPartido.JUGADO);
+        p.setWalkover(true);
         if (idLocal == idGanador) {
             p.setGolesLocal(3);
         } else {

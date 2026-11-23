@@ -1,5 +1,6 @@
 package alphasport.ui.escritorio;
 
+import alphasport.service.ReglasPartido;
 import static alphasport.ui.escritorio.Aplicacion.boton;
 import static alphasport.ui.escritorio.Aplicacion.etiqueta;
 import static alphasport.ui.escritorio.Datos.b;
@@ -323,7 +324,7 @@ class Dialogos {
         StackPane panel = (StackPane) ((StackPane) v.getScene().getRoot()).getChildren().get(0);
         Region foto = new Region();
         foto.getStyleClass().add("foto-campeon");
-        foto.setStyle("-fx-background-image: url('" + alphasport.ui.Arranque.CARPETA_WEB.resolve("img").resolve("estadio-noche.jpg").toUri()
+        foto.setStyle("-fx-background-image: url('" + alphasport.ui.FabricaAplicacion.CARPETA_WEB.resolve("img").resolve("estadio-noche.jpg").toUri()
                 + "'); -fx-background-size: cover; -fx-background-position: center 60%;");
         Region velo = new Region();
         velo.getStyleClass().add("velo-campeon");
@@ -970,7 +971,7 @@ class Dialogos {
             }
             Integer minutoTarjeta = leerMinuto(tjMinuto, true);
             if (minutoTarjeta == null) {
-                mostrarError(err, "El minuto de la tarjeta debe estar entre 1 y 130 (o vacío si no se sabe).");
+                mostrarError(err, "El minuto de la tarjeta debe estar entre 1 y " + ReglasPartido.MINUTO_MAXIMO + " (o vacío si no se sabe).");
                 tjMinuto.requestFocus();
                 return;
             }
@@ -985,10 +986,6 @@ class Dialogos {
                 return;
             }
             List<Map<String, Object>> delJugador = tarjetas.stream().filter(t -> n(t, "jugador") == idJugador).toList();
-            if (roja && delJugador.stream().anyMatch(t -> s(t, "tipo").equals("ROJA"))) {
-                mostrarError(err, s(jugador, "nombre") + " ya fue expulsado en este partido.");
-                return;
-            }
             if (!roja && delJugador.stream().anyMatch(t -> s(t, "tipo").equals("AMARILLA"))
                     && confirmar("Doble amarilla", s(jugador, "nombre") + " ya tiene una amarilla en este partido. "
                             + "¿Registrar la segunda como ROJA (expulsión, 1 fecha)?", "Sí, roja")) {
@@ -1025,7 +1022,7 @@ class Dialogos {
         Runnable[] llenarCambio = new Runnable[1];
 
         // 11 titulares, o toda la plantilla si tiene menos de 11.
-        java.util.function.IntUnaryOperator necesarios = idEq -> Math.min(TITULARES, plantillaDe.apply(idEq).size());
+        java.util.function.IntUnaryOperator necesarios = idEq -> Math.min(ReglasPartido.TITULARES, plantillaDe.apply(idEq).size());
         java.util.function.IntPredicate xiListo = idEq -> titulares.get(idEq).size() == necesarios.applyAsInt(idEq) && !titulares.get(idEq).isEmpty();
         // El XI se construye UNA sola vez. Al marcar un jugador solo se actualizan los controles que ya
         // existen (antes se borraba y se volvía a crear toda la lista: la casilla con el foco desaparecía,
@@ -1128,6 +1125,9 @@ class Dialogos {
         VBox grupoFormacion = grupo("Formación táctica",
                 new HBox(14, campo(s(p, "localNombre"), formLocal), campo(s(p, "visitanteNombre"), formVisitante)));
 
+        // ---- [REQ-07] Cuánto dura la votación del público (se puede decidir en la previa o con el resultado)
+        EditorVotacion votacion = new EditorVotacion(app, p);
+
         // ---- Goles por jugador: autor, minuto y asistencia (opcional). Alimentan goleadores y asistencias.
         List<Map<String, Object>> goles = new ArrayList<>();
         for (Map<String, Object> g : l(p, "goles")) {
@@ -1201,29 +1201,14 @@ class Dialogos {
             }
             Integer min = leerMinuto(glMinuto, true);
             if (min == null) {
-                mostrarError(err, "El minuto del gol debe estar entre 1 y 130 (o vacío si no se sabe).");
+                mostrarError(err, "El minuto del gol debe estar entre 1 y " + ReglasPartido.MINUTO_MAXIMO + " (o vacío si no se sabe).");
                 glMinuto.requestFocus();
-                return;
-            }
-            // No puede haber más goles registrados que los del marcador escrito arriba.
-            TextField marcadorEquipo = iEq == 0 ? gl : gv;
-            int enMarcador = marcadorEquipo.getText().isBlank() ? 0 : Integer.parseInt(marcadorEquipo.getText());
-            long registrados = goles.stream().filter(g -> n(g, "equipo") == idsEquipos[iEq]).count();
-            if (registrados >= enMarcador) {
-                mostrarError(err, glEquipo.getValue() + " tiene " + enMarcador + (enMarcador == 1 ? " gol" : " goles")
-                        + " en el marcador y ya " + (registrados == 1 ? "hay 1 registrado" : "hay " + registrados + " registrados")
-                        + ". Suba primero el marcador.");
-                marcadorEquipo.requestFocus();
                 return;
             }
             mostrarError(err, null);
             Map<String, Object> autor = autores.get(iAutor);
             int iAsist = glAsistente.getSelectionModel().getSelectedIndex();
             Map<String, Object> asist = iAsist > 0 ? asistentes.get(iAsist - 1) : null;
-            if (asist != null && n(asist, "id") == n(autor, "id")) {
-                mostrarError(err, s(autor, "nombre") + " no puede darse la asistencia a sí mismo.");
-                return;
-            }
             goles.add(mapa("equipo", idsEquipos[iEq], "minuto", min, "enContra", glEnContra.isSelected(),
                     "autor", n(autor, "id"), "autorNombre", s(autor, "nombre"), "autorDorsal", n(autor, "dorsal"),
                     "asistente", asist == null ? 0 : n(asist, "id"), "asistenteNombre", asist == null ? "" : s(asist, "nombre"),
@@ -1320,14 +1305,8 @@ class Dialogos {
         agregarCambio.setOnAction(e -> {
             Integer min = leerMinuto(cbMinuto, false);
             if (min == null) {
-                mostrarError(err, "Escriba el minuto del cambio (entre 1 y 130).");
+                mostrarError(err, "Escriba el minuto del cambio (entre 1 y " + ReglasPartido.MINUTO_MAXIMO + ").");
                 cbMinuto.requestFocus();
-                return;
-            }
-            int idEqCambio = idsEquipos[cbEquipo.getSelectionModel().getSelectedIndex()];
-            if (!xiListo.test(idEqCambio)) {
-                mostrarError(err, "Antes de registrar cambios escoja el XI inicial de " + cbEquipo.getValue() + " ("
-                        + titulares.get(idEqCambio).size() + "/" + necesarios.applyAsInt(idEqCambio) + ").");
                 return;
             }
             int iSale = cbSale.getSelectionModel().getSelectedIndex(), iEntra = cbEntra.getSelectionModel().getSelectedIndex();
@@ -1448,7 +1427,7 @@ class Dialogos {
             Label ayudaPrevia = etiqueta("Lo que guarde aquí lo ve el visitante en la previa del partido y queda listo en «Registrar resultados» "
                     + "para anotar goles, tarjetas y cambios.", "sutil", "pequeno");
             ayudaPrevia.setWrapText(true);
-            contenido = cuerpo("Previa del partido · " + app.contexto(p), duelo, ayudaPrevia, grupoProgramacion, grupoFormacion, grupoXI, err, botones);
+            contenido = cuerpo("Previa del partido · " + app.contexto(p), duelo, ayudaPrevia, grupoProgramacion, grupoFormacion, grupoXI, votacion.nodo(), err, botones);
         } else {
             // ---- Resultados: marcador y eventos del juego. La alineación de la previa queda plegada
             // (se puede corregir aquí si cambió a última hora, pero no estorba).
@@ -1476,7 +1455,7 @@ class Dialogos {
                 textosPrevia.getChildren().add(sinXI);
             }
             contenido = cuerpo("Registrar resultado · " + app.contexto(p), marcador, new HBox(14, campo("Estado", estado), penales), cabeceraPrevia, alineacion,
-                    grupoGoles, grupoTarjetas, grupoCambios, err, botones);
+                    grupoGoles, grupoTarjetas, grupoCambios, votacion.nodo(), err, botones);
         }
         Stage v = ventana(previa ? "Previa del partido" : "Registrar resultado", contenido, 900);
         cancelar.setOnAction(e -> v.close());
@@ -1501,16 +1480,9 @@ class Dialogos {
                 (faltaLocal ? gl : gv).requestFocus();
                 return;
             }
-            if (accion.equals("guardar")) {
-                // Un XI empezado tiene que quedar completo (o vacío) antes de guardar, en la previa o con el resultado.
-                for (int k = 0; k < 2; k++) {
-                    int idEq = idsEquipos[k], elegidos = titulares.get(idEq).size(), faltan = necesarios.applyAsInt(idEq);
-                    if (elegidos > 0 && elegidos != faltan) {
-                        mostrarError(err, "El XI inicial de " + s(p, k == 0 ? "localNombre" : "visitanteNombre") + " tiene " + elegidos
-                                + " de " + faltan + " jugadores. Complételo o pulse «Limpiar».");
-                        return;
-                    }
-                }
+            if (accion.equals("guardar") && votacion.horas() == null) {
+                mostrarError(err, votacion.error());
+                return;
             }
             boolean penal = conPenales && hayPenales.isSelected();
             Map<String, Object> datos = mapa("estado", claveEstado.get(),
@@ -1519,6 +1491,9 @@ class Dialogos {
                     "titularesLocal", new ArrayList<>(titulares.get(idsEquipos[0])), "titularesVisitante", new ArrayList<>(titulares.get(idsEquipos[1])), "fecha", fecha.getValue() == null ? "" : fecha.getValue().toString(),
                     "hora", hora.getText(), "sede", sede.getText(), "obs", obs.getText(),
                     "formacionLocal", formacionElegida(formLocal), "formacionVisitante", formacionElegida(formVisitante));
+            if (votacion.horas() != null) {
+                datos.put("horasVotacion", votacion.horas());
+            }
             Map<String, Object> cuerpo = mapa("id", n(p, "id"), "datos", datos, "accion", accion, "confirmado", false);
             Map<String, Object> r = app.ejecutar("partido", cuerpo);
             if (!b(r, "ok") && s(r, "codigo").equals("CONFIRMAR")) {
@@ -1551,9 +1526,6 @@ class Dialogos {
         }
     }
 
-    /** Jugadores que inician el partido. */
-    static final int TITULARES = 11;
-
     private static String textoJugador(Map<String, Object> j) {
         return "#" + n(j, "dorsal") + " " + s(j, "nombre") + (s(j, "posicion").isEmpty() ? "" : " · " + s(j, "posicion"));
     }
@@ -1569,13 +1541,13 @@ class Dialogos {
         return t;
     }
 
-    /** Minuto escrito (1 a 130). Si se permite vacío devuelve 0; si no es válido, null. */
+    /** Minuto escrito (1 al maximo de ReglasPartido). Si se permite vacío devuelve 0; si no es válido, null. */
     private static Integer leerMinuto(TextField t, boolean vacioPermitido) {
         if (t.getText().isBlank()) {
             return vacioPermitido ? 0 : null;
         }
         int m = Integer.parseInt(t.getText());
-        return m >= 1 && m <= 130 ? m : null;
+        return m >= 1 && m <= ReglasPartido.MINUTO_MAXIMO ? m : null;
     }
 
     /* ---------------------------------------------------------------- datos de prueba */
@@ -1743,11 +1715,12 @@ class Dialogos {
 
     /**
      * Detalle del partido: resumen, calificaciones [REQ-07], cara a cara, racha y alineaciones. Lo usan
-     * visitante y administrador; solo el visitante puede votar (con el id anónimo de este equipo).
+     * visitante y administrador. No se vota aquí: «Ir a votar» lleva al visitante a «Votaciones».
      */
     void detallePartido(Map<String, Object> p) {
         StackPane contenedor = new StackPane();
         int[] pestana = {0};
+        boolean[] votar = {false}; // «Ir a votar»: la sección se abre cuando esta ventana ya se cerró
         java.util.function.BooleanSupplier[] armar = new java.util.function.BooleanSupplier[1];
         // El administrador toca la foto de un jugador o un escudo; al guardarse, el detalle se vuelve a dibujar ahí mismo.
         VistaDetallePartido.Edicion edicion = !app.puedeEditar() ? null : new VistaDetallePartido.Edicion() {
@@ -1765,15 +1738,15 @@ class Dialogos {
             }
         };
         try {
-            String dispositivo = Dispositivo.id();
-            VistaCalificaciones.Votante votante = (jugador, valor) -> app.ejecutar("calificacion/votar",
-                    mapa("partido", n(p, "id"), "jugador", jugador, "valor", valor, "dispositivo", dispositivo));
             armar[0] = () -> {
-                Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id") + "/" + dispositivo);
+                Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id"));
                 if (detalle == null || m(detalle, "partido") == null) {
                     return false;
                 }
-                Node vista = VistaDetallePartido.construir(detalle, !app.puedeEditar(), votante, edicion);
+                Node vista = VistaDetallePartido.construir(detalle, edicion, app.puedeEditar() ? null : () -> {
+                    votar[0] = true;
+                    contenedor.getScene().getWindow().hide();
+                });
                 if (vista.lookup(".detalle-pestanas") instanceof javafx.scene.control.TabPane pestanas) {
                     pestanas.getSelectionModel().select(pestana[0]);
                     pestanas.getSelectionModel().selectedIndexProperty().addListener((o, a, ahora) -> pestana[0] = ahora.intValue());
@@ -1792,9 +1765,20 @@ class Dialogos {
         }
         Button cerrar = boton("Cerrar", "primario");
         cerrar.setDefaultButton(true);
-        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), contenedor, acciones(cerrar)), 920);
+        // El ancho de la cancha horizontal (960) más los márgenes; nunca más ancho que la pantalla.
+        double ancho = Math.min(1024, javafx.stage.Screen.getPrimary().getVisualBounds().getWidth() - 126);
+        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), contenedor, acciones(cerrar)), ancho);
         cerrar.setOnAction(e -> v.close());
+        // El foco empieza en las pestañas. Si lo ponía JavaFX al mostrar la ventana, además desplazaba el
+        // contenido hacia abajo: el marcador quedaba tapado y había que subir para verlo.
+        Node pestanas = contenedor.lookup(".detalle-pestanas");
+        if (pestanas != null) {
+            pestanas.requestFocus();
+        }
         v.showAndWait();
+        if (votar[0]) {
+            app.mostrarVista("votaciones");
+        }
     }
 
     void datosPrueba() {

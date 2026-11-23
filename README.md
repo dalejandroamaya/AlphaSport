@@ -8,9 +8,11 @@ El código está organizado en cuatro capas: **ui → service → persistence �
 
 | Versión | Cómo se abre | Guarda en |
 |---|---|---|
-| **Escritorio (JavaFX)** | Ventana propia de Java, sin navegador | `datos/` |
-| **Web con Java** | Java abre la interfaz en el navegador (`127.0.0.1:8080`) | `datos/` |
+| **Escritorio (JavaFX)** | Ventana propia de Java, sin navegador | PostgreSQL |
+| **Web con Java** | Java abre la interfaz en el navegador (`127.0.0.1:8080`) | PostgreSQL |
 | **Web sola** | Abrir `web/index.html` | el navegador |
+
+El escritorio y la web con Java necesitan la base de datos: siga los pasos de [README_DB.md](README_DB.md).
 
 Las tres tienen las mismas funciones, el mismo diseño («Estadio bajo reflectores»: vidrio sobre fotos de estadio, focos animados y dorado para los logros, en modo oscuro y claro) y los logos de AlphaSport. El sistema visual está documentado en [DESIGN.md](DESIGN.md).
 
@@ -28,11 +30,11 @@ Las tres tienen las mismas funciones, el mismo diseño («Estadio bajo reflector
 - **XI inicial**: en el partido se marcan los 11 titulares de cada equipo (o toda la plantilla si tiene menos). El botón «Dorsales más bajos» los elige de un clic. En los cambios, «Sale» muestra solo a los que están en la cancha y «Entra» solo a los suplentes que no han entrado. No se pueden anotar cambios sin el XI inicial, y el detalle del partido muestra las alineaciones.
 - Estado **«En juego»**: el marcador, las tarjetas y los cambios se guardan en vivo mientras se juega. Ese partido no cuenta en la tabla hasta que pasa a «Jugado».
 - Las tarjetas ahora pueden llevar **minuto** (opcional).
-- **Detalle del partido** al tocar cualquier partido: **Resumen** (goles, cambios y tarjetas minuto a minuto), **Cara a cara** (incluye campeonatos del historial), **Racha** de los últimos 5 partidos (V/E/D) y **Alineaciones** dibujadas sobre la cancha según la formación y el XI inicial.
+- **Detalle del partido** al tocar cualquier partido: **Resumen** (goles, cambios y tarjetas minuto a minuto), **Cara a cara** (incluye campeonatos del historial), **Racha** de los últimos 5 partidos (V/E/D) y **Alineaciones** sobre una cancha horizontal que se ve completa (local a la izquierda, visitante a la derecha), con la foto, el dorsal y el nombre de los 22 titulares; debajo, formación, cuerpo técnico, cambios y suplentes.
 - **Goles por jugador** en el editor del partido: minuto, autor, asistencia y autogol.
 - **Gestionar partidos** en dos pestañas: «Previa del partido» (fecha, sede, formación y XI) y «Registrar resultados» (marcador, goles, tarjetas y cambios).
 - **Noticias con moderación**: el administrador publica noticias con foto y aprueba o rechaza las que proponen los visitantes; todos pueden comentar y los insultos se cambian por `***` automáticamente.
-- **Calificación de jugadores**: en el detalle de un partido terminado, la pestaña «Calificaciones» muestra la nota de cada jugador que jugó (del 1.0 al 10.0) y destaca al **MVP**. La nota combina la del sistema (goles, asistencias, tarjetas y, para el portero, valla invicta y goles recibidos) con el voto de los visitantes, que pueden calificar del 1 al 10 durante las 24 horas siguientes al final, una vez por jugador desde cada dispositivo.
+- **Calificación de jugadores**: los visitantes votan del 1 al 10 en la sección **Votaciones**, una vez por jugador desde cada dispositivo, mientras la votación del partido está abierta. El administrador decide cuánto dura (12, 24, 48 horas u otro tiempo) en el editor del partido y puede cerrarla cuando quiera. La pestaña «Calificaciones» del detalle muestra la **nota final** (la del sistema promediada con los votos) y destaca al **MVP**.
 - **Llaves solo si el formato las tiene**: en una Liga la sección no aparece (el campeón sale de la tabla).
 - **Liga con divisiones (Liga A, B, C…)**: el administrador elige las divisiones al crear la liga, puede agregar o quitar divisiones y mover equipos antes de iniciar, y con «Nueva temporada» se aplican los ascensos y descensos. El campeón es el primero de la Liga A.
 - Sección **Estadísticas** solo con datos de todo el campeonato: goleadores, asistencias, valla menos vencida y juego limpio (con tarjetas y sanciones). El administrador corrige desde ahí; el visitante solo consulta.
@@ -57,19 +59,22 @@ La versión web sola se abre con doble clic en `web/index.html`, o con **Live Se
 ```
 src/alphasport/
   model/          entidades del dominio
-  persistence/    repositorios (interfaces + archivos .dat)
+  persistence/    repositorios (interfaces y formato anterior en archivos)
+    postgres/     conexión JDBC, DAO y repositorios en PostgreSQL
   service/        casos de uso y reglas del torneo
     formatos/     un formato de campeonato por clase
   ui/             servidor web local, API, presentador y arranque
     escritorio/   ventana JavaFX y su hoja de estilos
-test/alphasport/service/SimulacionFormatos.java
-lib/              JavaFX 21 (base, graphics, controls)
+test/alphasport/    SimulacionFormatos (reglas) y PruebaPostgres (base de datos)
+database/         schema.sql y seed.sql
+lib/              JavaFX 21 (base, graphics, controls) y driver JDBC de PostgreSQL
 web/
   index.html, css/estilos.css, img/ (logos)
   js/model, js/persistence, js/service, js/ui
   pruebas/        prueba automática del motor web
 docs/             arquitectura, formatos y reglas
-datos/            se crea al usar el programa (no se sube a Git)
+datos/imagenes/   fotos y escudos (no se sube a Git)
+db.properties     su conexión a PostgreSQL (no se sube a Git; copie db.properties.example)
 ```
 
 Autores: Diego Alejandro Amaya Verdecia y Ednilson Contreras.

@@ -136,7 +136,7 @@ function crearServicioLocal() {
     return {
       id: p.id, fase: p.fase, grupo: p.grupo || '', grupoNombre: p.grupo ? nombreGrupo(c.fases[p.fase], p.grupo.charCodeAt(0) - 65) : '', ronda: p.ronda, nombreRonda: p.nombreRonda, pierna: p.pierna || 0,
       llave: p.llave || '', eliminatorio: !!p.eliminatorio, local: p.local, visitante: p.visitante,
-      localNombre: m.nombre(p.local), visitanteNombre: m.nombre(p.visitante), estado: p.estado, jugado: P.jugado(p),
+      localNombre: m.nombre(p.local), visitanteNombre: m.nombre(p.visitante), estado: p.estado, jugado: P.jugado(p), walkover: P.walkover(p),
       gl: p.gl, gv: p.gv, pl: p.pl, pv: p.pv, penales: P.tienePenales(p), ganador: P.jugado(p) ? P.ganador(p) : -1,
       fecha: p.fecha || 'Por definir', hora: p.hora || '', sede: p.sede || '', obs: p.obs || '',
       tarjetas: P.tarjetas(p).map(t => Object.assign({ minuto: 0 }, t)),
@@ -144,7 +144,12 @@ function crearServicioLocal() {
       goles: P.goles(p).map(x => Object.assign({}, x)),
       titularesLocal: (p.titularesLocal || []).slice(), titularesVisitante: (p.titularesVisitante || []).slice(),
       formacionLocal: p.formacionLocal || '', formacionVisitante: p.formacionVisitante || '',
-      suspendidos: m.suspendidosEn(p).map(t => ({ jugador: t.jugador, nombre: t.nombre, equipo: t.equipo, equipoNombre: m.nombre(t.equipo) }))
+      suspendidos: m.suspendidosEn(p).map(t => ({ jugador: t.jugador, nombre: t.nombre, equipo: t.equipo, equipoNombre: m.nombre(t.equipo) })),
+      // [REQ-07] Votación del público (mismo JSON que Presentador.partido en Java).
+      votacion: {
+        horas: ReglasVotacion.horas(p), abierta: ReglasVotacion.abierta(c, p, Date.now()), cierraEn: ReglasVotacion.cierraEn(p),
+        cerradaAntes: ReglasVotacion.cerradaAntes(p), votos: P.votos(p).length
+      }
     };
   }
 
@@ -317,6 +322,18 @@ function crearServicioLocal() {
 
   const MINUTO_MAXIMO = 130; // 90 + prórroga + descuento
 
+  // Igual que ReglasPartido.dobleAmarilla en Java: a lo sumo una roja y dos amarillas, y quien tiene dos amarillas tiene su roja.
+  const dobleAmarilla = tarjetas => {
+    const porJugador = new Map();
+    tarjetas.forEach(t => porJugador.set(t.jugador, (porJugador.get(t.jugador) || []).concat(t)));
+    for (const lista of porJugador.values()) {
+      const nombre = lista[0].nombre, rojas = lista.filter(t => t.tipo === 'ROJA').length, amarillas = lista.length - rojas;
+      if (rojas > 1) throw new ErrorRegla(`${nombre} ya fue expulsado en este partido: tiene más de una roja.`);
+      if (amarillas > 2) throw new ErrorRegla(`${nombre} tiene ${amarillas} amarillas: con la segunda ya queda expulsado.`);
+      if (amarillas === 2 && rojas === 0) throw new ErrorRegla(`${nombre} tiene dos amarillas: la segunda es expulsión. Regístrela como roja.`);
+    }
+  };
+
   const TITULARES = 11;
 
   /** XI inicial de un equipo: jugadores de su plantilla, exactamente 11 (o toda la plantilla si tiene menos). */
@@ -455,6 +472,7 @@ function crearServicioLocal() {
         if (!j) throw new ErrorRegla('Una de las tarjetas es de un jugador que ya no existe.');
         return Object.assign({}, t, { jugador: j.id, nombre: j.nombre, dorsal: j.dorsal, minuto, fechas: t.tipo === 'ROJA' ? Math.max(1, t.fechas | 0) : 0 });
       }), p.local);
+      dobleAmarilla(datos.tarjetas);
       ponerTitulares(); // antes de los cambios: se validan contra este XI
       if (d.cambios) datos.cambios = leerCambios(d.cambios, p, datos);
       if (d.goles) datos.goles = leerGoles(d.goles, p); // la carga rápida no envía los goles: se conservan
@@ -479,12 +497,17 @@ function crearServicioLocal() {
     datos.hora = d.hora || '';
     datos.sede = String(d.sede || '').trim();
     datos.obs = String(d.obs || '').trim();
+    if (accion === 'guardar' && 'horasVotacion' in d) { // [REQ-07] cuánto dura la votación (la carga rápida no lo envía)
+      ReglasVotacion.programar(datos, d.horasVotacion, Date.now(), ErrorRegla);
+    }
     if (accion === 'woLocal' || accion === 'woVisitante') {
       const ganador = accion === 'woLocal' ? p.local : p.visitante;
       Motor.walkover(datos, p, ganador, 'W.O. a favor de ' + m.nombre(ganador));
     } else if (accion === 'borrar') {
       P.reiniciar(datos);
     }
+    // Si al editar un W.O. se registra lo que pasó en la cancha, deja de ser W.O.
+    datos.walkover = P.walkover(datos) && P.resultadoDeWalkover(datos);
     if (P.jugado(datos)) {
       const necesita = m.requierePenales(p, datos.gl, datos.gv);
       if (necesita && (datos.pl === SIN_PENALES || datos.pl === datos.pv)) {
@@ -497,7 +520,7 @@ function crearServicioLocal() {
       throw new ErrorRegla('Este cambio modifica quién clasifica o avanza.\nLas rondas y fases generadas después de este partido se borrarán y tendrá que volver a pulsar «Avanzar» para generarlas de nuevo.\n\n¿Desea continuar?', 'CONFIRMAR');
     }
     m.aplicarEdicion(p, datos, afecta);
-    Calificaciones.marcarFinal(p, Date.now()); // [REQ-07] abre (o descarta) la votación de 24 horas
+    ReglasVotacion.marcarFinal(p, Date.now()); // [REQ-07] abre (o descarta) la votación del público
   }
 
   /* ---------------------------------------------------------------- sesión y permisos (igual que ApiControlador) */
@@ -687,9 +710,17 @@ function crearServicioLocal() {
       const p = c.partidos.find(x => x.id === d.partido);
       if (!p) throw new ErrorRegla('El partido no existe.');
       const ahora = Date.now();
-      Calificaciones.votar(c, p, d.jugador, d.valor, d.dispositivo, ahora, ErrorRegla);
+      const cuantos = ReglasVotacion.votar(c, p, d.votos || [{ jugador: d.jugador, valor: d.valor }], d.dispositivo, ahora, ErrorRegla);
       ultimasCalificaciones = Calificaciones.calcular(c, p, ahora, d.dispositivo);
-      return '¡Gracias! Su calificación quedó registrada.';
+      return cuantos === 1 ? '¡Gracias! Su calificación quedó registrada.' : `¡Gracias! Sus ${cuantos} calificaciones quedaron registradas.`;
+    },
+    // [REQ-07] El administrador cierra la votación antes de tiempo.
+    'votacion/cerrar': d => {
+      exigir();
+      const p = c.partidos.find(x => x.id === d.partido);
+      if (!p) throw new ErrorRegla('El partido no existe.');
+      ReglasVotacion.cerrar(p, Date.now(), ErrorRegla);
+      return 'Votación cerrada: las notas finales quedaron definitivas.';
     }
   };
   /** Calificaciones después del último voto (se devuelven en la respuesta para redibujar la pestaña). */
@@ -726,7 +757,9 @@ function crearServicioLocal() {
         semillaMaximoEquipos: DatosPrueba.MAXIMO_EQUIPOS,
         configuracion: configuracionPorDefecto(),
         formaciones: FORMACIONES.slice(),
-        formacionPorDefecto: FORMACION_POR_DEFECTO
+        formacionPorDefecto: FORMACION_POR_DEFECTO,
+        reglasPartido: { titulares: TITULARES, minutoMaximo: MINUTO_MAXIMO },
+        votacion: { opciones: [12, 24, 48], minimo: ReglasVotacion.HORAS_MINIMO, maximo: ReglasVotacion.HORAS_MAXIMO, porDefecto: ReglasVotacion.HORAS_POR_DEFECTO }
       };
     },
     async sesion() { return { ok: true, sesion: sesion() }; },
@@ -739,6 +772,16 @@ function crearServicioLocal() {
     },
     async noticias() {
       try { exigirSesion(); return { ok: true, noticias: noticiasJson() }; } catch (e) { return fallo(e); }
+    },
+    /** [REQ-07] Votaciones abiertas para este navegador (mismo JSON que GET /api/votaciones/{dispositivo}). */
+    async votaciones() {
+      try {
+        exigirSesion();
+        const ahora = Date.now(), dispositivo = Almacen.dispositivo();
+        return { ok: true, votaciones: !c ? [] : ReglasVotacion.abiertas(c, ahora).map(p => ({ partido: partido(p), calificaciones: Calificaciones.calcular(c, p, ahora, dispositivo) })) };
+      } catch (e) {
+        return fallo(e);
+      }
     },
     /** En la web sola la foto ya es una «data URL»: se usa tal cual. */
     urlImagen: imagen => imagen || '',

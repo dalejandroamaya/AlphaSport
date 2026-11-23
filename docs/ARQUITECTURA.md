@@ -20,7 +20,7 @@ AlphaSport está organizado en cuatro capas: **ui → service → persistence �
             ┌──────────── persistence ────────────┐
             │ RepositorioCampeonato (interfaz)     │
             │ RepositorioHistorial  (interfaz)     │
-            │ ArchivoRepositorio... (archivos .dat)│
+            │ PostgresRepositorio... (PostgreSQL)  │
             └──────────────────┬───────────────────┘
                                ▼
             ┌─────────────── model ───────────────┐
@@ -34,12 +34,12 @@ AlphaSport está organizado en cuatro capas: **ui → service → persistence �
 
 | Capa | Paquete | Responsabilidad | No hace |
 |---|---|---|---|
-| **ui** | `ui`, `ui.escritorio` | Mostrar la información y recibir las acciones del usuario. Hay dos interfaces: la ventana de escritorio en JavaFX y la interfaz web que sirve `ServidorWeb`. Ambas usan el mismo `ApiControlador` (traduce cada acción en una llamada al servicio) y el mismo `Presentador` (prepara tablas, llaves, sanciones e historial para la pantalla). | No aplica reglas del torneo ni guarda archivos. |
-| **service** | `service`, `service.formatos` | Casos de uso (`CampeonatoService`: crear, cambiar formato, cancelar, avanzar, editar partidos, equipos, historial, respaldos) y reglas del torneo (`MotorCampeonato`, `TablaPosiciones`, `GeneradorFixture`, `Sanciones`, `ResumenCampeonato`, `Palmares`). Cada formato es una subclase de `FormatoCampeonato`. | No sabe cómo se dibuja la pantalla ni dónde se guardan los datos. |
-| **persistence** | `persistence` | Interfaces `RepositorioCampeonato` y `RepositorioHistorial` con su implementación en archivos binarios (`datos/campeonato.dat` y `datos/historial/`). `PersistenciaException` aísla los errores de almacenamiento. | No conoce las reglas del torneo. |
+| **ui** | `ui`, `ui.escritorio` | Mostrar la información y recibir las acciones del usuario. Hay dos interfaces: la ventana de escritorio en JavaFX y la interfaz web que sirve `ServidorWeb`. Ambas usan el mismo `ApiControlador`, que busca la ruta en los módulos `Rutas*` (sesión, campeonato, equipos, partidos, votación y noticias), exige su `Permiso` y llama al servicio; `FabricaAplicacion` arma todo y el mismo `Presentador` (prepara tablas, llaves, sanciones e historial para la pantalla). | No aplica reglas del torneo ni guarda archivos. |
+| **service** | `service`, `service.formatos` | Casos de uso, por cohesión: `CampeonatoService` (crear, formato, avanzar, temporadas, divisiones), `EquiposService`, `PartidosService`, `VotacionService` e `HistorialService` (historial y respaldos). Comparten el campeonato en curso y sus transacciones en `ContextoCampeonato` y reglas del torneo (`MotorCampeonato`, `TablaPosiciones`, `GeneradorFixture`, `Sanciones`, `ResumenCampeonato`, `Palmares`). Cada formato es una subclase de `FormatoCampeonato`. | No sabe cómo se dibuja la pantalla ni dónde se guardan los datos. |
+| **persistence** | `persistence` | Interfaces `RepositorioCampeonato`, `RepositorioHistorial` y `RepositorioNoticias`. El programa usa su versión en PostgreSQL; la de archivos queda para las pruebas y para migrar datos anteriores. `PersistenciaException` aísla los errores de almacenamiento. | No conoce las reglas del torneo. |
 | **model** | `model` | Entidades del dominio y enumeraciones. | No calcula tablas ni decide quién avanza. |
 
-Para usar una base de datos (Fase 3) basta con crear, por ejemplo, `BdRepositorioCampeonato implements RepositorioCampeonato` y entregarla al `CampeonatoService` en `Arranque`; el servicio y las interfaces no cambian.
+La base de datos (PostgreSQL) está en `persistence.postgres`: `FabricaAplicacion` entrega `PostgresRepositorioCampeonato`, `PostgresRepositorioHistorial` y `PostgresRepositorioNoticias` a los servicios. Ver «Base de datos» al final y [README_DB.md](../README_DB.md).
 
 ## Capas en la versión web (`web/js/`)
 
@@ -116,7 +116,7 @@ classDiagram
 
 - `model.Rol` dice qué puede hacer cada rol (`puedeEditar()`); `model.Usuario` es quien inició sesión.
 - `service.AutenticacionService` valida las cuentas (hoy en memoria; en la Fase 3 se cambia por un repositorio).
-- **La regla real está en `ui.ApiControlador`**: guarda `usuarioActual` y, antes de ejecutar cualquier acción, llama a `exigirAdministrador()`. Solo `login`, `login/visitante` y `logout` son públicas (lista blanca). Con sesión, el visitante solo puede proponer noticias, comentar y calificar jugadores (`RUTAS_VISITANTE`). `ServidorWeb` protege aparte el respaldo y el cierre del programa.
+- **La regla real está en el servidor**: cada ruta de los módulos `Rutas*` declara el `Permiso` que exige y `ApiControlador` lo revisa antes de ejecutarla; cada `Rol` es un conjunto de permisos. Solo `login`, `login/visitante` y `logout` son públicas. Cada navegador tiene su sesión (`SesionService`, cookie `HttpOnly` y `SameSite`); el respaldo y la exportación también pasan por el controlador.
 - Las interfaces solo **ocultan**: escritorio con `Aplicacion.puedeEditar()`, `soloAdmin(...)` y `puedeVer(vista)`; web con el atributo `data-solo-admin` y `puedeVer()` en `app.js`.
 
 ## Detalle de partido
@@ -128,7 +128,7 @@ Al tocar un partido, el visitante ve un detalle de solo lectura con cuatro pesta
 | Resumen | Cifras por equipo (goles, cambios, amarillas, rojas) y la línea de tiempo con goles, cambios y tarjetas | Sale del JSON del partido (`goles`, `cambios`, `tarjetas`); no se calcula nada nuevo |
 | Cara a cara | Victorias de cada uno, empates y los últimos 10 enfrentamientos | Partidos jugados **antes** de este, del campeonato actual y del historial. Los equipos se cruzan por nombre. |
 | Racha | Últimos 5 resultados de cada equipo: 🟩 V, 🟨 E, 🟥 D | Mismo origen; el más reciente a la izquierda |
-| Alineaciones | Cancha con el XI de cada equipo según su formación, el minuto en que salió cada titular y la lista de cambios | Portero atrás; el resto por posición (defensa → medio → ataque) y lado (izquierda → derecha). Sin XI: casillas «?». Sin formación: 4-4-2 «por defecto». Reutiliza el XI inicial y los cambios que registra el administrador: no hay una segunda lista de alineaciones. |
+| Alineaciones | Cancha **horizontal** (local a la izquierda, visitante a la derecha) con la foto, el dorsal y el nombre del XI según la formación. Se ajusta a la ventana para verse completa. Debajo: formación, estado, cuerpo técnico, cambios y suplentes (`VistaAlineaciones` / `cancha.js`) | Portero atrás; el resto por posición (defensa → medio → ataque) y lado (izquierda → derecha). Sin XI: casillas «?». Sin formación: 4-4-2 «por defecto». Reutiliza el XI inicial y los cambios que registra el administrador: no hay una segunda lista de alineaciones. |
 
 | Capa | Java | Web sola |
 |---|---|---|
@@ -196,12 +196,12 @@ Sección **Noticias** (la ven los dos roles):
 
 - **Filtro anti-obscenidades** (`FiltroPalabras` / `FiltroPalabras` en `noticias.js`): antes de guardar un comentario, cada palabra de la lista negra se cambia por `***`. Reconoce mayúsculas, tildes, letras estiradas («idiotaaa»), plurales y números o símbolos en lugar de letras («1d10t4», «m@lparidos»), sin censurar palabras inocentes parecidas («pera», «cálculo»). La lista está en los dos archivos: si se agrega una palabra, se agrega en ambos.
 - **Fotos:** la interfaz envía la foto como *data URL*. El servicio revisa que de verdad sea JPG, PNG, GIF o WEBP (por sus primeros bytes, no por el nombre) y de máximo 5 MB. En Java se copia a `datos/imagenes/` y `Noticia.imagenRuta` guarda su nombre; la web con Java la pide en `/api/imagen/{nombre}`, que solo entrega fotos de noticias publicadas (o pendientes al administrador) y nunca archivos sueltos. En la web sola la foto ya va reducida por el navegador (máx. 1280 px, JPEG) y se guarda dentro de la noticia.
-- **Almacenamiento sin base de datos:** `NoticiasService` trabaja con una **lista en memoria**. El repositorio solo la conserva: `RepositorioNoticiasEnMemoria` (se pierde al cerrar) o `ArchivoRepositorioNoticias` (`datos/noticias.dat`, como el campeonato). Se elige en `Arranque.noticias()`. En la web sola, `Almacen.noticias` (navegador).
+- **Almacenamiento:** `NoticiasService` no guarda listas: cada consulta (publicadas o pendientes) y cada cambio va a `RepositorioNoticias`, que en el programa es `PostgresRepositorioNoticias`. Las fotos siguen en `datos/imagenes/` (`ImagenesEnDisco`).
 
 | Capa | Java | Web sola |
 |---|---|---|
 | model | `Noticia` (id, titulo, cuerpo, autor, rolAutor, fecha, imagenRuta, aprobado, comentarios), `Comentario` | (objetos en `noticias.js`) |
-| persistence | `RepositorioNoticias` (interfaz), `RepositorioNoticiasEnMemoria`, `ArchivoRepositorioNoticias` | `Almacen.noticias` en `almacen.js` |
+| persistence | `RepositorioNoticias` (interfaz), `PostgresRepositorioNoticias`; `RepositorioNoticiasEnMemoria` (pruebas) | `Almacen.noticias` en `almacen.js` |
 | service | `NoticiasService`, `FiltroPalabras` | `crearNoticiasLocal()` y `FiltroPalabras` en `noticias.js` |
 | ui | `ApiControlador`: `consultar("noticias")` y rutas `noticia/proponer`, `noticia/comentar` (visitante o admin), `noticia/guardar`, `noticia/aprobar`, `noticia/eliminar`, `comentario/eliminar` (solo admin); `Presentador.noticias`; `ServidorWeb` (`/api/imagen/`); escritorio: `Aplicacion.vistaNoticias()` y `Dialogos.noticia()` | `servicioLocal.js` (mismas rutas y permisos), `servicioRemoto.js`, `renderNoticias()` y `#dlgNoticia` en `app.js` |
 
@@ -223,35 +223,36 @@ Para el administrador, la sección **Partidos** se llama **Gestionar partidos** 
 
 ## [REQ-07] Calificación de jugadores por partido (sistema + público)
 
-Pestaña **Calificaciones** en el detalle de un partido terminado (la ven los dos roles). Cada jugador que jugó —titular, ingresado de cambio o con un gol, asistencia o tarjeta registrados— tiene una nota de 1.0 a 10.0:
+Pestaña **Calificaciones** en el detalle de un partido terminado (la ven los dos roles): solo la **nota final** de cada jugador y el MVP. El visitante vota en su sección **Votaciones**, que lista los partidos con la votación abierta. Cada jugador que jugó —titular, ingresado de cambio o con un gol, asistencia o tarjeta registrados— tiene una nota de 1.0 a 10.0:
 
 | Parte | Regla |
 |---|---|
 | **Nota del sistema** | 6.0 por jugar; gol +1.0, asistencia +0.5, amarilla −0.5, roja −2.0. Portero: +1.5 con la valla invicta y −0.3 por cada gol recibido. Siempre entre 1.0 y 10.0. El autogol no suma |
-| **Voto del público** | Solo visitantes, del 1 al 10, durante las **24 horas** siguientes a la hora en que el partido quedó «Jugado» (`Partido.finalizadoEn`). Un voto por jugador desde cada dispositivo |
+| **Voto del público** | Solo visitantes, del 1 al 10, mientras la votación está abierta. Un voto por jugador desde cada dispositivo. Se envían varios a la vez: todos o ninguno |
+| **Tiempo de votación** | Se abre cuando el partido queda «Jugado» (`Partido.finalizadoEn`) y dura las horas que programe el administrador en el editor del partido: 12, 24, 48 u otro valor de 1 a 720 (24 si no elige). «Cerrar votación ahora» la cierra antes; elegir otro tiempo la reabre, si el nuevo cierre es futuro |
 | **Nota final** | Sin votos = la del sistema. Con votos = (sistema + promedio del público) / 2, redondeada a 1 decimal (mitad hacia arriba: 8.25 → 8.3) |
 | **MVP** | La nota final más alta. Empates: más goles, más asistencias, mejor nota del sistema, titular, local y dorsal más bajo |
 
-- **Todo en memoria, dentro del partido:** `Partido` guarda `finalizadoEn` y la lista de `VotoJugador` (jugador, valor, dispositivo, fecha). Se guardan con el campeonato (`campeonato.dat` / navegador) y se van con él, así los votos de un campeonato nunca se mezclan con otro. Los archivos anteriores siguen abriendo: sus partidos jugados quedan como «sin registro» (solo nota del sistema).
-- **La nota se calcula al consultar** (`CalculadoraCalificaciones.calcular()`): si el administrador corrige un gol o una tarjeta, la nota cambia sola. El resultado, `CalificacionesPartido`, es un `record` de solo lectura: no es un modelo porque nunca se guarda (igual que `DetallePartido` y `EstadisticasCampeonato`). Así cada clase tiene una sola responsabilidad: la calculadora tiene las reglas y el record, el resultado. Corregir el resultado conserva la hora de cierre y los votos; borrarlo (volver a pendiente) los descarta. Un W.O. no tiene calificaciones.
-- **Dispositivo:** identificador anónimo al azar (no es un dato personal). Web: `Almacen.dispositivo()` en el navegador. Escritorio: `Dispositivo.id()` en las preferencias del usuario de Windows. Viaja en `GET /api/partido/{id}/{dispositivo}` (para mostrar «Su voto») y en `calificacion/votar`.
-- **Permisos:** `calificacion/votar` está en `RUTAS_VISITANTE`; además el administrador recibe `PERMISO` («el administrador no vota»): ya influye en la nota del sistema al registrar goles y tarjetas.
+- **Dentro del partido:** `Partido` guarda `finalizadoEn`, `horasVotacion`, `votacionCerradaEn` y la lista de `VotoJugador` (jugador, valor, dispositivo, fecha). Se guardan con el campeonato (`campeonato.dat` / navegador) y se van con él, así los votos de un campeonato nunca se mezclan con otro. Los archivos anteriores siguen abriendo: sus partidos jugados quedan como «sin registro» (solo nota del sistema).
+- **La nota se calcula al consultar** (`CalculadoraCalificaciones.calcular()`): si el administrador corrige un gol o una tarjeta, la nota cambia sola. El resultado, `CalificacionesPartido`, es un `record` de solo lectura: no es un modelo porque nunca se guarda (igual que `DetallePartido` y `EstadisticasCampeonato`). Así cada clase tiene una sola responsabilidad: la calculadora tiene las reglas y el record, el resultado. Corregir el resultado conserva la hora del final y los votos; borrarlo (volver a pendiente) los descarta, pero no las horas programadas. Un W.O. no tiene calificaciones.
+- **Dispositivo:** identificador anónimo al azar (no es un dato personal). Web: `Almacen.dispositivo()` en el navegador. Escritorio: `Dispositivo.id()` en las preferencias del usuario de Windows. Viaja en `GET /api/votaciones/{dispositivo}` (para mostrar «Su voto») y en `calificacion/votar`.
+- **Permisos:** `calificacion/votar` está en `RUTAS_VISITANTE`; además el administrador recibe `PERMISO` («el administrador no vota»): ya influye en la nota del sistema al registrar goles y tarjetas. `votacion/cerrar` y las horas (`partido`, campo `horasVotacion`) son solo del administrador. La sección «Votaciones» es solo del visitante (`VISTAS_SOLO_VISITANTE`).
 
 | Capa | Java | Web sola |
 |---|---|---|
-| model | **Nuevo** `VotoJugador`; `Partido.finalizadoEn` y `getVotos()` | `P.votos()` y `P.reiniciar()` en `modelo.js` |
-| persistence | (sin cambios: va dentro del campeonato) | `Almacen.dispositivo()` en `almacen.js` |
-| service | **Nuevos** `CalculadoraCalificaciones` (reglas: nota, ventana de 24 h, votar, MVP) y `CalificacionesPartido` (record con el resultado); `CampeonatoService.calificaciones()`, `votarJugador()` y la hora de cierre en `guardarPartido()` (con `Clock` para las pruebas) | **Nuevo** `calificaciones.js` (mismas reglas y JSON); `servicioLocal.js`: ruta `calificacion/votar` y `calificaciones` en el detalle |
-| ui · API | `ApiControlador` (ruta y permisos, `partido/{id}/{dispositivo}`), `Presentador.calificaciones()` | `servicioRemoto.js` (envía el dispositivo) |
-| ui · pantallas | **Nuevos** `VistaCalificaciones` y `Dispositivo`; `VistaDetallePartido` (pestaña) y `Dialogos.detallePartido()` (votar); `escritorio.css` | `index.html` (pestaña y script), `app.js` (`calificacionesHtml()`, `votarJugador()`), `estilos.css` |
-| pruebas | `SimulacionFormatos.probarCalificaciones()` | `web/pruebas/simulacion.js` |
+| model | `VotoJugador`; `Partido`: `finalizadoEn`, `horasVotacion`, `votacionCerradaEn` y `getVotos()` | `P.votos()`, `P.datos()` y `P.reiniciar()` en `modelo.js` |
+| persistence | `PartidoDAO` (`partidos`, `votos_publico`) y `CalificacionDAO` (`calificaciones_partido`) | `Almacen.dispositivo()` en `almacen.js` |
+| service | `ReglasVotacion` (tiempo, cierre y votos), `CalculadoraCalificaciones` (nota y MVP) y `CalificacionesPartido` (record con el resultado); `CampeonatoService`: `calificaciones()`, `votarJugadores()`, `votacionesAbiertas()`, `programarVotacion()`, `cerrarVotacion()` (con `Clock` para las pruebas) | `reglasVotacion.js` y `calificaciones.js` (mismas reglas y JSON); `servicioLocal.js`: rutas `calificacion/votar` y `votacion/cerrar`, y `votaciones()` |
+| ui · API | `ApiControlador` (rutas y permisos), `Presentador`: `calificaciones()`, `votaciones()` y `votacion` en cada partido | `servicioRemoto.js` (envía el dispositivo) |
+| ui · pantallas | `VistaVotaciones` (visitante), `EditorVotacion` (administrador), `VistaCalificaciones` (nota final), `TiempoVotacion` (textos) y `Dispositivo` | `votaciones.js` (las tres pantallas) |
+| pruebas | `SimulacionFormatos.probarCalificaciones()` y `probarPreviaYResultado()` (por la API) | `web/pruebas/simulacion.js` |
 
 ### Cómo agregar algo nuevo sin romper nada
 
 1. **Dato nuevo de un partido** (por ejemplo, tiros al arco): campo en `Partido` con getter que nunca devuelve `null` (archivos viejos), copiarlo en `copiarDatosDe` y limpiarlo en `reiniciarResultado`; leerlo y validarlo en `ApiControlador.guardarPartido`; enviarlo en `Presentador.partido`; repetir en `modelo.js` (`P.datos`, `P.reiniciar`) y `servicioLocal.js`. Se muestra en `VistaDetallePartido.resumen` / `resumenPartidoHtml`.
 2. **Estadística global nueva:** un método en `EstadisticasCampeonato` (y su gemelo en `estadisticas.js`), un campo en `Presentador.estadisticas` y una pestaña más en la vista.
 3. **Permisos:** la regla está en `ApiControlador` (Java) y en `servicioLocal.js` (web sola). Toda acción que modifica datos es solo para el administrador salvo las rutas de la lista blanca. Las interfaces solo ocultan.
-4. **Base de datos (Fase 3):** solo cambia la capa `persistence`; `Gol` ya es una entidad propia lista para su tabla.
+4. **Base de datos:** un dato nuevo del modelo necesita su columna en `database/schema.sql` y su lectura y escritura en el DAO que corresponda.
 
 ## Conceptos de POO aplicados
 
@@ -292,3 +293,24 @@ flowchart LR
     D -. Archivo .-> K[Cambiar formato o cancelar]
     K --> C
 ```
+## Base de datos (PostgreSQL)
+
+```
+ApiControlador ──► CampeonatoService ──► RepositorioCampeonato ──► PostgresRepositorioCampeonato
+                   NoticiasService   ──► RepositorioNoticias   ──► PostgresRepositorioNoticias
+                                                                     │ ConexionDB (transacciones)
+                                                                     ▼
+                     TorneoDAO · EquipoDAO · FaseDAO · PartidoDAO · CalificacionDAO · ConsultasDAO
+```
+
+- **`ConexionDB`** lee `db.properties`, mantiene una conexión y ejecuta cada trabajo en una transacción: confirma o deshace todo. Traduce los errores de PostgreSQL a mensajes entendibles.
+- **`CampeonatoDAO`** reparte el campeonato en sus tablas y escribe solo lo que cambió: compara la huella (SHA-256) de cada equipo, fase y partido con la última guardada. Los `id` de las filas no cambian al guardar, así otras tablas (votos, Fantasy) pueden apuntar a ellos.
+- **Reglas en Java, datos en SQL:** el motor del torneo sigue igual (tablas, desempates, llaves, nota híbrida). El servicio trabaja con el campeonato que leyó de la base y lo guarda en cada acción.
+- **Dos programas a la vez:** `torneos.version` sube con cada guardado. `CampeonatoService.sincronizar()` vuelve a leer si cambió; si los dos guardan al mismo tiempo, el segundo no pisa al primero.
+- **Si no se puede guardar**, el servicio descarta el cambio y vuelve a lo que está en la base.
+- **Historial:** cada campeonato archivado es una copia completa (`ARCHIVADO`) que no cambia con el actual.
+- **`ConsultasDAO`** lee las vistas (tabla de posiciones, última alineación, votaciones activas y notas). La prueba comprueba que dan lo mismo que los cálculos del programa.
+- **Seguridad:** todas las consultas usan parámetros; la contraseña solo está en `db.properties` (ignorado por Git).
+- **Pendiente para el siguiente sprint:** el login sigue en `AutenticacionService`; la tabla `usuarios` ya existe.
+
+Prueba: `PruebaPostgres` (en un esquema temporal que se borra al final).

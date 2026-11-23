@@ -10,32 +10,31 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
- * Guarda las noticias en datos/noticias.dat y las fotos en datos/imagenes/ (sin base de
- * datos, igual que el campeonato). Las fotos se copian a esa carpeta con un nombre propio,
- * asi la noticia no se rompe si la foto original se mueve o se borra.
+ * Noticias en datos/noticias.dat (las fotos estan en datos/imagenes/: {@link ImagenesEnDisco}). Es el formato anterior a PostgreSQL: se conserva
+ * para poder pasar esos datos a la base de datos.
  */
-public class ArchivoRepositorioNoticias implements RepositorioNoticias {
+public class ArchivoRepositorioNoticias extends RepositorioNoticiasEnMemoria {
 
     private final Path archivo;
-    private final Path carpetaImagenes;
 
-    public ArchivoRepositorioNoticias(Path carpetaDatos) {
+    public ArchivoRepositorioNoticias(Path carpetaDatos) throws PersistenciaException {
         this.archivo = carpetaDatos.resolve("noticias.dat");
-        this.carpetaImagenes = carpetaDatos.resolve("imagenes");
+        noticias.addAll(leer());
+    }
+
+    /** Todas las noticias del archivo, aprobadas o no, en el orden en que se crearon. */
+    public List<Noticia> todas() {
+        return List.copyOf(noticias);
     }
 
     @Override
-    public void guardar(List<Noticia> noticias) throws PersistenciaException {
+    protected void alCambiar() throws PersistenciaException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ObjectOutputStream salida = new ObjectOutputStream(bytes)) {
             salida.writeObject(new ArrayList<>(noticias));
-        } catch (IOException e) {
-            throw new PersistenciaException("No se pudieron convertir las noticias", e);
-        }
-        try {
+            salida.flush();
             Files.createDirectories(archivo.getParent());
             Files.write(archivo, bytes.toByteArray());
         } catch (IOException e) {
@@ -43,9 +42,8 @@ public class ArchivoRepositorioNoticias implements RepositorioNoticias {
         }
     }
 
-    @Override
     @SuppressWarnings("unchecked")
-    public List<Noticia> cargar() throws PersistenciaException {
+    private List<Noticia> leer() throws PersistenciaException {
         if (!Files.exists(archivo)) {
             return new ArrayList<>();
         }
@@ -54,48 +52,5 @@ public class ArchivoRepositorioNoticias implements RepositorioNoticias {
         } catch (IOException | ClassNotFoundException | ClassCastException e) {
             throw new PersistenciaException("No se pudo leer " + archivo, e);
         }
-    }
-
-    @Override
-    public String guardarImagen(byte[] datos, String extension) throws PersistenciaException {
-        String nombre = "noticia-" + UUID.randomUUID().toString().substring(0, 8) + "." + extension;
-        try {
-            Files.createDirectories(carpetaImagenes);
-            Files.write(carpetaImagenes.resolve(nombre), datos);
-        } catch (IOException e) {
-            throw new PersistenciaException("No se pudo guardar la foto", e);
-        }
-        return nombre;
-    }
-
-    @Override
-    public byte[] leerImagen(String nombre) throws PersistenciaException {
-        Path ruta = rutaSegura(nombre);
-        try {
-            return ruta != null && Files.isRegularFile(ruta) ? Files.readAllBytes(ruta) : null;
-        } catch (IOException e) {
-            throw new PersistenciaException("No se pudo leer la foto", e);
-        }
-    }
-
-    @Override
-    public void eliminarImagen(String nombre) throws PersistenciaException {
-        Path ruta = rutaSegura(nombre);
-        try {
-            if (ruta != null) {
-                Files.deleteIfExists(ruta);
-            }
-        } catch (IOException e) {
-            throw new PersistenciaException("No se pudo borrar la foto", e);
-        }
-    }
-
-    /** Solo nombres de la carpeta de imagenes (nada de «../»). */
-    private Path rutaSegura(String nombre) {
-        if (nombre == null || nombre.isBlank()) {
-            return null;
-        }
-        Path ruta = carpetaImagenes.resolve(nombre).normalize();
-        return ruta.startsWith(carpetaImagenes.normalize()) ? ruta : null;
     }
 }

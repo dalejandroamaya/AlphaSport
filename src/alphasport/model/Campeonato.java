@@ -82,6 +82,7 @@ public class Campeonato implements Serializable {
                 Jugador copia = new Jugador(j.getNombre(), j.getDocumento(), j.getDorsal(), j.getPosicion());
                 copia.setId(nuevoIdJugador());
                 copia.setFoto(j.getFoto());
+                copia.setCodigoPersona(j.getCodigoPersona()); // es la misma persona
                 nuevo.agregarJugador(copia);
             }
         }
@@ -298,6 +299,25 @@ public class Campeonato implements Serializable {
             }
         }
         return false;
+    }
+
+    // Contadores de ids internos: se guardan para no reutilizar el de algo que ya se borro.
+    public int getSiguienteIdEquipo() {
+        return siguienteIdEquipo;
+    }
+
+    public int getSiguienteIdPartido() {
+        return siguienteIdPartido;
+    }
+
+    public int getSiguienteIdJugador() {
+        return siguienteIdJugador;
+    }
+
+    public void restaurarContadores(int equipo, int partido, int jugador) {
+        siguienteIdEquipo = equipo;
+        siguienteIdPartido = partido;
+        siguienteIdJugador = jugador;
     }
 
     public long getSemilla() {

@@ -1,0 +1,7 @@
+# Plantilla de conexion a PostgreSQL.
+# Copie este archivo como db.properties (Git lo ignora) y escriba su propia contrasena.
+db.host=localhost
+db.port=5432
+db.name=alphasport_db
+db.user=postgres
+db.password=SU_CONTRASENA_AQUI

@@ -1,6 +1,7 @@
 package alphasport.service;
 
 import alphasport.model.Campeonato;
+import alphasport.model.DirectorTecnico;
 import alphasport.model.Equipo;
 import alphasport.model.Formacion;
 import alphasport.model.Jugador;
@@ -53,8 +54,9 @@ public class DetallePartido {
     public record Puesto(int linea, int orden, Jugador jugador) {
     }
 
-    /** Alineacion de un equipo: formacion usada y jugadores por linea. */
-    public record Alineacion(String formacion, boolean formacionElegida, boolean confirmada, List<List<Puesto>> lineas) {
+   
+    public record Alineacion(String formacion, boolean formacionElegida, boolean confirmada, List<List<Puesto>> lineas,
+            List<Jugador> suplentes, DirectorTecnico directorTecnico) {
     }
 
     private final Partido partido;
@@ -81,12 +83,6 @@ public class DetallePartido {
                 partido.getTitularesVisitante());
     }
 
-    /* ---------------------------------------------------------------- partidos anteriores */
-
-    /**
-     * Partidos jugados antes del consultado, del mas reciente al mas antiguo: primero los
-     * del campeonato actual (en orden del fixture) y luego los del historial (por fecha de archivo).
-     */
     private static List<Registro> partidosPrevios(Campeonato actual, List<Campeonato> historial, Partido partido) {
         List<Registro> lista = new ArrayList<>();
         List<Partido> delActual = actual.getPartidos();
@@ -118,12 +114,6 @@ public class DetallePartido {
                 ganador < 0 ? null : c.nombreDe(ganador)));
     }
 
-    /* ---------------------------------------------------------------- alineaciones */
-
-    /**
-     * Ubica el XI en la cancha: el portero en la linea 0 y el resto ordenado de atras
-     * hacia adelante por su posicion (defensa, medio, ataque) y de izquierda a derecha.
-     */
     static Alineacion alineacion(Equipo equipo, String textoFormacion, List<Integer> titulares) {
         Formacion elegida = Formacion.desdeTexto(textoFormacion);
         Formacion formacion = elegida != null ? elegida : Formacion.POR_DEFECTO;
@@ -157,7 +147,10 @@ public class DetallePartido {
             }
             lineas.add(puestos);
         }
-        return new Alineacion(formacion.getTexto(), elegida != null, confirmada, lineas);
+        List<Jugador> suplentes = !confirmada ? List.of() : equipo.getJugadores().stream().filter(j -> !xi.contains(j))
+                .sorted(Comparator.comparingInt(Jugador::getDorsal)).toList();
+        return new Alineacion(formacion.getTexto(), elegida != null, confirmada, lineas, suplentes,
+                equipo == null ? null : equipo.getDirectorTecnico());
     }
 
     /** 0 portero, 1 defensa, 2 mediocampo, 3 ataque (segun Jugador.GRUPOS_POSICIONES). */
@@ -184,7 +177,6 @@ public class DetallePartido {
         return a != null && b != null && a.trim().equalsIgnoreCase(b.trim());
     }
 
-    /* ---------------------------------------------------------------- consultas */
 
     public Partido getPartido() {
         return partido;

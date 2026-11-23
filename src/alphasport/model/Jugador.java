@@ -20,6 +20,9 @@ public class Jugador extends Persona {
     private int dorsal;
     private String posicion;
     private String foto; // nombre de la foto tipo cedula (datos/imagenes); null o "" = sin foto (se ve «NN»)
+    // La misma persona en todas las temporadas y copias del historial. Es un UUID para que un respaldo de otra
+    // base nunca se confunda con alguien de esta.
+    private String codigoPersona = nuevoCodigo();
 
     public Jugador() {
     }
@@ -61,6 +64,28 @@ public class Jugador extends Persona {
 
     public void setFoto(String foto) {
         this.foto = foto == null ? "" : foto;
+    }
+
+    /** Codigo de la persona (UUID): no cambia aunque el jugador pase a otra temporada o se edite. */
+    public String getCodigoPersona() {
+        return codigoPersona;
+    }
+
+    /** null o vacio = una persona nueva. */
+    public void setCodigoPersona(String codigoPersona) {
+        this.codigoPersona = codigoPersona == null || codigoPersona.isBlank() ? nuevoCodigo() : codigoPersona;
+    }
+
+    public static String nuevoCodigo() {
+        return java.util.UUID.randomUUID().toString();
+    }
+
+    /** Los archivos anteriores no traen el codigo: cada jugador queda como una persona nueva. */
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        if (codigoPersona == null || codigoPersona.isBlank()) {
+            codigoPersona = nuevoCodigo();
+        }
     }
 
     @Override

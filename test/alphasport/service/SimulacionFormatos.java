@@ -60,6 +60,10 @@ public class SimulacionFormatos {
         probarWalkoverYCampeones();
         probarNoticias();
         probarPreviaYResultado();
+        probarReglasPartido();
+        probarPermisos();
+        probarServidorWeb();
+        probarClaves();
         probarCalificaciones();
         probarFotos();
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
@@ -250,7 +254,7 @@ public class SimulacionFormatos {
         return "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(b.toByteArray());
     }
 
-    /** Reloj que la prueba puede adelantar (para la ventana de 24 horas de la votacion). */
+    /** Reloj que la prueba puede adelantar (para el cierre de la votacion). */
     private static final class RelojPrueba extends java.time.Clock {
         long ahora = 1_800_000_000_000L;
 
@@ -277,21 +281,23 @@ public class SimulacionFormatos {
 
     /**
      * [REQ-07] Calificaciones: nota del sistema (base, goles, asistencias, tarjetas, valla invicta y goles
-     * recibidos del portero), limites 1.0 y 10.0, votos del publico solo dentro de 24 horas y una vez por
-     * dispositivo, nota final hibrida redondeada a 1 decimal, MVP, y que borrar el resultado descarte la votacion.
+     * recibidos del portero), limites 1.0 y 10.0, votos del publico solo mientras la votacion esta abierta y una
+     * vez por dispositivo, tiempo de votacion configurable y cierre manual, nota final hibrida redondeada a 1
+     * decimal, MVP, y que borrar el resultado descarte la votacion.
      */
     private static void probarCalificaciones() {
         boolean correcto;
         try {
             // Reglas sueltas y limites.
             List<String> d = new ArrayList<>();
-            boolean reglas = CalculadoraCalificaciones.notaSistema(false, 0, 0, 0, 0, 0, d) == 6.0
-                    && CalculadoraCalificaciones.notaSistema(false, 2, 1, 1, 0, 0, d) == 8.0     // 6 + 2 + 0.5 - 0.5
-                    && CalculadoraCalificaciones.notaSistema(true, 0, 0, 0, 0, 0, d) == 7.5      // valla invicta
-                    && CalculadoraCalificaciones.notaSistema(true, 0, 0, 0, 0, 3, d) == 5.1      // 6 - 0.9
-                    && CalculadoraCalificaciones.notaSistema(false, 0, 0, 0, 3, 0, d) == 1.0     // 6 - 6 -> minimo 1.0
-                    && CalculadoraCalificaciones.notaSistema(false, 6, 0, 0, 0, 0, d) == 10.0    // 6 + 6 -> maximo 10.0
-                    && CalculadoraCalificaciones.redondear((7.0 + 9.5) / 2) == 8.3;             // 8.25 -> 8.3
+            ReglaPuntuacion nota = PuntuacionNotaPartido.REGLAS;
+            boolean reglas = nota.puntuar(new DesempenoJugador(false, true, 0, 0, 0, 0, 0), d) == 6.0
+                    && nota.puntuar(new DesempenoJugador(false, true, 2, 1, 1, 0, 0), d) == 8.0     // 6 + 2 + 0.5 - 0.5
+                    && nota.puntuar(new DesempenoJugador(true, true, 0, 0, 0, 0, 0), d) == 7.5      // valla invicta
+                    && nota.puntuar(new DesempenoJugador(true, true, 0, 0, 0, 0, 3), d) == 5.1      // 6 - 0.9
+                    && nota.puntuar(new DesempenoJugador(false, true, 0, 0, 0, 3, 0), d) == 1.0     // 6 - 6 -> minimo 1.0
+                    && nota.puntuar(new DesempenoJugador(false, true, 6, 0, 0, 0, 0), d) == 10.0    // 6 + 6 -> maximo 10.0
+                    && PuntuacionNotaPartido.redondear((7.0 + 9.5) / 2) == 8.3;                    // 8.25 -> 8.3
 
             RelojPrueba reloj = new RelojPrueba();
             CampeonatoService servicio = new CampeonatoService(
@@ -301,7 +307,7 @@ public class SimulacionFormatos {
             cfg.setSorteoAleatorio(false);
             servicio.crear("Notas", TipoFormato.LIGA, cfg, false);
             for (int i = 1; i <= 4; i++) {
-                servicio.agregarEquipo("N" + i);
+                servicio.equipos().agregarEquipo("N" + i);
             }
             Campeonato c = servicio.getCampeonato();
             for (alphasport.model.Equipo e : new ArrayList<>(c.getEquipos())) {
@@ -310,7 +316,7 @@ public class SimulacionFormatos {
                     plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, "C" + e.getId() + "-" + dorsal,
                             dorsal, dorsal == 1 ? "Portero" : "Mediocampista central"));
                 }
-                servicio.guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
+                servicio.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
             }
             servicio.avanzar();
             Partido p = c.getPartidos().get(0);
@@ -328,9 +334,9 @@ public class SimulacionFormatos {
                     new alphasport.model.Gol(p.getIdLocal(), 70, loc.get(8), false, null))));
             datos.setTarjetas(new ArrayList<>(List.of(new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(3), alphasport.model.Tarjeta.AMARILLA, 0),
                     new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(4), alphasport.model.Tarjeta.ROJA, 1))), p.getIdLocal());
-            servicio.guardarPartido(p.getId(), datos, false);
+            servicio.partidos().guardarPartido(p.getId(), datos, false);
             long cierre = reloj.ahora;
-            CalificacionesPartido n = servicio.calificaciones(p.getId(), null);
+            CalificacionesPartido n = servicio.votacion().calificaciones(p.getId(), null);
             java.util.function.BiFunction<List<CalificacionesPartido.Calificacion>, Integer, CalificacionesPartido.Calificacion> de =
                     (lista, dorsal) -> lista.stream().filter(x -> x.dorsal() == dorsal).findFirst().orElseThrow();
             boolean sistema = p.getFinalizadoEn() == cierre && n.votacion() == CalificacionesPartido.Votacion.ABIERTA
@@ -341,6 +347,7 @@ public class SimulacionFormatos {
                     && de.apply(n.local(), 4).notaSistema() == 5.5        // amarilla
                     && de.apply(n.local(), 5).notaSistema() == 4.0        // roja
                     && de.apply(n.visitante(), 1).notaSistema() == 5.4    // portero: 2 goles recibidos
+                    && otrasReglas(c, p)
                     && n.idMvp() == loc.get(8).getId();                   // el #9 (8.0) supera al portero (7.5)
             if (!sistema) {
                 System.out.println("  cierre=" + (p.getFinalizadoEn() == cierre) + " votacion=" + n.votacion() + " local="
@@ -350,48 +357,86 @@ public class SimulacionFormatos {
 
             // Votos: el #1 local recibe 10 y 9 desde dos dispositivos -> (7.5 + 9.5) / 2 = 8.5 y pasa a ser el MVP.
             int portero = loc.get(0).getId();
-            servicio.votarJugador(p.getId(), portero, 10, "dispositivo-A1");
+            servicio.votacion().votarJugador(p.getId(), portero, 10, "dispositivo-A1");
             boolean repetido;
             try {
-                servicio.votarJugador(p.getId(), portero, 3, "dispositivo-A1");
+                servicio.votacion().votarJugador(p.getId(), portero, 3, "dispositivo-A1");
                 repetido = false;
             } catch (ReglaNegocioException e) {
                 repetido = true; // mismo dispositivo, mismo jugador, mismo partido
             }
-            CalificacionesPartido conVotos = servicio.votarJugador(p.getId(), portero, 9, "dispositivo-B2");
+            CalificacionesPartido conVotos = servicio.votacion().votarJugador(p.getId(), portero, 9, "dispositivo-B2");
             CalificacionesPartido.Calificacion arquero = de.apply(conVotos.local(), 1);
             boolean hibrida = repetido && arquero.votos() == 2 && arquero.promedioPublico() == 9.5 && arquero.notaFinal() == 8.5
                     && conVotos.idMvp() == portero && de.apply(conVotos.local(), 9).notaFinal() == 8.0 // sin votos = sistema
-                    && de.apply(servicio.calificaciones(p.getId(), "dispositivo-A1").local(), 1).miVoto() == 10;
+                    && de.apply(servicio.votacion().calificaciones(p.getId(), "dispositivo-A1").local(), 1).miVoto() == 10;
 
             // Valores fuera de rango y jugadores que no jugaron.
-            boolean rango = rechaza(() -> servicio.votarJugador(p.getId(), portero, 11, "dispositivo-C3"))
-                    && rechaza(() -> servicio.votarJugador(p.getId(), portero, 0, "dispositivo-C3"))
-                    && rechaza(() -> servicio.votarJugador(p.getId(), loc.get(13).getId(), 7, "dispositivo-C3")); // suplente sin jugar
+            boolean rango = rechaza(() -> servicio.votacion().votarJugador(p.getId(), portero, 11, "dispositivo-C3"))
+                    && rechaza(() -> servicio.votacion().votarJugador(p.getId(), portero, 0, "dispositivo-C3"))
+                    && rechaza(() -> servicio.votacion().votarJugador(p.getId(), loc.get(13).getId(), 7, "dispositivo-C3")); // suplente sin jugar
 
-            // Pasadas las 24 horas la votacion se cierra y la nota queda como estaba.
-            reloj.ahora = cierre + CalculadoraCalificaciones.VENTANA_VOTACION_MS + 1;
-            CalificacionesPartido cerrada = servicio.calificaciones(p.getId(), null);
-            boolean ventana = rechaza(() -> servicio.votarJugador(p.getId(), loc.get(8).getId(), 8, "dispositivo-C3"))
+            // Varios votos a la vez: si uno no se acepta no se guarda ninguno.
+            boolean varios = rechaza(() -> servicio.votacion().votarJugadores(p.getId(), java.util.Map.of(loc.get(8).getId(), 7, loc.get(13).getId(), 7), "dispositivo-D4"))
+                    && rechaza(() -> servicio.votacion().votarJugadores(p.getId(), java.util.Map.of(), "dispositivo-D4"))
+                    && p.getVotos().size() == 2
+                    && servicio.votacion().votacionesAbiertas().equals(List.of(p)); // el unico partido terminado
+
+            // Tiempo configurable: 48 horas mueve el cierre; cerrar a mano lo adelanta; otro tiempo lo reabre.
+            final long hora = 60L * 60 * 1000;
+            java.util.function.IntConsumer programar = horas -> {
+                Partido copia = new Partido();
+                copia.copiarDatosDe(p);
+                servicio.votacion().programarVotacion(copia, horas);
+                try {
+                    servicio.partidos().guardarPartido(p.getId(), copia, false);
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            };
+            boolean tiempo = servicio.votacion().calificaciones(p.getId(), null).cierraEn() == cierre + ReglasVotacion.HORAS_POR_DEFECTO * hora;
+            programar.accept(48);
+            tiempo &= p.getHorasVotacion() == 48 && servicio.votacion().calificaciones(p.getId(), null).cierraEn() == cierre + 48 * hora
+                    && rechaza(() -> programar.accept(0)) && rechaza(() -> programar.accept(ReglasVotacion.HORAS_MAXIMO + 1));
+            reloj.ahora = cierre + 30 * hora;
+            tiempo &= servicio.votacion().calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.ABIERTA
+                    && rechaza(() -> programar.accept(12)) && p.getHorasVotacion() == 48; // 12 h ya habrian pasado
+            servicio.votacion().cerrarVotacion(p.getId());
+            tiempo &= servicio.votacion().calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.CERRADA
+                    && servicio.votacion().calificaciones(p.getId(), null).cierraEn() == cierre + 30 * hora
+                    && servicio.votacion().votacionesAbiertas().isEmpty()
+                    && rechaza(() -> servicio.votacion().cerrarVotacion(p.getId()))
+                    && rechaza(() -> servicio.votacion().votarJugador(p.getId(), loc.get(8).getId(), 8, "dispositivo-C3"));
+            programar.accept(48); // el mismo tiempo no la reabre
+            tiempo &= servicio.votacion().votacionesAbiertas().isEmpty();
+            programar.accept(36);
+            tiempo &= servicio.votacion().votacionesAbiertas().equals(List.of(p)) && p.getVotos().size() == 2 && p.getFinalizadoEn() == cierre;
+
+            // Vencido el tiempo la votacion se cierra sola y la nota queda como estaba.
+            reloj.ahora = cierre + 36 * hora;
+            tiempo &= servicio.votacion().votacionesAbiertas().isEmpty();
+            CalificacionesPartido cerrada = servicio.votacion().calificaciones(p.getId(), null);
+            boolean ventana = rechaza(() -> servicio.votacion().votarJugador(p.getId(), loc.get(8).getId(), 8, "dispositivo-C3"))
                     && cerrada.votacion() == CalificacionesPartido.Votacion.CERRADA && de.apply(cerrada.local(), 1).notaFinal() == 8.5;
 
             // Corregir el resultado conserva la hora de cierre y los votos; borrarlo los descarta.
             Partido correccion = new Partido();
             correccion.copiarDatosDe(p);
             correccion.setGolesLocal(3);
-            servicio.guardarPartido(p.getId(), correccion, false);
+            servicio.partidos().guardarPartido(p.getId(), correccion, false);
             boolean conserva = p.getFinalizadoEn() == cierre && p.getVotos().size() == 2;
             Partido borrado = new Partido();
             borrado.copiarDatosDe(p);
             borrado.reiniciarResultado();
-            servicio.guardarPartido(p.getId(), borrado, false);
-            boolean descarta = p.getFinalizadoEn() == 0 && p.getVotos().isEmpty()
-                    && servicio.calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.SIN_RESULTADO;
+            servicio.partidos().guardarPartido(p.getId(), borrado, false);
+            boolean descarta = p.getFinalizadoEn() == 0 && p.getVotos().isEmpty() && p.getVotacionCerradaEn() == 0
+                    && p.getHorasVotacion() == 36 // la duracion se decide antes de jugar: no se borra
+                    && servicio.votacion().calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.SIN_RESULTADO;
 
-            correcto = reglas && sistema && hibrida && rango && ventana && conserva && descarta;
+            correcto = reglas && sistema && hibrida && rango && varios && tiempo && ventana && conserva && descarta;
             if (!correcto) {
                 System.out.println("  reglas=" + reglas + " sistema=" + sistema + " hibrida=" + hibrida + " rango=" + rango
-                        + " ventana=" + ventana + " conserva=" + conserva + " descarta=" + descarta);
+                        + " varios=" + varios + " tiempo=" + tiempo + " ventana=" + ventana + " conserva=" + conserva + " descarta=" + descarta);
             }
         } catch (Exception e) {
             correcto = false;
@@ -399,6 +444,305 @@ public class SimulacionFormatos {
             e.printStackTrace();
         }
         System.out.println("Calificaciones de jugadores (sistema, público y MVP): " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * [A5] Las reglas del partido las aplica el servicio, no la pantalla ni el controlador: un partido
+     * guardado directo por CampeonatoService tambien se revisa.
+     */
+    private static void probarReglasPartido() {
+        boolean correcto;
+        try {
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-reglas")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-reglas")));
+            ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+            cfg.setSorteoAleatorio(false);
+            servicio.crear("Reglas", TipoFormato.LIGA, cfg, false);
+            servicio.equipos().cargarDatosPrueba(7, 4, true);
+            servicio.avanzar();
+            Campeonato c = servicio.getCampeonato();
+            Partido p = c.getPartidos().get(0);
+            List<alphasport.model.Jugador> loc = c.buscarEquipo(p.getIdLocal()).getJugadores();
+            List<alphasport.model.Jugador> vis = c.buscarEquipo(p.getIdVisitante()).getJugadores();
+            java.util.function.Supplier<Partido> base = () -> {
+                Partido d = new Partido();
+                d.copiarDatosDe(p);
+                d.setEstado(EstadoPartido.JUGADO);
+                d.setGolesLocal(1);
+                d.setGolesVisitante(0);
+                d.setTitulares(ids(loc.subList(0, 11)), ids(vis.subList(0, 11)));
+                return d;
+            };
+            Partido corto = base.get();
+            corto.setTitulares(ids(loc.subList(0, 10)), ids(vis.subList(0, 11)));
+            Partido titularEntra = base.get();
+            titularEntra.setCambios(new ArrayList<>(List.of(new alphasport.model.Cambio(p.getIdLocal(), 60, loc.get(0), loc.get(1)))));
+            Partido golAjeno = base.get();
+            golAjeno.setGoles(new ArrayList<>(List.of(new alphasport.model.Gol(p.getIdLocal(), 10, vis.get(3), false, null))));
+            Partido demasiados = base.get();
+            demasiados.setGoles(new ArrayList<>(List.of(new alphasport.model.Gol(p.getIdLocal(), 10, loc.get(9), false, null),
+                    new alphasport.model.Gol(p.getIdLocal(), 20, loc.get(9), false, null))));
+            Partido minuto = base.get();
+            alphasport.model.Tarjeta tarde = new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(2), alphasport.model.Tarjeta.AMARILLA, 0);
+            tarde.setMinuto(ReglasPartido.MINUTO_MAXIMO + 1);
+            minuto.setTarjetas(new ArrayList<>(List.of(tarde)), p.getIdLocal());
+            // Doble amarilla: la segunda es expulsion, en el servicio y no solo en la pantalla.
+            java.util.function.Function<String[], Partido> conTarjetas = tipos -> {
+                Partido d = base.get();
+                ArrayList<alphasport.model.Tarjeta> lista = new ArrayList<>();
+                for (String tipo : tipos) {
+                    lista.add(new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(4), tipo, tipo.equals(alphasport.model.Tarjeta.ROJA) ? 1 : 0));
+                }
+                d.setTarjetas(lista, p.getIdLocal());
+                return d;
+            };
+            String a = alphasport.model.Tarjeta.AMARILLA, r = alphasport.model.Tarjeta.ROJA;
+            boolean dobleAmarilla = rechaza(() -> servicio.partidos().guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a}), false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a, a, r}), false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), conTarjetas.apply(new String[]{r, r}), false));
+            servicio.partidos().guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, r}), false); // asi la registran las pantallas
+            dobleAmarilla &= servicio.buscarPartido(p.getId()).getTarjetas().size() == 2;
+            servicio.partidos().guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a, r}), false);
+            dobleAmarilla &= servicio.buscarPartido(p.getId()).getTarjetas().size() == 3;
+            Partido limpio = base.get();
+            limpio.reiniciarResultado();
+            servicio.partidos().guardarPartido(p.getId(), limpio, false);
+            boolean rechazos = rechaza(() -> servicio.partidos().guardarPartido(p.getId(), corto, false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), titularEntra, false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), golAjeno, false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), demasiados, false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), minuto, false))
+                    && !servicio.buscarPartido(p.getId()).isJugado();
+            // Un partido correcto se guarda, y sigue pudiendo editarse aunque su goleador deje el equipo.
+            Partido bueno = base.get();
+            bueno.setGoles(new ArrayList<>(List.of(new alphasport.model.Gol(p.getIdLocal(), 10, loc.get(9), false, loc.get(8)))));
+            bueno.setCambios(new ArrayList<>(List.of(new alphasport.model.Cambio(p.getIdLocal(), 60, loc.get(9), loc.get(14)))));
+            servicio.partidos().guardarPartido(p.getId(), bueno, false);
+            alphasport.model.Equipo local = c.buscarEquipo(p.getIdLocal());
+            List<alphasport.model.Jugador> sinGoleador = new ArrayList<>(local.getJugadores());
+            sinGoleador.remove(9);
+            servicio.equipos().guardarEquipo(local.getId(), local.getNombreEquipo(), local.getEstadio(), local.getDirectorTecnico(), sinGoleador);
+            Partido sede = new Partido();
+            sede.copiarDatosDe(servicio.buscarPartido(p.getId()));
+            sede.setSede("Otra sede");
+            servicio.partidos().guardarPartido(p.getId(), sede, false);
+            boolean guarda = servicio.buscarPartido(p.getId()).getGoles().size() == 1 && servicio.buscarPartido(p.getId()).getSede().equals("Otra sede");
+            correcto = dobleAmarilla && rechazos && guarda;
+            if (!correcto) {
+                System.out.println("  dobleAmarilla=" + dobleAmarilla + " rechazos=" + rechazos + " guarda=" + guarda);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Reglas del partido en el servicio: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    private static ArrayList<Integer> ids(List<alphasport.model.Jugador> jugadores) {
+        ArrayList<Integer> ids = new ArrayList<>();
+        jugadores.forEach(j -> ids.add(j.getId()));
+        return ids;
+    }
+
+    /**
+     * [A7] Otro conjunto de puntos (como el del modo Fantasy) se enchufa sin tocar la calculadora: sin base,
+     * sin minimo ni maximo y con su propio desglose.
+     */
+    private static boolean otrasReglas(Campeonato c, Partido p) {
+        ReglaPuntuacion fantasy = (x, desglose) -> PuntuacionNotaPartido.sumar(desglose, "Gol", x.goles(), 4)
+                + PuntuacionNotaPartido.sumar(desglose, "Asistencia", x.asistencias(), 3)
+                + PuntuacionNotaPartido.sumar(desglose, "Tarjeta roja", x.rojas(), -3)
+                + (x.titular() ? 2 : 1);
+        CalificacionesPartido f = CalculadoraCalificaciones.calcular(c, p, p.getFinalizadoEn(), null, fantasy);
+        java.util.function.ToDoubleFunction<Integer> local = dorsal -> f.local().stream().filter(x -> x.dorsal() == dorsal)
+                .findFirst().orElseThrow().notaSistema();
+        return local.applyAsDouble(9) == 10.0 && local.applyAsDouble(8) == 5.0 && local.applyAsDouble(5) == -1.0
+                && f.local().stream().filter(x -> x.dorsal() == 9).findFirst().orElseThrow().desglose().contains("Gol ×2: +8.0")
+                && f.idMvp() == f.local().stream().filter(x -> x.dorsal() == 9).findFirst().orElseThrow().idJugador();
+    }
+
+    /** [A3] Cada ruta exige un permiso y cada rol es un conjunto de permisos. */
+    private static void probarPermisos() {
+        boolean correcto;
+        try {
+            alphasport.model.Rol admin = alphasport.model.Rol.ADMINISTRADOR, visitante = alphasport.model.Rol.VISITANTE;
+            boolean roles = admin.puede(alphasport.model.Permiso.GESTIONAR_CAMPEONATO) && !admin.puede(alphasport.model.Permiso.VOTAR_JUGADORES)
+                    && visitante.puede(alphasport.model.Permiso.VOTAR_JUGADORES) && !visitante.puede(alphasport.model.Permiso.MODERAR_NOTICIAS)
+                    && admin.puedeEditar() && !visitante.puedeEditar();
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-permisos")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-permisos")));
+            alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService());
+            java.util.function.Function<Accion, String> codigo = accion -> {
+                try {
+                    accion.correr();
+                    return "OK";
+                } catch (ReglaNegocioException e) {
+                    return e.getCodigo();
+                } catch (Exception e) {
+                    return e.toString();
+                }
+            };
+            boolean sinSesion = codigo.apply(() -> api.consultar("estado")).equals("LOGIN")
+                    && codigo.apply(() -> api.ejecutar("noticia/comentar", java.util.Map.of("id", 1, "autor", "A", "texto", "Hola"))).equals("LOGIN");
+            // [L1] Respaldo y exportacion pasan por el controlador: tambien exigen sesion y permiso.
+            boolean archivos = codigo.apply(api::respaldo).equals("LOGIN") && codigo.apply(api::historialEnTexto).equals("LOGIN");
+            api.ejecutar("login/visitante", java.util.Map.of());
+            @SuppressWarnings("unchecked")
+            List<String> permisosVisitante = (List<String>) api.sesion().get("permisos");
+            archivos &= codigo.apply(() -> api.abrirRespaldo(new byte[0])).equals("PERMISO");
+            boolean comoVisitante = codigo.apply(() -> api.ejecutar("nuevo", java.util.Map.of())).equals("PERMISO")
+                    && codigo.apply(() -> api.ejecutar("noticia/aprobar", java.util.Map.of("id", 1))).equals("PERMISO")
+                    && codigo.apply(() -> api.ejecutar("ruta/que/no/existe", java.util.Map.of())).equals("PERMISO") // lista blanca
+                    && codigo.apply(() -> api.ejecutar("noticia/proponer", java.util.Map.of("titulo", "Propuesta de prueba",
+                            "cuerpo", "Texto de la propuesta.", "autor", "Ana"))).equals("OK")
+                    && permisosVisitante.contains("VOTAR_JUGADORES") && !permisosVisitante.contains("GESTIONAR_CAMPEONATO");
+            api.ejecutar("login", java.util.Map.of("usuario", "admin", "clave", "123"));
+            boolean comoAdmin = codigo.apply(() -> api.ejecutar("calificacion/votar", java.util.Map.of("partido", 1, "jugador", 1, "valor", 7,
+                    "dispositivo", "x"))).equals("PERMISO") && api.getNoticias().pendientes().size() == 1
+                    && ((java.util.Map<?, ?>) api.consultar("noticias").get("noticias")).toString().contains("Propuesta de prueba");
+            // [M2] Cada modulo registra sus rutas con su permiso: solo entrar y salir son publicas.
+            java.util.Map<String, alphasport.model.Permiso> acciones = api.permisosDeAcciones();
+            boolean rutas = acciones.size() >= 29 && acciones.entrySet().stream().filter(e -> e.getValue() == null).map(java.util.Map.Entry::getKey)
+                    .sorted().toList().equals(List.of("login", "login/visitante", "logout"))
+                    && acciones.get("calificacion/votar") == alphasport.model.Permiso.VOTAR_JUGADORES
+                    && acciones.get("comentario/eliminar") == alphasport.model.Permiso.MODERAR_NOTICIAS
+                    && acciones.get("partido") == alphasport.model.Permiso.GESTIONAR_CAMPEONATO
+                    && api.permisosDeConsultas().get("partido/…") == alphasport.model.Permiso.VER
+                    && api.permisosDeConsultas().get("catalogo") == null;
+            correcto = roles && sinSesion && comoVisitante && comoAdmin && rutas && archivos;
+            if (!correcto) {
+                System.out.println("  roles=" + roles + " sinSesion=" + sinSesion + " comoVisitante=" + comoVisitante + " comoAdmin=" + comoAdmin
+                        + " rutas=" + rutas + " archivos=" + archivos + " " + acciones);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Permisos por rol: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * [A2] El servidor web da una sesion a cada navegador (cookie HttpOnly y SameSite) y rechaza las acciones
+     * que no vienen de su propia pagina. Usa un puerto de pruebas (desde 18300), nunca el 8080 del programa.
+     */
+    private static void probarServidorWeb() {
+        boolean correcto;
+        alphasport.ui.ServidorWeb servidor = null;
+        try {
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-web")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-web")));
+            servidor = new alphasport.ui.ServidorWeb(java.nio.file.Path.of("web"),
+                    new alphasport.ui.ApiControlador(servicio, new AutenticacionService()));
+            int puerto = servidor.iniciar(18300);
+            String base = "http://127.0.0.1:" + puerto;
+            java.net.http.HttpClient cliente = java.net.http.HttpClient.newHttpClient();
+            // Sin cookie no hay sesion.
+            boolean sinSesion = pedir(cliente, base, "GET", "estado", null, null, base).body().contains("\"LOGIN\"");
+            // Dos navegadores: el administrador y un visitante, cada uno con su cookie.
+            var admin = pedir(cliente, base, "POST", "login", "{\"usuario\":\"admin\",\"clave\":\"123\"}", null, base);
+            String cookieAdmin = admin.headers().firstValue("Set-Cookie").orElse("");
+            var visita = pedir(cliente, base, "POST", "login/visitante", "{}", null, base);
+            String cookieVisita = visita.headers().firstValue("Set-Cookie").orElse("");
+            String tokenAdmin = cookieAdmin.replaceFirst(";.*$", ""), tokenVisita = cookieVisita.replaceFirst(";.*$", "");
+            boolean cookies = cookieAdmin.startsWith(alphasport.ui.ServidorWeb.COOKIE + "=") && cookieAdmin.contains("HttpOnly")
+                    && cookieAdmin.contains("SameSite=Strict") && !tokenAdmin.equals(tokenVisita) && tokenAdmin.length() > 30;
+            boolean separadas = pedir(cliente, base, "GET", "sesion", null, tokenAdmin, base).body().contains("\"ADMINISTRADOR\"")
+                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"VISITANTE\"")
+                    && pedir(cliente, base, "POST", "division/agregar", "{}", tokenVisita, base).body().contains("\"PERMISO\"");
+            // Otra pagina no puede usar la sesion del administrador, y solo se atiende con el Host de esta maquina.
+            var ajena = pedir(cliente, base, "POST", "nuevo", "{}", tokenAdmin, "http://pagina-ajena.example");
+            var sinOrigen = pedir(cliente, base, "POST", "nuevo", "{}", tokenAdmin, null);
+            boolean origen = ajena.statusCode() == 403 && ajena.body().contains("\"ORIGEN\"") && sinOrigen.statusCode() == 403
+                    && hostAjeno(puerto).startsWith("HTTP/1.1 403");
+            // Al salir se borra la cookie y el token deja de servir.
+            var salir = pedir(cliente, base, "POST", "logout", "{}", tokenAdmin, base);
+            boolean cerrada = salir.headers().firstValue("Set-Cookie").orElse("").contains("Max-Age=0")
+                    && pedir(cliente, base, "GET", "estado", null, tokenAdmin, base).body().contains("\"LOGIN\"")
+                    && pedir(cliente, base, "GET", "sesion", null, tokenVisita, base).body().contains("\"VISITANTE\"")
+                    && cliente.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/")).build(),
+                            java.net.http.HttpResponse.BodyHandlers.ofString()).statusCode() == 200;
+            correcto = sinSesion && cookies && separadas && origen && cerrada;
+            if (!correcto) {
+                System.out.println("  sinSesion=" + sinSesion + " cookies=" + cookies + " separadas=" + separadas + " origen=" + origen + " cerrada=" + cerrada);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        } finally {
+            if (servidor != null) {
+                servidor.detener();
+            }
+        }
+        System.out.println("Servidor web: una sesión por navegador y control de origen: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    private static java.net.http.HttpResponse<String> pedir(java.net.http.HttpClient cliente, String base, String metodo, String ruta,
+            String cuerpo, String cookie, String origen) throws Exception {
+        var pedido = java.net.http.HttpRequest.newBuilder(java.net.URI.create(base + "/api/" + ruta));
+        if (cookie != null) {
+            pedido.header("Cookie", cookie.contains("=") ? cookie : alphasport.ui.ServidorWeb.COOKIE + "=" + cookie);
+        }
+        if (origen != null) {
+            pedido.header("Origin", origen);
+        }
+        pedido.method(metodo, cuerpo == null ? java.net.http.HttpRequest.BodyPublishers.noBody()
+                : java.net.http.HttpRequest.BodyPublishers.ofString(cuerpo));
+        return cliente.send(pedido.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** Primera linea de la respuesta a una peticion con otro Host (como en un ataque de «DNS rebinding»). */
+    private static String hostAjeno(int puerto) throws Exception {
+        try (java.net.Socket s = new java.net.Socket("127.0.0.1", puerto)) {
+            s.getOutputStream().write(("GET /api/catalogo HTTP/1.1\r\nHost: pagina-ajena.example\r\nConnection: close\r\n\r\n")
+                    .getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            return new java.io.BufferedReader(new java.io.InputStreamReader(s.getInputStream(), java.nio.charset.StandardCharsets.US_ASCII)).readLine();
+        }
+    }
+
+    /** [A8] Las claves se guardan y se comparan como hash; las cuentas vienen de un RepositorioUsuarios. */
+    private static void probarClaves() {
+        boolean correcto;
+        try {
+            ClavesPbkdf2 rapido = new ClavesPbkdf2(1000); // pocas iteraciones: solo para que la prueba sea rapida
+            String h = rapido.hash("secreta"), otro = rapido.hash("secreta");
+            String alterado = h.substring(0, h.length() - 2) + (h.endsWith("AA") ? "BB" : "AA");
+            boolean hash = h.startsWith(ClavesPbkdf2.PREFIJO + "$1000$") && !h.contains("secreta") && !h.equals(otro)
+                    && rapido.coincide("secreta", h) && rapido.coincide("secreta", otro) && !rapido.coincide("Secreta", h)
+                    && !rapido.coincide("secreta", alterado) && !rapido.coincide("secreta", "secreta") && !rapido.coincide(null, h)
+                    && !rapido.coincide("secreta", "$2a$06$bcrypt-no-soportado") && h.length() <= 255;
+            // Otro repositorio de cuentas (como sera la tabla usuarios) sin cambiar el servicio.
+            AutenticacionService propia = new AutenticacionService(new alphasport.persistence.RepositorioUsuariosEnMemoria(List.of(
+                    new alphasport.model.CuentaUsuario("ana", "Ana", alphasport.model.Rol.ADMINISTRADOR, rapido.hash("clave-de-ana")))), rapido);
+            boolean repositorio = propia.iniciarSesion("  ANA ", "clave-de-ana").puedeEditar()
+                    && rechaza(() -> propia.iniciarSesion("ana", "otra")) && rechaza(() -> propia.iniciarSesion("admin", "123"));
+            // Las cuentas de demostracion siguen entrando con sus claves de siempre.
+            AutenticacionService demo = new AutenticacionService();
+            boolean demostracion = demo.iniciarSesion("admin", "123").puedeEditar() && !demo.iniciarSesion("visitante", "321").puedeEditar()
+                    && rechaza(() -> demo.iniciarSesion("admin", "321")) && rechaza(() -> demo.iniciarSesion("nadie", "123"));
+            correcto = hash && repositorio && demostracion;
+            if (!correcto) {
+                System.out.println("  hash=" + hash + " repositorio=" + repositorio + " demostracion=" + demostracion);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Claves con hash y cuentas por repositorio: " + (correcto ? "correcto" : "MAL"));
         if (!correcto) {
             fallos++;
         }
@@ -435,7 +779,7 @@ public class SimulacionFormatos {
             cfg.setSorteoAleatorio(false);
             servicio.crear("Previa", TipoFormato.LIGA, cfg, false);
             for (int i = 1; i <= 4; i++) {
-                servicio.agregarEquipo("P" + i);
+                servicio.equipos().agregarEquipo("P" + i);
             }
             Campeonato c = servicio.getCampeonato();
             for (alphasport.model.Equipo e : new ArrayList<>(c.getEquipos())) {
@@ -443,7 +787,7 @@ public class SimulacionFormatos {
                 for (int d = 1; d <= 14; d++) {
                     plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + d, "D" + e.getId() + "-" + d, d, "Mediocampista"));
                 }
-                servicio.guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
+                servicio.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
             }
             servicio.avanzar();
             alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService(),
@@ -461,6 +805,10 @@ public class SimulacionFormatos {
             api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", previa, "accion", "guardar", "confirmado", false));
             boolean previaGuardada = !p.isJugado() && p.getTitularesLocal().equals(xiLocal) && p.getTitularesVisitante().equals(xiVisitante)
                     && p.getFormacionLocal().equals("4-4-2") && p.getSede().equals("Estadio Norte");
+            // La alineación lleva los 11 de la previa y, como suplentes, los 3 que sobran de la plantilla (por dorsal).
+            DetallePartido.Alineacion alineacion = servicio.partidos().detallePartido(p.getId()).getAlineacionLocal();
+            previaGuardada &= alineacion.confirmada() && alineacion.lineas().stream().mapToInt(List::size).sum() == 11
+                    && alineacion.suplentes().stream().map(alphasport.model.Jugador::getDorsal).toList().equals(List.of(12, 13, 14));
             // 2) Resultado: el cambio usa el XI de la previa (sale un titular, entra un suplente).
             int sale = xiLocal.get(10);
             int entra = c.buscarEquipo(p.getIdLocal()).getJugadores().get(12).getId();
@@ -474,9 +822,25 @@ public class SimulacionFormatos {
             api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", resultado, "accion", "borrar", "confirmado", false));
             boolean previaConservada = !p.isJugado() && p.getCambios().isEmpty() && p.getTitularesLocal().equals(xiLocal)
                     && p.getFormacionVisitante().equals("4-3-3");
-            correcto = previaGuardada && resultadoGuardado && previaConservada;
+            // 4) [REQ-07] Votacion por la API: el admin programa las horas y cierra; el visitante la ve, vota y la deja de ver.
+            resultado.put("horasVotacion", 48);
+            api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", resultado, "accion", "guardar", "confirmado", false));
+            boolean adminNoVota = rechaza(() -> api.ejecutar("calificacion/votar", java.util.Map.of("partido", p.getId(), "jugador", xiLocal.get(0), "valor", 8, "dispositivo", "dispositivo-A1")));
+            api.ejecutar("logout", java.util.Map.of());
+            api.ejecutar("login/visitante", java.util.Map.of());
+            java.util.function.Supplier<Integer> abiertas = () -> ((List<?>) api.consultar("votaciones/dispositivo-A1").get("votaciones")).size();
+            boolean votacion = adminNoVota && p.getHorasVotacion() == 48 && abiertas.get() == 1;
+            java.util.Map<String, Object> votado = api.ejecutar("calificacion/votar", java.util.Map.of("partido", p.getId(), "dispositivo", "dispositivo-A1",
+                    "votos", List.of(java.util.Map.of("jugador", xiLocal.get(0), "valor", 8), java.util.Map.of("jugador", entra, "valor", 9))));
+            votacion &= Boolean.TRUE.equals(votado.get("ok")) && p.getVotos().size() == 2 && abiertas.get() == 1
+                    && rechaza(() -> api.ejecutar("votacion/cerrar", java.util.Map.of("partido", p.getId()))); // el visitante no la cierra
+            api.ejecutar("login", java.util.Map.of("usuario", "admin", "clave", "123"));
+            api.ejecutar("votacion/cerrar", java.util.Map.of("partido", p.getId()));
+            votacion &= abiertas.get() == 0;
+
+            correcto = previaGuardada && resultadoGuardado && previaConservada && votacion;
             if (!correcto) {
-                System.out.println("  previa=" + previaGuardada + " resultado=" + resultadoGuardado + " conservada=" + previaConservada);
+                System.out.println("  previa=" + previaGuardada + " resultado=" + resultadoGuardado + " conservada=" + previaConservada + " votacion=" + votacion);
             }
         } catch (Exception e) {
             correcto = false;
@@ -811,7 +1175,7 @@ public class SimulacionFormatos {
             servicio.crear("Liga por divisiones", TipoFormato.LIGA, cfg, false);
             servicio.agregarDivision();                       // la liga se expande: Liga C
             for (int i = 1; i <= 12; i++) {
-                servicio.agregarEquipo("D" + i);              // se reparten: 4 por division
+                servicio.equipos().agregarEquipo("D" + i);              // se reparten: 4 por division
             }
             Campeonato c = servicio.getCampeonato();
             boolean reparto = c.equiposDeDivision(0).size() == 4 && c.equiposDeDivision(1).size() == 4
@@ -862,17 +1226,17 @@ public class SimulacionFormatos {
             cfg.setDivisiones(3);
             servicio.crear("W.O. y campeones", TipoFormato.LIGA, cfg, false);
             for (int i = 1; i <= 9; i++) {
-                servicio.agregarEquipo("W" + i);
+                servicio.equipos().agregarEquipo("W" + i);
             }
             servicio.avanzar();
             Campeonato c = servicio.getCampeonato();
             Partido p1 = c.getPartidos().get(0), p2 = c.getPartidos().get(1);
             Partido copia1 = new Partido();
             copia1.copiarDatosDe(p1);                               // igual que el editor
-            servicio.darWalkover(p1.getId(), copia1, p1.getIdLocal(), false);
+            servicio.partidos().darWalkover(p1.getId(), copia1, p1.getIdLocal(), false);
             Partido copia2 = new Partido();
             copia2.copiarDatosDe(p2);
-            servicio.darWalkover(p2.getId(), copia2, p2.getIdVisitante(), false);
+            servicio.partidos().darWalkover(p2.getId(), copia2, p2.getIdVisitante(), false);
             boolean ganaLocal = p1.getGolesLocal() == 3 && p1.getGolesVisitante() == 0 && p1.getGanador() == p1.getIdLocal();
             boolean ganaVisitante = p2.getGolesVisitante() == 3 && p2.getGolesLocal() == 0 && p2.getGanador() == p2.getIdVisitante();
             boolean puntos = servicio.getMotor().tablaDeGrupo(0, p1.getGrupo().charAt(0) - 'A').stream()

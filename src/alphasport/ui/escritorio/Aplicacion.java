@@ -8,11 +8,9 @@ import static alphasport.ui.escritorio.Datos.n;
 import static alphasport.ui.escritorio.Datos.s;
 
 import alphasport.model.Usuario;
-import alphasport.service.AutenticacionService;
-import alphasport.service.CampeonatoService;
 import alphasport.service.ReglaNegocioException;
 import alphasport.ui.ApiControlador;
-import alphasport.ui.Arranque;
+import alphasport.ui.FabricaAplicacion;
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -74,15 +72,18 @@ import javafx.util.Duration;
  */
 public class Aplicacion extends Application {
 
-    static final String[] VISTAS = {"equipos", "partidos", "posiciones", "llaves", "sanciones", "noticias", "reglas"};
+    static final String[] VISTAS = {"equipos", "partidos", "votaciones", "posiciones", "llaves", "sanciones", "noticias", "reglas"};
     /** Vistas que el visitante no ve (no le aportan: son de gestión). */
     static final java.util.Set<String> VISTAS_SOLO_ADMIN = java.util.Set.of("equipos", "reglas");
+    /** Vistas que solo ve el visitante: el administrador no vota [REQ-07]. */
+    static final java.util.Set<String> VISTAS_SOLO_VISITANTE = java.util.Set.of("votaciones");
     /** Vista con la que entra el visitante. */
     static final String VISTA_INICIAL_VISITANTE = "partidos";
-    static final String[] NOMBRES_VISTAS = {"Equipos", "Partidos", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas"};
+    static final String[] NOMBRES_VISTAS = {"Equipos", "Partidos", "Votaciones", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas"};
     static final String[] ICONOS_VISTAS = {
         "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z",
         "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM3 10h18M8 3v4M16 3v4",
+        "M12 3l2.7 5.8 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3.1 1.2-6.2L3 9.6l6.3-.8Z",
         "M4 20V10M10 20V4M16 20v-7M22 20H2",
         "M3 4h5v6H3M3 14h5v6H3M8 7h4v10H8M12 12h5M17 9h4v6h-4",
         "M6.5 4h6a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 5 15.5v-10A1.5 1.5 0 0 1 6.5 4ZM15 7h3a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6a1.5 1.5 0 0 1-1.5-1.5V18",
@@ -98,8 +99,9 @@ public class Aplicacion extends Application {
     static final String ICONO_DADO = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18ZM12 7l3.5 2.6-1.3 4.1H9.8L8.5 9.6Z";
     static final String ICONO_ESTADIO = "M3 10c0-2 4-4 9-4s9 2 9 4v7c0 2-4 4-9 4s-9-2-9-4zM3 10c0 2 4 4 9 4s9-2 9-4";
 
+    /** Arma la conexion, los servicios y el controlador; se cierra al salir. */
+    private final FabricaAplicacion fabrica = new FabricaAplicacion();
     Stage stage;
-    CampeonatoService servicio;
     ApiControlador api;
     Map<String, Object> catalogo;
     Map<String, Object> E = mapa("hay", false);
@@ -131,12 +133,25 @@ public class Aplicacion extends Application {
     private int pestanaEstadisticas; // pestaña elegida en Estadísticas (se conserva al redibujar)
     private String pestanaNoticias;  // «pendientes» o «publicadas» (null = se elige al entrar)
     private String pestanaPartidos = "previa"; // «previa» o «resultados» en Gestionar partidos
+    private VistaVotaciones votaciones = new VistaVotaciones(this); // [REQ-07] recuerda las notas sin enviar
 
     @Override
     public void start(Stage stage) {
         this.stage = stage;
-        servicio = Arranque.servicio();
-        api = new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias());
+        try {
+            api = fabrica.controlador();
+        } catch (alphasport.persistence.PersistenciaException e) {
+            avisarSinDatos(e);
+            return;
+        }
+        // Si se pierde la conexión en medio de una consulta se avisa, en vez de fallar en silencio.
+        Thread.currentThread().setUncaughtExceptionHandler((hilo, e) -> {
+            if (e instanceof ReglaNegocioException) {
+                aviso(e.getMessage());
+            } else {
+                e.printStackTrace();
+            }
+        });
         catalogo = api.consultar("catalogo");
         dialogos = new Dialogos(this);
         Fotos.usar(this);
@@ -153,6 +168,21 @@ public class Aplicacion extends Application {
         stage.show();
     }
 
+    @Override
+    public void stop() {
+        fabrica.close();
+    }
+
+    /** Sin datos no se abre la ventana principal: se explica qué revisar. */
+    private static void avisarSinDatos(Exception e) {
+        javafx.scene.control.Alert alerta = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR, e.getMessage());
+        alerta.setTitle("AlphaSport");
+        alerta.setHeaderText("No se pudieron abrir los datos");
+        alerta.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        alerta.showAndWait();
+        javafx.application.Platform.exit();
+    }
+
     String hojaEstilos() {
         URL recurso = getClass().getResource("escritorio.css");
         return recurso != null ? recurso.toExternalForm()
@@ -160,12 +190,12 @@ public class Aplicacion extends Application {
     }
 
     static Image imagen(String nombre) {
-        return new Image(Arranque.CARPETA_WEB.resolve("img").resolve(nombre).toUri().toString(), true);
+        return new Image(FabricaAplicacion.CARPETA_WEB.resolve("img").resolve(nombre).toUri().toString(), true);
     }
 
     /** Inter (regular, semibold y bold), la misma fuente de la web, guardada en web/fuentes. */
     private static void cargarFuentes() {
-        Path carpeta = Arranque.CARPETA_WEB.resolve("fuentes");
+        Path carpeta = FabricaAplicacion.CARPETA_WEB.resolve("fuentes");
         if (!Files.isDirectory(carpeta)) {
             return;
         }
@@ -233,7 +263,7 @@ public class Aplicacion extends Application {
         if (fotoFondo == null) {
             return;
         }
-        Path foto = Arranque.CARPETA_WEB.resolve("img").resolve(claro ? "estadio-dia.jpg" : "estadio-noche.jpg");
+        Path foto = FabricaAplicacion.CARPETA_WEB.resolve("img").resolve(claro ? "estadio-dia.jpg" : "estadio-noche.jpg");
         fotoFondo.setStyle("-fx-background-image: url('" + foto.toUri() + "'); -fx-background-size: cover; -fx-background-position: center 62%;");
     }
 
@@ -324,7 +354,7 @@ public class Aplicacion extends Application {
         if (vista.equals("llaves") && !usaLlaves()) {
             return false;
         }
-        return puedeEditar() || !VISTAS_SOLO_ADMIN.contains(vista);
+        return puedeEditar() ? !VISTAS_SOLO_VISITANTE.contains(vista) : !VISTAS_SOLO_ADMIN.contains(vista);
     }
 
     /** Oculta (y saca del layout) los controles de edicion cuando el usuario es visitante. */
@@ -357,6 +387,14 @@ public class Aplicacion extends Application {
         E = m(r, "estado");
         render();
         return r;
+    }
+
+    /** Vuelve a pedir el estado y dibuja (por ejemplo, cuando vence una votación sin que nadie haga nada). */
+    void refrescar() {
+        if (api.getUsuarioActual() != null) {
+            E = api.consultar("estado");
+            render();
+        }
     }
 
     void aviso(String texto) {
@@ -449,6 +487,7 @@ public class Aplicacion extends Application {
 
     void mostrarPrincipal() {
         E = api.consultar("estado");
+        votaciones = new VistaVotaciones(this); // otra sesión: sin las notas a medio elegir de la anterior
         ImageView logo = new ImageView(imagen("logo.png"));
         logo.setFitWidth(150);
         logo.setPreserveRatio(true);
@@ -466,8 +505,8 @@ public class Aplicacion extends Application {
         }
         for (int i = 0; i < VISTAS.length; i++) {
             String clave = VISTAS[i];
-            if (!puedeEditar() && VISTAS_SOLO_ADMIN.contains(clave)) {
-                continue; // el visitante no ve Equipos ni Reglas
+            if ((puedeEditar() ? VISTAS_SOLO_VISITANTE : VISTAS_SOLO_ADMIN).contains(clave)) {
+                continue; // el visitante no ve Equipos ni Reglas; el administrador no ve Votaciones
             }
             SVGPath icono = new SVGPath();
             icono.setContent(ICONOS_VISTAS[i]);
@@ -594,7 +633,7 @@ public class Aplicacion extends Application {
         MenuItem abrir = new MenuItem("Abrir respaldo…");
         abrir.setOnAction(e -> abrirRespaldo());
         MenuItem exportar = new MenuItem("Exportar historial (.txt)");
-        exportar.setOnAction(e -> guardarTexto(s(m(E, "campeonato"), "nombre"), servicio.textoHistorial()));
+        exportar.setOnAction(e -> exportarHistorial());
         MenuItem historial = new MenuItem("Historial de campeonatos");
         historial.setOnAction(e -> dialogos.historial());
         MenuItem sesion = new MenuItem("Cerrar sesión");
@@ -672,7 +711,7 @@ public class Aplicacion extends Application {
             return;
         }
         try {
-            Files.write(archivo.toPath(), servicio.respaldo());
+            Files.write(archivo.toPath(), api.respaldo().datos()); // por el controlador: permiso y datos al dia
             aviso("Respaldo guardado en " + archivo.getName());
         } catch (Exception e) {
             dialogos.mensaje("Error", e.getMessage());
@@ -688,11 +727,19 @@ public class Aplicacion extends Application {
             return;
         }
         try {
-            servicio.abrirRespaldo(Files.readAllBytes(archivo.toPath()));
-            E = m(api.respuesta(null), "estado");
+            E = m(api.abrirRespaldo(Files.readAllBytes(archivo.toPath())), "estado");
             render();
             aviso("Se abrió «" + s(m(E, "campeonato"), "nombre") + "».");
         } catch (Exception e) {
+            dialogos.mensaje("Error", e.getMessage());
+        }
+    }
+
+    /** El historial del campeonato en un .txt; el texto lo da el controlador (con permiso y datos al dia). */
+    private void exportarHistorial() {
+        try {
+            guardarTexto(s(m(E, "campeonato"), "nombre"), new String(api.historialEnTexto().datos(), StandardCharsets.UTF_8));
+        } catch (ReglaNegocioException e) {
             dialogos.mensaje("Error", e.getMessage());
         }
     }
@@ -782,6 +829,12 @@ public class Aplicacion extends Application {
             botonLlaves.setVisible(puedeVer("llaves"));
             botonLlaves.setManaged(puedeVer("llaves"));
         }
+        // «Votaciones (2)»: cuántos partidos puede votar el visitante ahora.
+        ToggleButton botonVotaciones = navegacion.get("votaciones");
+        if (botonVotaciones != null) {
+            long abiertas = l(E, "partidos").stream().filter(TiempoVotacion::abierta).count();
+            botonVotaciones.setText(abiertas == 0 ? "Votaciones" : "Votaciones (" + abiertas + ")");
+        }
         mostrarVista(vista);
     }
 
@@ -816,6 +869,7 @@ public class Aplicacion extends Application {
         }
         Node nodo = switch (nombre) {
             case "partidos" -> vistaPartidos();
+            case "votaciones" -> vistaVotaciones();
             case "posiciones" -> vistaPosiciones();
             case "llaves" -> vistaLlaves();
             case "sanciones" -> vistaEstadisticas();
@@ -1176,6 +1230,13 @@ public class Aplicacion extends Application {
         return caja;
     }
 
+    /** [REQ-07] Solo visitante: califica a los jugadores de los partidos con la votación abierta. */
+    private Node vistaVotaciones() {
+        VBox caja = seccion("Votaciones", "Califique del 1 al 10 a los jugadores de los partidos terminados antes de que cierre la votación.");
+        caja.getChildren().add(votaciones.dibujar());
+        return caja;
+    }
+
     /** Panel de una pestaña con su explicación corta arriba. */
     private static VBox panelPestana(String ayuda) {
         VBox panel = new VBox(14);
@@ -1221,7 +1282,7 @@ public class Aplicacion extends Application {
         boolean todoListo = true;
         for (String[] lado : lados) {
             int plantilla = (int) l(equipoPorId(n(p, lado[0])), "jugadores").stream().filter(j -> n(j, "id") > 0).count();
-            int necesarios = Math.min(Dialogos.TITULARES, plantilla);
+            int necesarios = Math.min(alphasport.service.ReglasPartido.TITULARES, plantilla);
             int elegidos = Datos.lista(p, lado[1]).size();
             boolean listo = necesarios > 0 && elegidos == necesarios;
             todoListo &= listo && !s(p, lado[2]).isEmpty();
@@ -1362,7 +1423,7 @@ public class Aplicacion extends Application {
             {"visitante", "visitanteNombre", "titularesVisitante", "formacionVisitante"}};
         for (String[] lado : lados) {
             long plantilla = l(equipoPorId(n(p, lado[0])), "jugadores").stream().filter(j -> n(j, "id") > 0).count();
-            int necesarios = (int) Math.min(Dialogos.TITULARES, plantilla);
+            int necesarios = (int) Math.min(alphasport.service.ReglasPartido.TITULARES, plantilla);
             if (necesarios > 0 && Datos.lista(p, lado[2]).size() != necesarios) {
                 falta.add("el XI titular de " + s(p, lado[1]));
             }

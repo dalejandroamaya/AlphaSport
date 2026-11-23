@@ -21,6 +21,7 @@ import alphasport.service.FilaTabla;
 import alphasport.service.GeneradorFixture;
 import alphasport.service.MotorCampeonato;
 import alphasport.service.Palmares;
+import alphasport.service.ReglasVotacion;
 import alphasport.service.ResumenCampeonato;
 import alphasport.service.Sanciones;
 import java.util.ArrayList;
@@ -56,7 +57,12 @@ public class Presentador {
                         "posiciones", Arrays.asList(g).subList(1, g.length))).collect(Collectors.toList()),
                 "semillaMaximoEquipos", alphasport.service.DatosPrueba.MAXIMO_EQUIPOS, "configuracion", configuracion(new ConfiguracionTorneo()),
                 "formaciones", Arrays.stream(Formacion.values()).map(Formacion::getTexto).collect(Collectors.toList()),
-                "formacionPorDefecto", Formacion.POR_DEFECTO.getTexto());
+                "formacionPorDefecto", Formacion.POR_DEFECTO.getTexto(),
+                // Limites del partido para las pantallas: la regla esta en ReglasPartido.
+                "reglasPartido", mapa("titulares", alphasport.service.ReglasPartido.TITULARES, "minutoMaximo", alphasport.service.ReglasPartido.MINUTO_MAXIMO),
+                // [REQ-07] Duracion de la votacion del publico: opciones rapidas y limites del campo de horas.
+                "votacion", mapa("opciones", List.of(12, 24, 48), "minimo", ReglasVotacion.HORAS_MINIMO,
+                        "maximo", ReglasVotacion.HORAS_MAXIMO, "porDefecto", ReglasVotacion.HORAS_POR_DEFECTO));
     }
 
     public Map<String, Object> estado() {
@@ -169,6 +175,7 @@ public class Presentador {
         m.put("visitanteNombre", c.nombreDe(p.getIdVisitante()));
         m.put("estado", p.getEstado().name());
         m.put("jugado", p.isJugado());
+        m.put("walkover", p.isWalkover());
         m.put("gl", p.getGolesLocal());
         m.put("gv", p.getGolesVisitante());
         m.put("pl", p.getPenalesLocal());
@@ -190,6 +197,10 @@ public class Presentador {
                 "entra", x.getIdEntra(), "entraNombre", x.getNombreEntra(), "entraDorsal", x.getDorsalEntra()))
                 .collect(Collectors.toList()));
         m.put("suspendidos", suspendidos);
+        // [REQ-07] Votacion del publico: horas programadas, si se puede votar ahora, cuando cierra (ms; 0 = sin hora
+        // de cierre), si el administrador la cerro antes de tiempo y cuantos votos lleva.
+        m.put("votacion", mapa("horas", p.getHorasVotacion(), "abierta", servicio.votacion().votacionAbierta(p),
+                "cierraEn", ReglasVotacion.cierraEn(p), "cerradaAntes", ReglasVotacion.cerradaAntes(p), "votos", p.getVotos().size()));
         return m;
     }
 
@@ -431,7 +442,7 @@ public class Presentador {
     public static Map<String, Object> calificaciones(CalificacionesPartido n) {
         java.util.function.Function<List<CalificacionesPartido.Calificacion>, List<Object>> jugadores = lista -> lista.stream()
                 .map(x -> (Object) mapa("id", x.idJugador(), "equipo", x.idEquipo(), "nombre", x.nombre(), "dorsal", x.dorsal(),
-                        "posicion", x.posicion(), "portero", x.portero(), "titular", x.titular(), "goles", x.goles(),
+                        "posicion", x.posicion(), "foto", x.foto(), "portero", x.portero(), "titular", x.titular(), "goles", x.goles(),
                         "asistencias", x.asistencias(), "amarillas", x.amarillas(), "rojas", x.rojas(),
                         "golesRecibidos", x.golesRecibidos(), "notaSistema", x.notaSistema(), "desglose", x.desglose(),
                         "votos", x.votos(), "promedioPublico", x.promedioPublico(), "notaFinal", x.notaFinal(),
@@ -440,6 +451,19 @@ public class Presentador {
         return mapa("votacion", n.votacion().name(), "cierraEn", n.cierraEn(), "disponible", n.disponible(),
                 "motivo", n.motivoSinCalificaciones(), "mvp", n.idMvp(),
                 "local", jugadores.apply(n.local()), "visitante", jugadores.apply(n.visitante()));
+    }
+
+    /**
+     * [REQ-07] Votaciones abiertas para el visitante: [{partido, calificaciones}], primero la que cierra antes.
+     * En cada jugador, miVoto dice si este dispositivo ya lo califico.
+     */
+    public List<Object> votaciones(String dispositivo) {
+        List<Object> lista = new ArrayList<>();
+        for (Partido p : servicio.votacion().votacionesAbiertas()) {
+            lista.add(mapa("partido", partido(servicio.getCampeonato(), p, servicio.sanciones()),
+                    "calificaciones", calificaciones(servicio.votacion().calificaciones(p.getId(), dispositivo))));
+        }
+        return lista;
     }
 
     /** Partido previo; si se da el equipo, agrega resultado (V/E/D) y rival desde su punto de vista. */
@@ -459,13 +483,19 @@ public class Presentador {
     private Map<String, Object> alineacion(DetallePartido.Alineacion a) {
         List<Object> lineas = new ArrayList<>();
         for (List<DetallePartido.Puesto> linea : a.lineas()) {
-            lineas.add(linea.stream().map(p -> p.jugador() == null ? null
-                    : (Object) mapa("id", p.jugador().getId(), "dorsal", p.jugador().getDorsal(),
-                            "nombre", p.jugador().getNombre(), "posicion", p.jugador().getPosicion(), "foto", p.jugador().getFoto()))
+            lineas.add(linea.stream().map(p -> p.jugador() == null ? null : (Object) fichaJugador(p.jugador()))
                     .collect(Collectors.toList()));
         }
+        DirectorTecnico dt = a.directorTecnico();
         return mapa("formacion", a.formacion(), "formacionElegida", a.formacionElegida(), "confirmada", a.confirmada(),
-                "lineas", lineas);
+                "lineas", lineas,
+                "suplentes", a.suplentes().stream().map(Presentador::fichaJugador).collect(Collectors.toList()),
+                "dt", dt == null ? "" : dt.getNombre());
+    }
+
+    /** Lo que se dibuja de un jugador en la cancha y en la lista de suplentes. */
+    private static Map<String, Object> fichaJugador(Jugador j) {
+        return mapa("id", j.getId(), "dorsal", j.getDorsal(), "nombre", j.getNombre(), "posicion", j.getPosicion(), "foto", j.getFoto());
     }
 
     public Map<String, Object> historial(List<Campeonato> campeonatos) {

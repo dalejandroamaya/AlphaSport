@@ -167,21 +167,52 @@ if (typeof Calificaciones !== 'undefined') {
   const sistema = n.votacion === 'ABIERTA' && n.local.length === 11 && de(n.local, 1).notaSistema === 7.5 && de(n.local, 9).notaSistema === 8
     && de(n.local, 8).notaSistema === 6.5 && de(n.local, 4).notaSistema === 5.5 && de(n.local, 5).notaSistema === 4
     && de(n.visitante, 1).notaSistema === 5.4 && n.mvp === 109;
-  Calificaciones.votar(c, p, 101, 10, 'dispositivo-A1', ahora + 2000, ErrorRegla);
-  const repetido = rechaza(() => Calificaciones.votar(c, p, 101, 3, 'dispositivo-A1', ahora + 3000, ErrorRegla));
-  Calificaciones.votar(c, p, 101, 9, 'dispositivo-B2', ahora + 4000, ErrorRegla);
+  const votar = (jugador, valor, dispositivo, cuando) => ReglasVotacion.votar(c, p, [{ jugador, valor }], dispositivo, cuando, ErrorRegla);
+  votar(101, 10, 'dispositivo-A1', ahora + 2000);
+  const repetido = rechaza(() => votar(101, 3, 'dispositivo-A1', ahora + 3000));
+  votar(101, 9, 'dispositivo-B2', ahora + 4000);
   const v = Calificaciones.calcular(c, p, ahora + 5000, 'dispositivo-A1');
   const hibrida = repetido && de(v.local, 1).notaFinal === 8.5 && de(v.local, 1).promedioPublico === 9.5 && v.mvp === 101 && de(v.local, 1).miVoto === 10;
-  const rango = rechaza(() => Calificaciones.votar(c, p, 101, 11, 'dispositivo-C3', ahora, ErrorRegla))
-    && rechaza(() => Calificaciones.votar(c, p, 114, 7, 'dispositivo-C3', ahora, ErrorRegla)); // suplente sin jugar
-  const fuera = ahora + Calificaciones.VENTANA_VOTACION_MS + 1;
-  const ventana = rechaza(() => Calificaciones.votar(c, p, 109, 8, 'dispositivo-C3', fuera, ErrorRegla))
-    && Calificaciones.calcular(c, p, fuera, null).votacion === 'CERRADA';
+  const rango = rechaza(() => votar(101, 11, 'dispositivo-C3', ahora))
+    && rechaza(() => votar(114, 7, 'dispositivo-C3', ahora)); // suplente sin jugar
+  // Varios votos a la vez: si uno no se acepta no se guarda ninguno.
+  c.partidos = [p];
+  const varios = rechaza(() => ReglasVotacion.votar(c, p, [{ jugador: 109, valor: 7 }, { jugador: 114, valor: 7 }], 'dispositivo-D4', ahora, ErrorRegla))
+    && rechaza(() => ReglasVotacion.votar(c, p, [], 'dispositivo-D4', ahora, ErrorRegla)) && p.votos.length === 2
+    && ReglasVotacion.abiertas(c, ahora).length === 1;
+  // Tiempo configurable: 48 horas mueve el cierre; cerrar a mano lo adelanta; otro tiempo lo reabre.
+  const hora = 3600000, programar = (h, cuando) => ReglasVotacion.programar(p, h, cuando, ErrorRegla);
+  let tiempo = ReglasVotacion.cierraEn(p) === ahora + 24 * hora;
+  programar(48, ahora);
+  tiempo = tiempo && ReglasVotacion.cierraEn(p) === ahora + 48 * hora && rechaza(() => programar(0, ahora)) && rechaza(() => programar(721, ahora))
+    && rechaza(() => programar(1.5, ahora)) && ReglasVotacion.estado(p, ahora + 30 * hora) === 'ABIERTA'
+    && rechaza(() => programar(12, ahora + 30 * hora)) && ReglasVotacion.horas(p) === 48;
+  ReglasVotacion.cerrar(p, ahora + 30 * hora, ErrorRegla);
+  tiempo = tiempo && ReglasVotacion.estado(p, ahora + 30 * hora) === 'CERRADA' && ReglasVotacion.cierraEn(p) === ahora + 30 * hora
+    && ReglasVotacion.abiertas(c, ahora + 30 * hora).length === 0 && rechaza(() => ReglasVotacion.cerrar(p, ahora + 30 * hora, ErrorRegla));
+  programar(48, ahora + 30 * hora); // el mismo tiempo no la reabre
+  tiempo = tiempo && ReglasVotacion.estado(p, ahora + 30 * hora) === 'CERRADA';
+  programar(36, ahora + 30 * hora);
+  tiempo = tiempo && ReglasVotacion.estado(p, ahora + 30 * hora) === 'ABIERTA' && p.votos.length === 2;
+  const fuera = ahora + 36 * hora;
+  const ventana = rechaza(() => votar(109, 8, 'dispositivo-C3', fuera)) && Calificaciones.calcular(c, p, fuera, null).votacion === 'CERRADA';
+  // El W.O. lo dice el campo, no el texto de la observación (salvo en los partidos anteriores, que no lo traen).
+  const base = P.datos(p), motivoDe = cambios => Calificaciones.calcular(c, Object.assign({}, p, base, cambios), ahora, null);
+  const anterior = Object.assign({}, p, { obs: 'W.O. a favor de A' });
+  delete anterior.walkover;
+  const walkover = motivoDe({ walkover: true, obs: 'Reclamo' }).motivo.includes('W.O.') && motivoDe({ walkover: false, obs: 'W.O. solicitado' }).disponible
+    && P.walkover(anterior) && !P.walkover(Object.assign({}, anterior, { obs: 'W.O. solicitado' }))
+    && P.resultadoDeWalkover({ estado: 'JUGADO', gl: 3, gv: 0 }) && !P.resultadoDeWalkover({ estado: 'JUGADO', gl: 3, gv: 0, goles: [{}] });
+  // Probar un cambio y cancelarlo (copia y respaldo) no pierde los votos; borrar el resultado sí los descarta.
+  const respaldo = P.datos(p);
   P.reiniciar(p);
-  Calificaciones.marcarFinal(p, fuera);
-  const descarta = p.finalizadoEn === 0 && p.votos.length === 0 && Calificaciones.calcular(c, p, fuera, null).votacion === 'SIN_RESULTADO';
-  const ok = reglas && sistema && hibrida && rango && ventana && descarta;
-  if (!ok) log(`  reglas=${reglas} sistema=${sistema} hibrida=${hibrida} rango=${rango} ventana=${ventana} descarta=${descarta}`);
+  Object.assign(p, respaldo);
+  const conserva = p.votos.length === 2 && p.finalizadoEn === ahora && p.horasVotacion === 36;
+  P.reiniciar(p);
+  ReglasVotacion.marcarFinal(p, fuera);
+  const descarta = p.finalizadoEn === 0 && p.votos.length === 0 && p.horasVotacion === 36 && Calificaciones.calcular(c, p, fuera, null).votacion === 'SIN_RESULTADO';
+  const ok = reglas && sistema && hibrida && rango && varios && tiempo && ventana && walkover && conserva && descarta;
+  if (!ok) log(`  reglas=${reglas} sistema=${sistema} hibrida=${hibrida} rango=${rango} varios=${varios} tiempo=${tiempo} ventana=${ventana} walkover=${walkover} conserva=${conserva} descarta=${descarta}`);
   log('Calificaciones de jugadores (sistema, público y MVP):', ok ? 'correcto' : 'MAL');
   if (!ok) fallos++;
 }

@@ -1,7 +1,5 @@
 package alphasport.ui;
 
-import alphasport.service.AutenticacionService;
-import alphasport.service.CampeonatoService;
 import java.awt.Desktop;
 import java.net.URI;
 
@@ -13,11 +11,23 @@ public class AlphaSportApp {
     private static final int PUERTO = 8080;
 
     public static void main(String[] args) throws Exception {
-        CampeonatoService servicio = Arranque.servicio();
-        ServidorWeb servidor = new ServidorWeb(Arranque.CARPETA_WEB, servicio, new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias()));
+        FabricaAplicacion fabrica = new FabricaAplicacion();
+        ServidorWeb servidor;
+        try {
+            servidor = fabrica.servidorWeb();
+        } catch (alphasport.persistence.PersistenciaException e) {
+            System.err.println(e.getMessage());
+            fabrica.close();
+            System.exit(1);
+            return;
+        }
+        servidor.alSalir(() -> System.exit(0)); // «Cerrar programa» en la web termina este proceso
         int puerto = servidor.iniciar(PUERTO);
         String direccion = "http://127.0.0.1:" + puerto + "/";
-        Runtime.getRuntime().addShutdownHook(new Thread(servidor::detener));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            servidor.detener();
+            fabrica.close();
+        }));
         System.out.println("AlphaSport esta funcionando en " + direccion);
         System.out.println("Para cerrar el programa use 'Cerrar programa' en el menu Archivo o presione Ctrl+C aqui.");
         if (args.length == 0 || !args[0].equals("--sin-navegador")) {

@@ -28,4 +28,8 @@ public final class Usuario {
     public boolean puedeEditar() {
         return rol.puedeEditar();
     }
+
+    public boolean puede(Permiso permiso) {
+        return rol.puede(permiso);
+    }
 }
