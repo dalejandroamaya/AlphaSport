@@ -7,6 +7,7 @@ import alphasport.model.Equipo;
 import alphasport.model.Jugador;
 import alphasport.model.Partido;
 import alphasport.model.TipoFormato;
+import alphasport.persistence.NotaJugador;
 import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.RepositorioCampeonato;
 import alphasport.persistence.RepositorioFotosEnMemoria;
@@ -53,14 +54,24 @@ public class CampeonatoService {
         return fotos;
     }
 
-    public void cargarGuardado() {
-        if (!repositorio.existe()) {
-            return;
-        }
-        try {
+    /** Si no se puede leer se lanza el error: nunca se empieza un campeonato nuevo encima de uno que no se pudo cargar. */
+    public void cargarGuardado() throws PersistenciaException {
+        if (repositorio.existe()) {
             usar(repositorio.cargar());
+        }
+    }
+
+    /**
+     * Vuelve a leer el campeonato si otro programa (el escritorio o la web) lo cambio en la base de datos.
+     * Se llama al empezar cada consulta y cada accion.
+     */
+    public void sincronizar() {
+        try {
+            if (repositorio.desactualizado()) {
+                usar(repositorio.cargar());
+            }
         } catch (PersistenciaException e) {
-            System.err.println(e.getMessage() + ". Se empezara un campeonato nuevo.");
+            throw new ReglaNegocioException("CONEXION", e.getMessage());
         }
     }
 
@@ -107,9 +118,8 @@ public class CampeonatoService {
      */
     public void cancelar() throws PersistenciaException {
         exigirCampeonato();
-        campeonato = null;
-        motor = null;
         repositorio.eliminar();
+        usar(null);
     }
 
     /**
@@ -456,6 +466,19 @@ public class CampeonatoService {
         motor.aplicarEdicion(partido, datos, afecta);
         ReglasVotacion.marcarFinal(partido, reloj.millis()); // [REQ-07] abre (o descarta) la votacion del publico
         guardar();
+        guardarNotas(idPartido);
+    }
+
+    /** Deja en la base de datos las notas del partido tal como las calcula CalculadoraCalificaciones. */
+    private void guardarNotas(int idPartido) throws PersistenciaException {
+        CalificacionesPartido c = calificaciones(idPartido, null);
+        List<NotaJugador> notas = new ArrayList<>();
+        for (List<CalificacionesPartido.Calificacion> lado : List.of(c.local(), c.visitante())) {
+            for (CalificacionesPartido.Calificacion n : lado) {
+                notas.add(new NotaJugador(n.idJugador(), n.notaSistema(), n.votos(), n.promedioPublico(), n.notaFinal(), n.mvp()));
+            }
+        }
+        repositorio.guardarNotas(idPartido, notas);
     }
 
     /** [REQ-07] Calificaciones de un partido; {@code dispositivo} sirve para mostrar el voto propio (puede ser null). */
@@ -474,6 +497,7 @@ public class CampeonatoService {
         exigirCampeonato();
         ReglasVotacion.votar(campeonato, buscarPartido(idPartido), notas, dispositivo, reloj.millis());
         guardar();
+        guardarNotas(idPartido);
         return calificaciones(idPartido, dispositivo);
     }
 
@@ -530,10 +554,14 @@ public class CampeonatoService {
     }
 
     public List<Campeonato> historial() {
-        return historial.listar();
+        try {
+            return historial.listar();
+        } catch (PersistenciaException e) {
+            throw new ReglaNegocioException("CONEXION", e.getMessage());
+        }
     }
 
-    public void eliminarDelHistorial(String codigo) {
+    public void eliminarDelHistorial(String codigo) throws PersistenciaException {
         if (!historial.eliminar(codigo)) {
             throw new ReglaNegocioException("No se encontró ese campeonato en el historial.");
         }
@@ -595,11 +623,21 @@ public class CampeonatoService {
 
     private void usar(Campeonato c) {
         campeonato = c;
-        motor = new MotorCampeonato(c);
+        motor = c == null ? null : new MotorCampeonato(c);
     }
 
+    /** Si no se pudo guardar, se descarta el cambio y se vuelve a lo que esta guardado. */
     private void guardar() throws PersistenciaException {
-        repositorio.guardar(campeonato);
+        try {
+            repositorio.guardar(campeonato);
+        } catch (PersistenciaException e) {
+            try {
+                usar(repositorio.existe() ? repositorio.cargar() : null);
+            } catch (PersistenciaException sinConexion) {
+                e.addSuppressed(sinConexion); // sin conexion: se sincroniza en la siguiente accion
+            }
+            throw e;
+        }
     }
 
     private void exigirCampeonato() {

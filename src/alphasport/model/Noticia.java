@@ -39,6 +39,11 @@ public class Noticia implements Serializable {
         return id;
     }
 
+    /** Lo pone el repositorio al guardar. */
+    public void setId(int id) {
+        this.id = id;
+    }
+
     public String getTitulo() {
         return titulo;
     }

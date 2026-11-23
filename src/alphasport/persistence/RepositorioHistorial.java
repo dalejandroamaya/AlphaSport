@@ -10,7 +10,7 @@ public interface RepositorioHistorial {
 
     void archivar(Campeonato campeonato) throws PersistenciaException;
 
-    List<Campeonato> listar();
+    List<Campeonato> listar() throws PersistenciaException;
 
-    boolean eliminar(String codigo);
+    boolean eliminar(String codigo) throws PersistenciaException;
 }

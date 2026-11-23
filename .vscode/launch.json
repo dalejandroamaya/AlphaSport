@@ -23,6 +23,20 @@
       "request": "launch",
       "mainClass": "alphasport.service.SimulacionFormatos",
       "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "java",
+      "name": "Prueba de PostgreSQL (PruebaPostgres)",
+      "request": "launch",
+      "mainClass": "alphasport.persistence.PruebaPostgres",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "java",
+      "name": "Pasar datos/ a PostgreSQL (MigradorArchivos)",
+      "request": "launch",
+      "mainClass": "alphasport.persistence.postgres.MigradorArchivos",
+      "cwd": "${workspaceFolder}"
     }
   ]
 }

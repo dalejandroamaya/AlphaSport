@@ -67,6 +67,7 @@ public class ServidorWeb {
             // Rutas que no pasan por api.ejecutar(): se validan aqui.
             if (ruta.equals("respaldo") || ruta.equals("exportar/historial")) {
                 api.exigirSesion();
+                servicio.sincronizar();
             }
             if (metodo.equals("POST") && (ruta.equals("respaldo") || ruta.equals("salir"))) {
                 api.exigirAdministrador();

@@ -388,7 +388,7 @@ public class SimulacionFormatos {
                     throw new IllegalStateException(e);
                 }
             };
-            boolean tiempo = servicio.calificaciones(p.getId(), null).cierraEn() == cierre + 24 * hora;
+            boolean tiempo = servicio.calificaciones(p.getId(), null).cierraEn() == cierre + ReglasVotacion.HORAS_POR_DEFECTO * hora;
             programar.accept(48);
             tiempo &= p.getHorasVotacion() == 48 && servicio.calificaciones(p.getId(), null).cierraEn() == cierre + 48 * hora
                     && rechaza(() -> programar.accept(0)) && rechaza(() -> programar.accept(ReglasVotacion.HORAS_MAXIMO + 1));

@@ -7,9 +7,7 @@ import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.RepositorioNoticias;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -17,8 +15,7 @@ import java.util.List;
  * - el administrador crea, edita, aprueba y elimina noticias y comentarios;
  * - el visitante propone noticias (quedan pendientes) y comenta las publicadas.
  *
- * Las noticias viven en una lista en memoria; el repositorio solo las conserva
- * (en memoria o en un archivo, segun la implementacion que se le entregue).
+ * Cada consulta y cada cambio va al repositorio (PostgreSQL); aqui no se guarda ninguna lista.
  * Los permisos (quien puede llamar cada metodo) los aplica ApiControlador.
  */
 public class NoticiasService {
@@ -37,44 +34,41 @@ public class NoticiasService {
     }
 
     private final RepositorioNoticias repositorio;
-    private final ArrayList<Noticia> noticias = new ArrayList<>();
-    private int siguienteNoticia = 1;
-    private int siguienteComentario = 1;
 
     public NoticiasService(RepositorioNoticias repositorio) {
         this.repositorio = repositorio;
-        try {
-            noticias.addAll(repositorio.cargar());
-        } catch (PersistenciaException e) {
-            System.err.println("No se pudieron cargar las noticias: " + e.getMessage());
-        }
-        for (Noticia n : noticias) {
-            siguienteNoticia = Math.max(siguienteNoticia, n.getId() + 1);
-            for (Comentario c : n.getComentarios()) {
-                siguienteComentario = Math.max(siguienteComentario, c.getId() + 1);
-            }
-        }
     }
 
     /* ---------------------------------------------------------------- consultas */
 
     /** Feed publico: solo las aprobadas, la mas reciente primero. */
     public List<Noticia> publicadas() {
-        return noticias.stream().filter(Noticia::isAprobado).sorted(masRecientePrimero()).toList();
+        return leer(repositorio::publicadas);
     }
 
     /** Propuestas de visitantes que esperan moderacion (solo las ve el administrador). */
     public List<Noticia> pendientes() {
-        return noticias.stream().filter(n -> !n.isAprobado()).sorted(masRecientePrimero()).toList();
-    }
-
-    private static Comparator<Noticia> masRecientePrimero() {
-        return Comparator.comparing(Noticia::getFecha).thenComparingInt(Noticia::getId).reversed();
+        return leer(repositorio::pendientes);
     }
 
     public Noticia buscar(int id) {
-        return noticias.stream().filter(n -> n.getId() == id).findFirst()
-                .orElseThrow(() -> new ReglaNegocioException("La noticia no existe (quizá ya fue eliminada)."));
+        Noticia n = leer(() -> repositorio.buscar(id));
+        if (n == null) {
+            throw new ReglaNegocioException("La noticia no existe (quizá ya fue eliminada).");
+        }
+        return n;
+    }
+
+    private interface Lectura<T> {
+        T leer() throws PersistenciaException;
+    }
+
+    private static <T> T leer(Lectura<T> lectura) {
+        try {
+            return lectura.leer();
+        } catch (PersistenciaException e) {
+            throw new ReglaNegocioException("CONEXION", e.getMessage());
+        }
     }
 
     /**
@@ -82,8 +76,7 @@ public class NoticiasService {
      * {@code incluirPendientes} (administrador): nadie puede pedir archivos sueltos.
      */
     public byte[] imagen(String nombre, boolean incluirPendientes) throws PersistenciaException {
-        boolean permitida = noticias.stream().anyMatch(n -> n.getImagenRuta().equals(nombre) && (n.isAprobado() || incluirPendientes));
-        return permitida ? repositorio.leerImagen(nombre) : null;
+        return repositorio.imagenVisible(nombre, incluirPendientes) ? repositorio.leerImagen(nombre) : null;
     }
 
     /* ---------------------------------------------------------------- visitante */
@@ -91,12 +84,11 @@ public class NoticiasService {
     /** El visitante propone una noticia: queda pendiente (aprobado = false) hasta que el administrador la apruebe. */
     public Noticia proponer(String titulo, String cuerpo, String autor, Imagen imagen) throws PersistenciaException {
         String nombre = limpiarNombre(autor, "Visitante");
-        Noticia n = new Noticia(siguienteNoticia++, validarTitulo(titulo), validarCuerpo(cuerpo), nombre, Rol.VISITANTE, ahora());
+        Noticia n = new Noticia(0, validarTitulo(titulo), validarCuerpo(cuerpo), nombre, Rol.VISITANTE, ahora());
         if (imagen != null) {
             n.setImagenRuta(repositorio.guardarImagen(imagen.datos(), imagen.extension()));
         }
-        noticias.add(n);
-        guardar();
+        repositorio.insertar(n);
         return n;
     }
 
@@ -113,10 +105,9 @@ public class NoticiasService {
         if (limpio.length() > MAXIMO_COMENTARIO) {
             throw new ReglaNegocioException("El comentario puede tener hasta " + MAXIMO_COMENTARIO + " caracteres.");
         }
-        Comentario c = new Comentario(siguienteComentario++, FiltroPalabras.sanear(limpiarNombre(autor, "Anónimo")),
+        Comentario c = new Comentario(0, FiltroPalabras.sanear(limpiarNombre(autor, "Anónimo")),
                 FiltroPalabras.sanear(limpio), ahora());
-        n.getComentarios().add(c);
-        guardar();
+        repositorio.insertarComentario(idNoticia, c);
         return c;
     }
 
@@ -130,8 +121,7 @@ public class NoticiasService {
         String t = validarTitulo(titulo), c = validarCuerpo(cuerpo);
         Noticia n;
         if (id == null) {
-            n = new Noticia(siguienteNoticia++, t, c, "Administración", Rol.ADMINISTRADOR, ahora());
-            noticias.add(n);
+            n = new Noticia(0, t, c, "Administración", Rol.ADMINISTRADOR, ahora());
         } else {
             n = buscar(id);
             n.setTitulo(t);
@@ -144,7 +134,11 @@ public class NoticiasService {
             }
             n.setImagenRuta(imagen == null ? "" : repositorio.guardarImagen(imagen.datos(), imagen.extension()));
         }
-        guardar();
+        if (id == null) {
+            repositorio.insertar(n);
+        } else {
+            repositorio.actualizar(n);
+        }
         return n;
     }
 
@@ -152,25 +146,24 @@ public class NoticiasService {
     public Noticia aprobar(int id) throws PersistenciaException {
         Noticia n = buscar(id);
         n.setAprobado(true);
-        guardar();
+        repositorio.actualizar(n);
         return n;
     }
 
     /** Rechaza una propuesta o elimina una noticia publicada (con su foto y sus comentarios). */
     public void eliminar(int id) throws PersistenciaException {
         Noticia n = buscar(id);
-        noticias.remove(n);
+        repositorio.eliminar(id);
         if (n.tieneImagen()) {
             repositorio.eliminarImagen(n.getImagenRuta());
         }
-        guardar();
     }
 
     public void eliminarComentario(int idNoticia, int idComentario) throws PersistenciaException {
-        if (!buscar(idNoticia).getComentarios().removeIf(c -> c.getId() == idComentario)) {
+        buscar(idNoticia);
+        if (!repositorio.eliminarComentario(idNoticia, idComentario)) {
             throw new ReglaNegocioException("El comentario no existe.");
         }
-        guardar();
     }
 
     /* ---------------------------------------------------------------- fotos y validaciones */
@@ -252,9 +245,5 @@ public class NoticiasService {
 
     private static String ahora() {
         return LocalDateTime.now().format(FORMATO_FECHA);
-    }
-
-    private void guardar() throws PersistenciaException {
-        repositorio.guardar(noticias);
     }
 }
