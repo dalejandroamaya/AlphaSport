@@ -108,9 +108,7 @@ public class CampeonatoService {
         if (mismosEquipos && campeonato != null) {
             nuevo.importarEquipos(campeonato.getEquipos());
         }
-        archivarActual();
-        usar(nuevo);
-        guardar();
+        reemplazarPor(nuevo);
     }
 
     /**
@@ -209,7 +207,6 @@ public class CampeonatoService {
         if (nombre == null || nombre.isBlank()) {
             throw new ReglaNegocioException("Escriba el nombre del nuevo torneo.");
         }
-        archivarActual();
         Campeonato copia = Serializacion.copiaProfunda(campeonato);
         copia.setNombreCampeonato(nombre.trim());
         copia.getPartidos().clear();
@@ -220,8 +217,7 @@ public class CampeonatoService {
         copia.setCodigo(null);
         copia.setFechaArchivo(null);
         copia.getEquipos().removeIf(Equipo::isRetirado);
-        usar(copia);
-        guardar();
+        reemplazarPor(copia);
     }
 
     public String avanzar() throws PersistenciaException {
@@ -548,14 +544,30 @@ public class CampeonatoService {
     }
 
     public void archivarActual() throws PersistenciaException {
+        archivar();
+    }
+
+    /** Guarda en el historial el campeonato en curso si ya tuvo partidos jugados (true si lo hizo). */
+    private boolean archivar() throws PersistenciaException {
         if (campeonato == null || campeonato.getPartidos().stream().noneMatch(Partido::isJugado)) {
-            return;
+            return false;
         }
         if (campeonato.getFechaArchivo() == null || campeonato.isTerminado()) {
             campeonato.setFechaArchivo(LocalDate.now().toString());
         }
         historial.archivar(campeonato);
         guardar();
+        return true;
+    }
+
+    /**
+     * {@code nuevo} pasa a ser el campeonato en curso. Si el actual ya tuvo partidos, queda en el historial con sus
+     * ids: lo que apunta a sus jugadores y partidos (notas, votos y, mas adelante, el Fantasy) sigue valiendo.
+     */
+    private void reemplazarPor(Campeonato nuevo) throws PersistenciaException {
+        boolean archivado = archivar();
+        usar(nuevo);
+        persistir(() -> repositorio.reemplazar(nuevo, archivado));
     }
 
     public List<Campeonato> historial() {
@@ -579,9 +591,7 @@ public class CampeonatoService {
 
     public void abrirRespaldo(byte[] datos) throws PersistenciaException {
         Campeonato abierto = Serializacion.desdeBytes(datos);
-        archivarActual();
-        usar(abierto);
-        guardar();
+        reemplazarPor(abierto);
     }
 
     public String textoHistorial() {
@@ -631,10 +641,19 @@ public class CampeonatoService {
         motor = c == null ? null : new MotorCampeonato(c);
     }
 
-    /** Si no se pudo guardar, se descarta el cambio y se vuelve a lo que esta guardado. */
     private void guardar() throws PersistenciaException {
+        persistir(() -> repositorio.guardar(campeonato));
+    }
+
+    @FunctionalInterface
+    private interface Escritura {
+        void ejecutar() throws PersistenciaException;
+    }
+
+    /** Si no se pudo guardar, se descarta el cambio y se vuelve a lo que esta guardado. */
+    private void persistir(Escritura escritura) throws PersistenciaException {
         try {
-            repositorio.guardar(campeonato);
+            escritura.ejecutar();
         } catch (PersistenciaException e) {
             try {
                 usar(repositorio.existe() ? repositorio.cargar() : null);

@@ -61,6 +61,25 @@ public class PostgresRepositorioCampeonato implements RepositorioCampeonato {
         huellas = nuevas[0];
     }
 
+    @Override
+    public void reemplazar(Campeonato nuevo, boolean archivarAnterior) throws PersistenciaException {
+        if (!archivarAnterior || conocido == null || conocido.codigo().equals(nuevo.getCodigo())) {
+            guardar(nuevo);
+            return;
+        }
+        CampeonatoDAO.Huellas[] nuevas = new CampeonatoDAO.Huellas[1];
+        conocido = conexion.ejecutar(con -> {
+            avanzar(con);
+            // El torneo en curso pasa entero al historial (mismos ids) en lugar de la copia que hizo el historial.
+            campeonatos.torneos().eliminarArchivado(con, conocido.codigo());
+            campeonatos.torneos().archivar(con, conocido.id());
+            int id = campeonatos.torneos().insertar(con, nuevo, TorneoDAO.ACTUAL);
+            nuevas[0] = campeonatos.escribir(con, id, nuevo, new CampeonatoDAO.Huellas());
+            return campeonatos.torneos().actual(con);
+        });
+        huellas = nuevas[0];
+    }
+
     private int avanzar(Connection con) throws SQLException, PersistenciaException {
         if (!campeonatos.torneos().avanzarVersion(con, conocido.id(), conocido.version())) {
             throw conflicto();
@@ -68,7 +87,7 @@ public class PostgresRepositorioCampeonato implements RepositorioCampeonato {
         return conocido.id();
     }
 
-    /** Un campeonato nuevo ocupa el lugar del que estaba en curso (las copias del historial no se tocan). */
+    /** Un campeonato nuevo ocupa el lugar del que estaba en curso, que se descarta (las copias del historial no se tocan). */
     private int reemplazarActual(Connection con, Campeonato c) throws SQLException, PersistenciaException {
         if (conocido != null) {
             avanzar(con);

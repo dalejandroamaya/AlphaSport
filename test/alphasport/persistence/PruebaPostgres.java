@@ -62,6 +62,7 @@ public final class PruebaPostgres {
         probar("Consultas SQL iguales a los cálculos del programa", PruebaPostgres::probarConsultas);
         probar("Plantilla: dorsales intercambiados y jugadores retirados", PruebaPostgres::probarPlantilla);
         probar("Identidad: los ids no cambian al guardar ni al archivar", PruebaPostgres::probarIdentidad);
+        probar("Temporadas: el campeonato anterior pasa al historial con sus ids", PruebaPostgres::probarTemporadas);
         probar("W.O.: sin notas ni votación, y vuelve a la normalidad al borrarlo", PruebaPostgres::probarWalkover);
         probar("Dos programas a la vez: sincronización y conflictos", PruebaPostgres::probarDosProgramas);
         probar("Historial: copias que no cambian con el campeonato actual", PruebaPostgres::probarHistorial);
@@ -512,6 +513,65 @@ public final class PruebaPostgres {
                     texto.append(rs.getString(1)).append('#').append(rs.getInt(2)).append('=').append(rs.getString(3)).append(' ');
                 }
                 return texto.toString();
+            }
+        });
+    }
+
+    private static boolean probarTemporadas(ConexionDB db) throws Exception {
+        CampeonatoService s = liga(db, 4);
+        Partido p = s.getCampeonato().getPartidos().get(0);
+        jugarCompleto(s, p);
+        int portero = p.getTitularesVisitante().get(0);
+        s.votarJugador(p.getId(), portero, 8, "dispositivo-T1");
+        String codigo = s.getCampeonato().getCodigo();
+        String jugadores = idsActuales(db, "jugadores"), partidos = idsActuales(db, "partidos"), equipos = idsActuales(db, "equipos");
+        int notas = contar(db, "SELECT COUNT(*) FROM calificaciones_partido");
+        // Una tabla que apunta a los jugadores, como lo hara el modulo Fantasy.
+        sql(db, "CREATE TABLE fantasy_prueba (jugador_id INTEGER NOT NULL REFERENCES jugadores (id) ON DELETE CASCADE)");
+        sql(db, "INSERT INTO fantasy_prueba SELECT j.id FROM jugadores j JOIN torneos t ON t.id = j.torneo_id AND t.situacion = 'ACTUAL'"
+                + " WHERE j.numero = " + portero);
+        s.siguienteTemporada("Temporada 2");
+        // El campeonato anterior es el del historial, con los mismos ids, sus notas y sus votos.
+        boolean conserva = ids(db, codigo, "jugadores").equals(jugadores) && ids(db, codigo, "partidos").equals(partidos)
+                && ids(db, codigo, "equipos").equals(equipos) && notas > 0 && contar(db, "SELECT COUNT(*) FROM calificaciones_partido") == notas
+                && contar(db, "SELECT COUNT(*) FROM votos_publico") == 1 && contar(db, "SELECT COUNT(*) FROM torneos WHERE situacion = 'ARCHIVADO'") == 1;
+        Campeonato archivado = servicio(db).historial().get(0);
+        conserva &= archivado.getCodigo().equals(codigo) && archivado.getFechaArchivo() != null
+                && archivado.getPartidos().stream().filter(Partido::isJugado).count() == 1 && !s.getCampeonato().getCodigo().equals(codigo);
+        // Lo que apunta al jugador lo sigue encontrando, y es la misma persona que juega la nueva temporada.
+        boolean fantasy = contar(db, "SELECT COUNT(*) FROM fantasy_prueba f JOIN jugadores j ON j.id = f.jugador_id"
+                + " JOIN jugadores n ON n.persona_id = j.persona_id JOIN torneos t ON t.id = n.torneo_id AND t.situacion = 'ACTUAL'") == 1;
+        // Lo mismo al crear otro campeonato y al abrir un respaldo; cambiar el formato o cancelar descartan el actual.
+        s.avanzar();
+        jugarCompleto(s, s.getCampeonato().getPartidos().get(0));
+        String segunda = s.getCampeonato().getCodigo(), jugadores2 = idsActuales(db, "jugadores");
+        s.crear("Otro torneo", TipoFormato.LIGA, new ConfiguracionTorneo(), true);
+        boolean otros = ids(db, segunda, "jugadores").equals(jugadores2) && servicio(db).historial().size() == 2;
+        byte[] respaldo = s.respaldo();
+        s.cambiarFormato("Otro torneo 2", TipoFormato.LIGA, new ConfiguracionTorneo());
+        otros &= servicio(db).historial().size() == 2 && contar(db, "SELECT COUNT(*) FROM torneos") == 3;
+        s.cancelar();
+        s.abrirRespaldo(respaldo);
+        otros &= servicio(db).historial().size() == 2 && seLeeIgual(db, s) && contar(db, "SELECT COUNT(*) FROM fantasy_prueba") == 1;
+        if (!(conserva && fantasy && otros)) {
+            System.out.println("  conserva=" + conserva + " fantasy=" + fantasy + " otros=" + otros);
+        }
+        return conserva && fantasy && otros;
+    }
+
+    /** numero -> id de una tabla en la copia archivada del torneo. */
+    private static String ids(ConexionDB db, String codigo, String tabla) throws PersistenciaException {
+        return db.ejecutar(con -> {
+            try (var st = con.prepareStatement("SELECT x.numero, x.id FROM " + tabla
+                    + " x JOIN torneos t ON t.id = x.torneo_id WHERE t.situacion = 'ARCHIVADO' AND t.codigo = ? ORDER BY x.numero")) {
+                st.setString(1, codigo);
+                try (var rs = st.executeQuery()) {
+                    StringBuilder texto = new StringBuilder();
+                    while (rs.next()) {
+                        texto.append(rs.getInt(1)).append('=').append(rs.getInt(2)).append(' ');
+                    }
+                    return texto.toString();
+                }
             }
         });
     }

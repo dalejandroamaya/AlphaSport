@@ -78,7 +78,7 @@ Ejecute **Prueba de PostgreSQL (PruebaPostgres)**: debe terminar en `TODO BIEN`.
 
 | Tabla | Qué guarda |
 |---|---|
-| `torneos`, `torneo_criterios`, `divisiones` | El campeonato en curso (`ACTUAL`) y las copias del historial (`ARCHIVADO`), con sus reglas |
+| `torneos`, `torneo_criterios`, `divisiones` | El campeonato en curso (`ACTUAL`) y los del historial (`ARCHIVADO`), con sus reglas. Al empezar otro campeonato, el anterior pasa al historial con sus mismos ids |
 | `equipos`, `directores_tecnicos`, `jugadores` | Plantillas. Un jugador que sale queda con `activo = FALSE`: sus goles y votos lo siguen usando |
 | `personas` | Quién es cada jugador (`codigo` UUID): la misma persona en todas las temporadas y copias del historial. No se borra con el torneo |
 | `fases`, `fase_participantes`, `fase_grupos`, `fase_cuadro` | Fases, grupos y llaves |

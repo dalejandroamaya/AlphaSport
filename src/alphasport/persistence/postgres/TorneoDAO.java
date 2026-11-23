@@ -48,6 +48,22 @@ final class TorneoDAO {
         return Sql.cambiar(con, "UPDATE torneos SET version = version + 1, actualizado_en = CURRENT_TIMESTAMP WHERE id = ? AND version = ?", id, version) == 1;
     }
 
+    /** El torneo en curso pasa al historial tal como esta: sus ids, notas y votos no cambian. */
+    void archivar(Connection con, int id) throws SQLException {
+        Sql.cambiar(con, """
+                UPDATE torneos SET situacion = 'ARCHIVADO', fecha_archivo = COALESCE(fecha_archivo, CURRENT_DATE),
+                       version = version + 1, actualizado_en = CURRENT_TIMESTAMP
+                 WHERE id = ?""", id);
+    }
+
+    /** Borra la copia archivada de un torneo, si la hay. */
+    void eliminarArchivado(Connection con, String codigo) throws SQLException {
+        Integer id = Sql.uno(con, "SELECT id FROM torneos WHERE codigo = ? AND situacion = 'ARCHIVADO'", rs -> rs.getInt(1), codigo);
+        if (id != null) {
+            eliminar(con, id);
+        }
+    }
+
     boolean eliminar(Connection con, int id) throws SQLException {
         // Los eventos y los partidos apuntan a equipos y jugadores sin cascada: se borran antes.
         Sql.cambiar(con, "DELETE FROM partidos WHERE torneo_id = ?", id);
