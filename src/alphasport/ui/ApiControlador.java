@@ -19,6 +19,7 @@ import alphasport.service.CampeonatoService;
 import alphasport.service.NoticiasService;
 import alphasport.service.ReglaNegocioException;
 import alphasport.service.ReglasPartido;
+import alphasport.service.SesionService;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -33,13 +34,17 @@ import java.util.Set;
 public class ApiControlador {
 
     private final CampeonatoService servicio;
-    private final AutenticacionService autenticacion;
+    private final SesionService sesion;
     private final Presentador presentador;
     private final NoticiasService noticias;
 
     public ApiControlador(CampeonatoService servicio, AutenticacionService autenticacion, NoticiasService noticias) {
+        this(servicio, new SesionService(autenticacion), noticias);
+    }
+
+    public ApiControlador(CampeonatoService servicio, SesionService sesion, NoticiasService noticias) {
         this.servicio = servicio;
-        this.autenticacion = autenticacion;
+        this.sesion = sesion;
         this.noticias = noticias;
         this.presentador = new Presentador(servicio);
     }
@@ -54,9 +59,6 @@ public class ApiControlador {
     }
 
     /* ---------------------------------------------------------------- sesion y permisos */
-
-    /** Usuario con sesion abierta; null si nadie ha iniciado sesion. */
-    private Usuario usuarioActual;
 
     /** Rutas de ejecutar() que no exigen sesion. */
     private static final Set<String> RUTAS_PUBLICAS = Set.of("login", "login/visitante", "logout");
@@ -75,24 +77,19 @@ public class ApiControlador {
         };
     }
 
+    /** Usuario con sesion abierta; null si nadie ha iniciado sesion. */
     public Usuario getUsuarioActual() {
-        return usuarioActual;
+        return sesion.usuario();
     }
 
     /** Lanza LOGIN si no hay sesion. */
     public void exigirSesion() {
-        if (usuarioActual == null) {
-            throw new ReglaNegocioException("LOGIN", "Inicie sesión para continuar.");
-        }
+        sesion.exigirSesion();
     }
 
     /** Lanza LOGIN si no hay sesion y PERMISO si el rol no tiene ese permiso. */
     public void exigir(Permiso permiso) {
-        exigirSesion();
-        if (!usuarioActual.puede(permiso)) {
-            throw new ReglaNegocioException("PERMISO", "Su rol (" + usuarioActual.getRol().getNombre()
-                    + ") no puede " + permiso.getAccion() + ".");
-        }
+        sesion.exigir(permiso);
     }
 
     /** Lanza PERMISO si el usuario no puede modificar datos. */
@@ -101,15 +98,16 @@ public class ApiControlador {
     }
 
     private boolean puede(Permiso permiso) {
-        return usuarioActual != null && usuarioActual.puede(permiso);
+        return sesion.puede(permiso);
     }
 
     /** Datos de la sesion para la interfaz: {usuario, rol, puedeEditar, permisos}. */
     public Map<String, Object> sesion() {
-        return usuarioActual == null ? null
-                : Presentador.mapa("usuario", usuarioActual.getNombre(), "rol", usuarioActual.getRol().name(),
-                        "rolNombre", usuarioActual.getRol().getNombre(), "puedeEditar", usuarioActual.puedeEditar(),
-                        "permisos", usuarioActual.getRol().getPermisos().stream().map(Permiso::name).sorted().toList());
+        Usuario u = sesion.usuario();
+        return u == null ? null
+                : Presentador.mapa("usuario", u.getNombre(), "rol", u.getRol().name(),
+                        "rolNombre", u.getRol().getNombre(), "puedeEditar", u.puedeEditar(),
+                        "permisos", u.getRol().getPermisos().stream().map(Permiso::name).sorted().toList());
     }
 
     public Map<String, Object> consultar(String ruta) {
@@ -153,10 +151,10 @@ public class ApiControlador {
         }
         String mensaje = null;
         switch (ruta) {
-            case "login" -> usuarioActual = autenticacion.iniciarSesion(texto(cuerpo, "usuario"), texto(cuerpo, "clave"));
-            case "login/visitante" -> usuarioActual = autenticacion.entrarComoVisitante();
+            case "login" -> sesion.iniciar(texto(cuerpo, "usuario"), texto(cuerpo, "clave"));
+            case "login/visitante" -> sesion.entrarComoVisitante();
             case "logout" -> {
-                usuarioActual = null;
+                sesion.cerrar();
                 return Presentador.mapa("ok", true);
             }
             case "nuevo" -> servicio.crear(texto(cuerpo, "nombre"), TipoFormato.valueOf(texto(cuerpo, "formato")),
@@ -261,7 +259,7 @@ public class ApiControlador {
 
     public byte[] imagenNoticia(String nombre) throws Exception {
         exigirSesion();
-        return noticias.imagen(nombre, usuarioActual.puede(Permiso.MODERAR_NOTICIAS));
+        return noticias.imagen(nombre, puede(Permiso.MODERAR_NOTICIAS));
     }
 
     public Map<String, Object> respuesta(String mensaje) {
