@@ -47,15 +47,15 @@ final class PartidoDAO {
         int local = k.equipos().get(p.getIdLocal()), visitante = k.equipos().get(p.getIdVisitante());
         int id = Sql.insertar(con, """
                 INSERT INTO partidos (torneo_id, numero, fase_id, local_id, visitante_id, paso, grupo, ronda, nombre_ronda, serie, pierna, llave, eliminatorio,
-                                      fecha, hora, sede, observaciones, formacion_local, formacion_visitante, estado, goles_local, goles_visitante,
+                                      fecha, hora, sede, observaciones, formacion_local, formacion_visitante, estado, walkover, goles_local, goles_visitante,
                                       penales_local, penales_visitante, amarillas_local, rojas_local, amarillas_visitante, rojas_visitante,
                                       finalizado_en, horas_votacion, votacion_cerrada_en)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (torneo_id, numero) DO UPDATE SET fase_id = EXCLUDED.fase_id, local_id = EXCLUDED.local_id, visitante_id = EXCLUDED.visitante_id,
                     paso = EXCLUDED.paso, grupo = EXCLUDED.grupo, ronda = EXCLUDED.ronda, nombre_ronda = EXCLUDED.nombre_ronda, serie = EXCLUDED.serie,
                     pierna = EXCLUDED.pierna, llave = EXCLUDED.llave, eliminatorio = EXCLUDED.eliminatorio, fecha = EXCLUDED.fecha, hora = EXCLUDED.hora,
                     sede = EXCLUDED.sede, observaciones = EXCLUDED.observaciones, formacion_local = EXCLUDED.formacion_local,
-                    formacion_visitante = EXCLUDED.formacion_visitante, estado = EXCLUDED.estado, goles_local = EXCLUDED.goles_local,
+                    formacion_visitante = EXCLUDED.formacion_visitante, estado = EXCLUDED.estado, walkover = EXCLUDED.walkover, goles_local = EXCLUDED.goles_local,
                     goles_visitante = EXCLUDED.goles_visitante, penales_local = EXCLUDED.penales_local, penales_visitante = EXCLUDED.penales_visitante,
                     amarillas_local = EXCLUDED.amarillas_local, rojas_local = EXCLUDED.rojas_local, amarillas_visitante = EXCLUDED.amarillas_visitante,
                     rojas_visitante = EXCLUDED.rojas_visitante, finalizado_en = EXCLUDED.finalizado_en, horas_votacion = EXCLUDED.horas_votacion,
@@ -64,7 +64,7 @@ final class PartidoDAO {
                 k.idTorneo(), p.getId(), k.fases().get(p.getIndiceFase()), local, visitante, p.getPaso(), Sql.texto(p.getGrupo()), p.getRonda(),
                 Sql.texto(p.getNombreRonda()), Sql.texto(p.getSerie()), p.getPierna(), Sql.texto(p.getLlave()), p.isEliminatorio(),
                 Sql.fecha(p.getFecha()), Sql.hora(p.getHora()), Sql.texto(p.getSede()), Sql.texto(p.getObservaciones()),
-                Sql.nulo(p.getFormacionLocal()), Sql.nulo(p.getFormacionVisitante()), p.getEstado().name(), p.getGolesLocal(), p.getGolesVisitante(),
+                Sql.nulo(p.getFormacionLocal()), Sql.nulo(p.getFormacionVisitante()), p.getEstado().name(), p.isWalkover(), p.getGolesLocal(), p.getGolesVisitante(),
                 penales(p.getPenalesLocal()), penales(p.getPenalesVisitante()), p.getAmarillasLocal(), p.getRojasLocal(), p.getAmarillasVisitante(),
                 p.getRojasVisitante(), Sql.momento(p.getFinalizadoEn()), p.getHorasVotacion(), Sql.momento(p.getVotacionCerradaEn()));
         guardarAlineaciones(con, id, p, k);
@@ -205,6 +205,7 @@ final class PartidoDAO {
         p.setObservaciones(rs.getString("observaciones"));
         p.setFormaciones(rs.getString("formacion_local"), rs.getString("formacion_visitante"));
         p.setEstado(EstadoPartido.valueOf(rs.getString("estado")));
+        p.setWalkover(rs.getBoolean("walkover"));
         p.setGolesLocal(rs.getInt("goles_local"));
         p.setGolesVisitante(rs.getInt("goles_visitante"));
         Integer pl = Sql.entero(rs, "penales_local"), pv = Sql.entero(rs, "penales_visitante");

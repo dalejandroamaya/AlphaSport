@@ -136,7 +136,7 @@ function crearServicioLocal() {
     return {
       id: p.id, fase: p.fase, grupo: p.grupo || '', grupoNombre: p.grupo ? nombreGrupo(c.fases[p.fase], p.grupo.charCodeAt(0) - 65) : '', ronda: p.ronda, nombreRonda: p.nombreRonda, pierna: p.pierna || 0,
       llave: p.llave || '', eliminatorio: !!p.eliminatorio, local: p.local, visitante: p.visitante,
-      localNombre: m.nombre(p.local), visitanteNombre: m.nombre(p.visitante), estado: p.estado, jugado: P.jugado(p),
+      localNombre: m.nombre(p.local), visitanteNombre: m.nombre(p.visitante), estado: p.estado, jugado: P.jugado(p), walkover: P.walkover(p),
       gl: p.gl, gv: p.gv, pl: p.pl, pv: p.pv, penales: P.tienePenales(p), ganador: P.jugado(p) ? P.ganador(p) : -1,
       fecha: p.fecha || 'Por definir', hora: p.hora || '', sede: p.sede || '', obs: p.obs || '',
       tarjetas: P.tarjetas(p).map(t => Object.assign({ minuto: 0 }, t)),
@@ -322,6 +322,18 @@ function crearServicioLocal() {
 
   const MINUTO_MAXIMO = 130; // 90 + prórroga + descuento
 
+  // Igual que ReglasPartido.dobleAmarilla en Java: a lo sumo una roja y dos amarillas, y quien tiene dos amarillas tiene su roja.
+  const dobleAmarilla = tarjetas => {
+    const porJugador = new Map();
+    tarjetas.forEach(t => porJugador.set(t.jugador, (porJugador.get(t.jugador) || []).concat(t)));
+    for (const lista of porJugador.values()) {
+      const nombre = lista[0].nombre, rojas = lista.filter(t => t.tipo === 'ROJA').length, amarillas = lista.length - rojas;
+      if (rojas > 1) throw new ErrorRegla(`${nombre} ya fue expulsado en este partido: tiene más de una roja.`);
+      if (amarillas > 2) throw new ErrorRegla(`${nombre} tiene ${amarillas} amarillas: con la segunda ya queda expulsado.`);
+      if (amarillas === 2 && rojas === 0) throw new ErrorRegla(`${nombre} tiene dos amarillas: la segunda es expulsión. Regístrela como roja.`);
+    }
+  };
+
   const TITULARES = 11;
 
   /** XI inicial de un equipo: jugadores de su plantilla, exactamente 11 (o toda la plantilla si tiene menos). */
@@ -460,6 +472,7 @@ function crearServicioLocal() {
         if (!j) throw new ErrorRegla('Una de las tarjetas es de un jugador que ya no existe.');
         return Object.assign({}, t, { jugador: j.id, nombre: j.nombre, dorsal: j.dorsal, minuto, fechas: t.tipo === 'ROJA' ? Math.max(1, t.fechas | 0) : 0 });
       }), p.local);
+      dobleAmarilla(datos.tarjetas);
       ponerTitulares(); // antes de los cambios: se validan contra este XI
       if (d.cambios) datos.cambios = leerCambios(d.cambios, p, datos);
       if (d.goles) datos.goles = leerGoles(d.goles, p); // la carga rápida no envía los goles: se conservan
@@ -493,6 +506,8 @@ function crearServicioLocal() {
     } else if (accion === 'borrar') {
       P.reiniciar(datos);
     }
+    // Si al editar un W.O. se registra lo que pasó en la cancha, deja de ser W.O.
+    datos.walkover = P.walkover(datos) && P.resultadoDeWalkover(datos);
     if (P.jugado(datos)) {
       const necesita = m.requierePenales(p, datos.gl, datos.gv);
       if (necesita && (datos.pl === SIN_PENALES || datos.pl === datos.pv)) {
@@ -743,6 +758,7 @@ function crearServicioLocal() {
         configuracion: configuracionPorDefecto(),
         formaciones: FORMACIONES.slice(),
         formacionPorDefecto: FORMACION_POR_DEFECTO,
+        reglasPartido: { titulares: TITULARES, minutoMaximo: MINUTO_MAXIMO },
         votacion: { opciones: [12, 24, 48], minimo: ReglasVotacion.HORAS_MINIMO, maximo: ReglasVotacion.HORAS_MAXIMO, porDefecto: ReglasVotacion.HORAS_POR_DEFECTO }
       };
     },

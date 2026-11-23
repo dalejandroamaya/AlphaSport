@@ -24,8 +24,6 @@ function restanteVotacion(cierraEn) {
   return minutos === 1 ? 'queda 1 min' : `quedan ${minutos} min`;
 }
 
-const esWalkover = p => String(p.obs || '').startsWith('W.O.');
-
 /* ---------------------------------------------------------------- Votaciones (visitante) */
 
 let votacionesAbiertas = [];
@@ -162,7 +160,7 @@ function horasEditorVotacion() {
 function dibujarEstadoVotacion(p) {
   const v = p.votacion, votos = plural(v.votos, '1 voto', v.votos + ' votos');
   $('vtEstado').textContent = !p.jugado ? 'Se abre cuando el partido quede «Jugado».'
-    : esWalkover(p) ? 'Partido definido por W.O.: no tiene votación.'
+    : p.walkover ? 'Partido definido por W.O.: no tiene votación.'
     : !v.cierraEn ? 'Partido jugado antes de existir las votaciones: no tiene votación.'
     : v.abierta ? `Abierta: ${restanteVotacion(v.cierraEn)} (cierra el ${horaVotacion(v.cierraEn)}). Lleva ${votos}.`
     : v.cierraEn > Date.now() ? 'No se registró quién jugó: no hay a quién calificar.'
@@ -170,7 +168,7 @@ function dibujarEstadoVotacion(p) {
   $('vtEstado').classList.toggle('votacion-abierta', v.abierta);
   $('vtCerrar').hidden = !v.abierta;
   // Sin votación posible solo se explica por qué.
-  $('vtControles').hidden = p.jugado && (esWalkover(p) || !v.cierraEn);
+  $('vtControles').hidden = p.jugado && (p.walkover || !v.cierraEn);
 }
 
 async function cerrarVotacion() {

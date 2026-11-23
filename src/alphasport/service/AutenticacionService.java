@@ -1,35 +1,48 @@
 package alphasport.service;
 
+import alphasport.model.CuentaUsuario;
 import alphasport.model.Rol;
 import alphasport.model.Usuario;
-import java.util.Map;
+import alphasport.persistence.PersistenciaException;
+import alphasport.persistence.RepositorioUsuarios;
+import alphasport.persistence.RepositorioUsuariosEnMemoria;
+import java.util.Optional;
 
 /**
- * Valida el acceso a la aplicacion y devuelve el usuario con su rol.
- * Prototipo: las cuentas estan en memoria (sin base de datos).
+ * Valida el acceso a la aplicacion y devuelve el usuario con su rol. Las cuentas las da un
+ * {@link RepositorioUsuarios} (el servicio no sabe si estan en memoria o en la base de datos) y la clave se
+ * compara con su hash con un {@link VerificadorClaves}: en ningun lado se guarda la clave.
  */
 public class AutenticacionService {
 
-    /** Cuenta demostrativa: clave y rol. */
-    private record Cuenta(String clave, Rol rol) {
+    private final RepositorioUsuarios usuarios;
+    private final VerificadorClaves verificador;
+    /** Hash de una clave que nadie usa: con un usuario que no existe se hace el mismo trabajo (no se nota en el tiempo). */
+    private final String hashFicticio;
+
+    public AutenticacionService(RepositorioUsuarios usuarios, VerificadorClaves verificador) {
+        this.usuarios = usuarios;
+        this.verificador = verificador;
+        this.hashFicticio = verificador.hash(java.util.UUID.randomUUID().toString());
     }
 
-    private static final Map<String, Cuenta> CUENTAS = Map.of(
-            "admin", new Cuenta("123", Rol.ADMINISTRADOR),
-            "visitante", new Cuenta("321", Rol.VISITANTE));
+    /** Con las cuentas de demostracion (admin y visitante) y PBKDF2. */
+    public AutenticacionService() {
+        this(RepositorioUsuariosEnMemoria.demostracion(), new ClavesPbkdf2());
+    }
 
     /**
      * Inicia sesion con usuario y clave.
      *
      * @throws ReglaNegocioException con codigo LOGIN si los datos no coinciden.
      */
-    public Usuario iniciarSesion(String usuario, String clave) {
-        String nombre = usuario == null ? "" : usuario.trim().toLowerCase();
-        Cuenta cuenta = CUENTAS.get(nombre);
-        if (cuenta == null || !cuenta.clave().equals(clave)) {
+    public Usuario iniciarSesion(String usuario, String clave) throws PersistenciaException {
+        Optional<CuentaUsuario> cuenta = usuarios.buscar(usuario);
+        boolean coincide = verificador.coincide(clave == null ? "" : clave, cuenta.map(CuentaUsuario::claveHash).orElse(hashFicticio));
+        if (cuenta.isEmpty() || !coincide) {
             throw new ReglaNegocioException("LOGIN", "Usuario o contraseña incorrectos.");
         }
-        return new Usuario(nombre, cuenta.rol());
+        return cuenta.get().comoUsuario();
     }
 
     /** Acceso de solo lectura sin contraseña (boton «Entrar como visitante»). */

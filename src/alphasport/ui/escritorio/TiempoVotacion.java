@@ -2,7 +2,6 @@ package alphasport.ui.escritorio;
 
 import static alphasport.ui.escritorio.Datos.b;
 import static alphasport.ui.escritorio.Datos.m;
-import static alphasport.ui.escritorio.Datos.s;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -51,6 +50,6 @@ final class TiempoVotacion {
 
     /** Un W.O. no se juega: no tiene votación. */
     static boolean esWalkover(Map<String, Object> partido) {
-        return s(partido, "obs").startsWith("W.O.");
+        return b(partido, "walkover");
     }
 }

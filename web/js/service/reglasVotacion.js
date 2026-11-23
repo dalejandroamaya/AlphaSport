@@ -32,7 +32,7 @@ const ReglasVotacion = (() => {
   }
 
   /** true si el visitante puede votar ahora: abierta, sin W.O. y con jugadores que calificar. */
-  const abierta = (c, p, ahora) => estado(p, ahora) === 'ABIERTA' && !Calificaciones.esWalkover(p)
+  const abierta = (c, p, ahora) => estado(p, ahora) === 'ABIERTA' && !P.walkover(p)
     && (Calificaciones.participantes(c, p, p.local).length > 0 || Calificaciones.participantes(c, p, p.visitante).length > 0);
 
   /** Partidos con la votación abierta, primero los que cierran antes. */
@@ -81,7 +81,7 @@ const ReglasVotacion = (() => {
   /** Registra los votos ([{jugador, valor}]). Primero se validan todos: si uno no se acepta no se guarda ninguno. */
   function votar(c, p, votos, dispositivo, ahora, ErrorRegla) {
     if (!/^[A-Za-z0-9-]{8,64}$/.test(String(dispositivo || ''))) throw new ErrorRegla('No se pudo identificar este dispositivo para registrar el voto.');
-    if (Calificaciones.esWalkover(p)) throw new ErrorRegla('Partido definido por W.O.: no hay jugadores que calificar.');
+    if (P.walkover(p)) throw new ErrorRegla('Partido definido por W.O.: no hay jugadores que calificar.');
     const e = estado(p, ahora);
     if (e === 'SIN_RESULTADO') throw new ErrorRegla('La votación se abre cuando el partido termina.');
     if (e === 'SIN_REGISTRO') throw new ErrorRegla('Este partido se jugó antes de existir las votaciones: solo tiene nota del sistema.');

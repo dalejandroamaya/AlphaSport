@@ -196,6 +196,13 @@ if (typeof Calificaciones !== 'undefined') {
   tiempo = tiempo && ReglasVotacion.estado(p, ahora + 30 * hora) === 'ABIERTA' && p.votos.length === 2;
   const fuera = ahora + 36 * hora;
   const ventana = rechaza(() => votar(109, 8, 'dispositivo-C3', fuera)) && Calificaciones.calcular(c, p, fuera, null).votacion === 'CERRADA';
+  // El W.O. lo dice el campo, no el texto de la observación (salvo en los partidos anteriores, que no lo traen).
+  const base = P.datos(p), motivoDe = cambios => Calificaciones.calcular(c, Object.assign({}, p, base, cambios), ahora, null);
+  const anterior = Object.assign({}, p, { obs: 'W.O. a favor de A' });
+  delete anterior.walkover;
+  const walkover = motivoDe({ walkover: true, obs: 'Reclamo' }).motivo.includes('W.O.') && motivoDe({ walkover: false, obs: 'W.O. solicitado' }).disponible
+    && P.walkover(anterior) && !P.walkover(Object.assign({}, anterior, { obs: 'W.O. solicitado' }))
+    && P.resultadoDeWalkover({ estado: 'JUGADO', gl: 3, gv: 0 }) && !P.resultadoDeWalkover({ estado: 'JUGADO', gl: 3, gv: 0, goles: [{}] });
   // Probar un cambio y cancelarlo (copia y respaldo) no pierde los votos; borrar el resultado sí los descarta.
   const respaldo = P.datos(p);
   P.reiniciar(p);
@@ -204,8 +211,8 @@ if (typeof Calificaciones !== 'undefined') {
   P.reiniciar(p);
   ReglasVotacion.marcarFinal(p, fuera);
   const descarta = p.finalizadoEn === 0 && p.votos.length === 0 && p.horasVotacion === 36 && Calificaciones.calcular(c, p, fuera, null).votacion === 'SIN_RESULTADO';
-  const ok = reglas && sistema && hibrida && rango && varios && tiempo && ventana && conserva && descarta;
-  if (!ok) log(`  reglas=${reglas} sistema=${sistema} hibrida=${hibrida} rango=${rango} varios=${varios} tiempo=${tiempo} ventana=${ventana} conserva=${conserva} descarta=${descarta}`);
+  const ok = reglas && sistema && hibrida && rango && varios && tiempo && ventana && walkover && conserva && descarta;
+  if (!ok) log(`  reglas=${reglas} sistema=${sistema} hibrida=${hibrida} rango=${rango} varios=${varios} tiempo=${tiempo} ventana=${ventana} walkover=${walkover} conserva=${conserva} descarta=${descarta}`);
   log('Calificaciones de jugadores (sistema, público y MVP):', ok ? 'correcto' : 'MAL');
   if (!ok) fallos++;
 }

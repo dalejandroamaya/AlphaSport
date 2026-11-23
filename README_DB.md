@@ -24,9 +24,21 @@ java -cp "bin;lib/*" alphasport.ui.AlphaSportApp
 4. Clic derecho en `alphasport_db` → **Query Tool**.
 5. Botón **Open File** (carpeta) → `database/schema.sql` → **Execute** (F5). Debe decir *Query returned successfully*.
 6. Opcional, para empezar con datos de prueba: abra `database/seed.sql` y ejecútelo igual.
-7. Clic derecho en **Schemas → public → Tables → Refresh**: aparecen 18 tablas, y 4 en **Views**.
+7. Clic derecho en **Schemas → public → Tables → Refresh**: aparecen 20 tablas, y 4 en **Views**.
 
 Los dos archivos van en una transacción: si algo falla no cambian nada. `schema.sql` no borra datos (si las tablas ya existen, avisa y no hace nada) y `seed.sql` no hace nada si ya hay un campeonato en curso.
+
+### Si la base ya existía: migraciones
+
+Cuando cambia el esquema, el cambio llega también como un archivo en `database/migraciones/`. En el **Query Tool** de `alphasport_db` ejecute, **en orden**, los que falten. Cada uno va en una transacción y se puede repetir: si ya se aplicó, no cambia nada. Una base nueva creada con `schema.sql` no los necesita.
+
+Para saber en qué versión está su base (si la tabla no existe, es la 0):
+
+```sql
+SELECT MAX(version) FROM esquema_version;
+```
+
+Si falta alguna, el programa lo avisa al abrir y no toca los datos.
 
 ## 3. Credenciales
 
@@ -66,8 +78,9 @@ Ejecute **Prueba de PostgreSQL (PruebaPostgres)**: debe terminar en `TODO BIEN`.
 
 | Tabla | Qué guarda |
 |---|---|
-| `torneos`, `torneo_criterios`, `divisiones` | El campeonato en curso (`ACTUAL`) y las copias del historial (`ARCHIVADO`), con sus reglas |
+| `torneos`, `torneo_criterios`, `divisiones` | El campeonato en curso (`ACTUAL`) y los del historial (`ARCHIVADO`), con sus reglas. Al empezar otro campeonato, el anterior pasa al historial con sus mismos ids |
 | `equipos`, `directores_tecnicos`, `jugadores` | Plantillas. Un jugador que sale queda con `activo = FALSE`: sus goles y votos lo siguen usando |
+| `personas` | Quién es cada jugador (`codigo` UUID): la misma persona en todas las temporadas y copias del historial. No se borra con el torneo |
 | `fases`, `fase_participantes`, `fase_grupos`, `fase_cuadro` | Fases, grupos y llaves |
 | `partidos` | Fixture, previa, resultado y votación (`horas_votacion`, `finalizado_en`, `votacion_cerrada_en`) |
 | `alineaciones` | Titulares y suplentes de cada partido |

@@ -8,7 +8,7 @@ import java.util.UUID;
 /**
  * Fotos de las noticias en una carpeta. La base de datos solo guarda el nombre de cada archivo.
  */
-public class ImagenesEnDisco {
+public class ImagenesEnDisco implements RepositorioImagenes {
 
     private final Path carpeta;
 
@@ -16,6 +16,7 @@ public class ImagenesEnDisco {
         this.carpeta = carpeta;
     }
 
+    @Override
     public String guardar(byte[] datos, String extension) throws PersistenciaException {
         String nombre = "noticia-" + UUID.randomUUID().toString().substring(0, 8) + "." + extension;
         try {
@@ -27,6 +28,7 @@ public class ImagenesEnDisco {
         return nombre;
     }
 
+    @Override
     public byte[] leer(String nombre) throws PersistenciaException {
         Path ruta = rutaSegura(nombre);
         try {
@@ -36,6 +38,7 @@ public class ImagenesEnDisco {
         }
     }
 
+    @Override
     public void eliminar(String nombre) throws PersistenciaException {
         Path ruta = rutaSegura(nombre);
         try {

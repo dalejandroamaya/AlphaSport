@@ -8,11 +8,9 @@ import static alphasport.ui.escritorio.Datos.n;
 import static alphasport.ui.escritorio.Datos.s;
 
 import alphasport.model.Usuario;
-import alphasport.service.AutenticacionService;
-import alphasport.service.CampeonatoService;
 import alphasport.service.ReglaNegocioException;
 import alphasport.ui.ApiControlador;
-import alphasport.ui.Arranque;
+import alphasport.ui.FabricaAplicacion;
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -101,8 +99,9 @@ public class Aplicacion extends Application {
     static final String ICONO_DADO = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18ZM12 7l3.5 2.6-1.3 4.1H9.8L8.5 9.6Z";
     static final String ICONO_ESTADIO = "M3 10c0-2 4-4 9-4s9 2 9 4v7c0 2-4 4-9 4s-9-2-9-4zM3 10c0 2 4 4 9 4s9-2 9-4";
 
+    /** Arma la conexion, los servicios y el controlador; se cierra al salir. */
+    private final FabricaAplicacion fabrica = new FabricaAplicacion();
     Stage stage;
-    CampeonatoService servicio;
     ApiControlador api;
     Map<String, Object> catalogo;
     Map<String, Object> E = mapa("hay", false);
@@ -140,8 +139,7 @@ public class Aplicacion extends Application {
     public void start(Stage stage) {
         this.stage = stage;
         try {
-            servicio = Arranque.servicio();
-            api = new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias());
+            api = fabrica.controlador();
         } catch (alphasport.persistence.PersistenciaException e) {
             avisarSinDatos(e);
             return;
@@ -170,6 +168,11 @@ public class Aplicacion extends Application {
         stage.show();
     }
 
+    @Override
+    public void stop() {
+        fabrica.close();
+    }
+
     /** Sin datos no se abre la ventana principal: se explica qué revisar. */
     private static void avisarSinDatos(Exception e) {
         javafx.scene.control.Alert alerta = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR, e.getMessage());
@@ -187,12 +190,12 @@ public class Aplicacion extends Application {
     }
 
     static Image imagen(String nombre) {
-        return new Image(Arranque.CARPETA_WEB.resolve("img").resolve(nombre).toUri().toString(), true);
+        return new Image(FabricaAplicacion.CARPETA_WEB.resolve("img").resolve(nombre).toUri().toString(), true);
     }
 
     /** Inter (regular, semibold y bold), la misma fuente de la web, guardada en web/fuentes. */
     private static void cargarFuentes() {
-        Path carpeta = Arranque.CARPETA_WEB.resolve("fuentes");
+        Path carpeta = FabricaAplicacion.CARPETA_WEB.resolve("fuentes");
         if (!Files.isDirectory(carpeta)) {
             return;
         }
@@ -260,7 +263,7 @@ public class Aplicacion extends Application {
         if (fotoFondo == null) {
             return;
         }
-        Path foto = Arranque.CARPETA_WEB.resolve("img").resolve(claro ? "estadio-dia.jpg" : "estadio-noche.jpg");
+        Path foto = FabricaAplicacion.CARPETA_WEB.resolve("img").resolve(claro ? "estadio-dia.jpg" : "estadio-noche.jpg");
         fotoFondo.setStyle("-fx-background-image: url('" + foto.toUri() + "'); -fx-background-size: cover; -fx-background-position: center 62%;");
     }
 
@@ -630,7 +633,7 @@ public class Aplicacion extends Application {
         MenuItem abrir = new MenuItem("Abrir respaldo…");
         abrir.setOnAction(e -> abrirRespaldo());
         MenuItem exportar = new MenuItem("Exportar historial (.txt)");
-        exportar.setOnAction(e -> guardarTexto(s(m(E, "campeonato"), "nombre"), servicio.textoHistorial()));
+        exportar.setOnAction(e -> exportarHistorial());
         MenuItem historial = new MenuItem("Historial de campeonatos");
         historial.setOnAction(e -> dialogos.historial());
         MenuItem sesion = new MenuItem("Cerrar sesión");
@@ -708,7 +711,7 @@ public class Aplicacion extends Application {
             return;
         }
         try {
-            Files.write(archivo.toPath(), servicio.respaldo());
+            Files.write(archivo.toPath(), api.respaldo().datos()); // por el controlador: permiso y datos al dia
             aviso("Respaldo guardado en " + archivo.getName());
         } catch (Exception e) {
             dialogos.mensaje("Error", e.getMessage());
@@ -724,11 +727,19 @@ public class Aplicacion extends Application {
             return;
         }
         try {
-            servicio.abrirRespaldo(Files.readAllBytes(archivo.toPath()));
-            E = m(api.respuesta(null), "estado");
+            E = m(api.abrirRespaldo(Files.readAllBytes(archivo.toPath())), "estado");
             render();
             aviso("Se abrió «" + s(m(E, "campeonato"), "nombre") + "».");
         } catch (Exception e) {
+            dialogos.mensaje("Error", e.getMessage());
+        }
+    }
+
+    /** El historial del campeonato en un .txt; el texto lo da el controlador (con permiso y datos al dia). */
+    private void exportarHistorial() {
+        try {
+            guardarTexto(s(m(E, "campeonato"), "nombre"), new String(api.historialEnTexto().datos(), StandardCharsets.UTF_8));
+        } catch (ReglaNegocioException e) {
             dialogos.mensaje("Error", e.getMessage());
         }
     }
@@ -1271,7 +1282,7 @@ public class Aplicacion extends Application {
         boolean todoListo = true;
         for (String[] lado : lados) {
             int plantilla = (int) l(equipoPorId(n(p, lado[0])), "jugadores").stream().filter(j -> n(j, "id") > 0).count();
-            int necesarios = Math.min(Dialogos.TITULARES, plantilla);
+            int necesarios = Math.min(alphasport.service.ReglasPartido.TITULARES, plantilla);
             int elegidos = Datos.lista(p, lado[1]).size();
             boolean listo = necesarios > 0 && elegidos == necesarios;
             todoListo &= listo && !s(p, lado[2]).isEmpty();
@@ -1412,7 +1423,7 @@ public class Aplicacion extends Application {
             {"visitante", "visitanteNombre", "titularesVisitante", "formacionVisitante"}};
         for (String[] lado : lados) {
             long plantilla = l(equipoPorId(n(p, lado[0])), "jugadores").stream().filter(j -> n(j, "id") > 0).count();
-            int necesarios = (int) Math.min(Dialogos.TITULARES, plantilla);
+            int necesarios = (int) Math.min(alphasport.service.ReglasPartido.TITULARES, plantilla);
             if (necesarios > 0 && Datos.lista(p, lado[2]).size() != necesarios) {
                 falta.add("el XI titular de " + s(p, lado[1]));
             }

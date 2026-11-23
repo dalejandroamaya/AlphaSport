@@ -104,8 +104,13 @@ const P = {
   // [REQ-07] Sin resultado no hay partido terminado: la votación (finalizadoEn) y sus votos se descartan. Las horas
   // que dura la votación se conservan: se deciden antes de jugar.
   reiniciar(p) {
-    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [], goles: [], finalizadoEn: 0, votacionCerradaEn: 0, votos: [] });
+    Object.assign(p, { estado: 'PENDIENTE', gl: 0, gv: 0, pl: SIN_PENALES, pv: SIN_PENALES, al: 0, rl: 0, av: 0, rv: 0, tarjetas: [], cambios: [], goles: [], walkover: false, finalizadoEn: 0, votacionCerradaEn: 0, votos: [] });
   },
+  // W.O.: no se jugó, así que no tiene notas ni votación. Los partidos anteriores no lo traen: allí solo lo decía la observación.
+  walkover: p => (typeof p.walkover === 'boolean' ? p.walkover : P.jugado(p) && /^W\.O\. (a favor|por retiro) de /.test(p.obs || '')),
+  /** El resultado sigue siendo el de un W.O.: 3-0 y sin nada registrado de un partido jugado. */
+  resultadoDeWalkover: p => P.jugado(p) && Math.max(p.gl, p.gv) === 3 && Math.min(p.gl, p.gv) === 0
+    && !P.goles(p).length && !P.tarjetas(p).length && !P.cambios(p).length,
   votos: p => p.votos || [],       // [REQ-07] partidos guardados antes de las calificaciones
   tarjetas: p => p.tarjetas || [], // partidos guardados antes de las tarjetas por jugador
   cambios: p => p.cambios || [],   // partidos guardados antes de registrar cambios
@@ -133,10 +138,11 @@ const P = {
     const titularesLocal = (p.titularesLocal || []).slice(), titularesVisitante = (p.titularesVisitante || []).slice();
     const formacionLocal = p.formacionLocal || '', formacionVisitante = p.formacionVisitante || '';
     // La votación también se copia (como Partido.copiarDatosDe en Java): si se cancela el cambio, no se pierden los votos.
+    const walkover = P.walkover(p);
     const finalizadoEn = p.finalizadoEn || 0, horasVotacion = p.horasVotacion || 0, votacionCerradaEn = p.votacionCerradaEn || 0;
     const votos = P.votos(p).map(x => Object.assign({}, x));
     return { estado, gl, gv, pl, pv, al, rl, av, rv, fecha, hora, sede, obs, tarjetas, cambios, goles, titularesLocal, titularesVisitante, formacionLocal, formacionVisitante,
-      finalizadoEn, horasVotacion, votacionCerradaEn, votos };
+      walkover, finalizadoEn, horasVotacion, votacionCerradaEn, votos };
   }
 };
 

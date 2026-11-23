@@ -4,6 +4,7 @@ import alphasport.model.Campeonato;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 
 /**
  * Guarda el campeonato en curso en un archivo binario (datos/campeonato.dat).
@@ -27,9 +28,12 @@ public class ArchivoRepositorioCampeonato implements RepositorioCampeonato {
     }
 
     @Override
-    public Campeonato cargar() throws PersistenciaException {
+    public Optional<Campeonato> cargar() throws PersistenciaException {
+        if (!Files.exists(archivo)) {
+            return Optional.empty();
+        }
         try {
-            return Serializacion.desdeBytes(Files.readAllBytes(archivo));
+            return Optional.of(Serializacion.desdeBytes(Files.readAllBytes(archivo)));
         } catch (IOException e) {
             throw new PersistenciaException("No se pudo leer " + archivo, e);
         }

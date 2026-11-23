@@ -12,17 +12,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Noticias en datos/noticias.dat y fotos en datos/imagenes/. Es el formato anterior a PostgreSQL: se conserva
+ * Noticias en datos/noticias.dat (las fotos estan en datos/imagenes/: {@link ImagenesEnDisco}). Es el formato anterior a PostgreSQL: se conserva
  * para poder pasar esos datos a la base de datos.
  */
 public class ArchivoRepositorioNoticias extends RepositorioNoticiasEnMemoria {
 
     private final Path archivo;
-    private final ImagenesEnDisco imagenes;
 
     public ArchivoRepositorioNoticias(Path carpetaDatos) throws PersistenciaException {
         this.archivo = carpetaDatos.resolve("noticias.dat");
-        this.imagenes = new ImagenesEnDisco(carpetaDatos.resolve("imagenes"));
         noticias.addAll(leer());
     }
 
@@ -54,20 +52,5 @@ public class ArchivoRepositorioNoticias extends RepositorioNoticiasEnMemoria {
         } catch (IOException | ClassNotFoundException | ClassCastException e) {
             throw new PersistenciaException("No se pudo leer " + archivo, e);
         }
-    }
-
-    @Override
-    public String guardarImagen(byte[] datos, String extension) throws PersistenciaException {
-        return imagenes.guardar(datos, extension);
-    }
-
-    @Override
-    public byte[] leerImagen(String nombre) throws PersistenciaException {
-        return imagenes.leer(nombre);
-    }
-
-    @Override
-    public void eliminarImagen(String nombre) throws PersistenciaException {
-        imagenes.eliminar(nombre);
     }
 }

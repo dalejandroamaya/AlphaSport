@@ -50,20 +50,29 @@ SELECT e.id, d.nombre, d.documento, 'Colombia'
        AS d (numero, nombre, documento) ON d.numero = e.numero;
 
 -- ---------------------------------------------------------------- jugadores
--- 16 por equipo: el dorsal 10 es el capitan.
-INSERT INTO jugadores (torneo_id, equipo_id, numero, nombre, documento, dorsal, posicion, es_capitan, orden)
-SELECT e.torneo_id, e.id, (e.numero - 1) * 16 + p.dorsal,
+-- 16 por equipo: el dorsal 10 es el capitan. Cada uno es una persona nueva (el documento J0001... la identifica aqui).
+CREATE TEMP TABLE semilla_jugadores ON COMMIT DROP AS
+SELECT e.torneo_id, e.id AS equipo_id, (e.numero - 1) * 16 + p.dorsal AS numero,
        (ARRAY['Mateo','Samuel','Nicolás','Tomás','Daniel','Felipe','Andrés','Santiago','Esteban','Camilo','Julián','Sergio','Iván','Óscar','Kevin','David'])[1 + (p.dorsal * 5 + e.numero * 3) % 16]
          || ' ' ||
-       (ARRAY['Rojas','Gómez','Castro','Medina','Vargas','Ortiz','Salazar','Peña','Cardona','Ríos','Mejía','Torres','Parra','Lozano','Cruz','Molina','Arias'])[1 + (p.dorsal * 7 + e.numero * 4) % 17],
-       'J' || lpad(((e.numero - 1) * 16 + p.dorsal)::text, 4, '0'),
-       p.dorsal, p.posicion, p.dorsal = 10, p.dorsal - 1
+       (ARRAY['Rojas','Gómez','Castro','Medina','Vargas','Ortiz','Salazar','Peña','Cardona','Ríos','Mejía','Torres','Parra','Lozano','Cruz','Molina','Arias'])[1 + (p.dorsal * 7 + e.numero * 4) % 17] AS nombre,
+       'J' || lpad(((e.numero - 1) * 16 + p.dorsal)::text, 4, '0') AS documento,
+       p.dorsal, p.posicion, p.dorsal = 10 AS es_capitan, p.dorsal - 1 AS orden
   FROM equipos e
   JOIN torneos t ON t.id = e.torneo_id AND t.codigo = 'seed0001' AND t.situacion = 'ACTUAL',
        (VALUES (1, 'Portero'), (2, 'Lateral derecho'), (3, 'Defensa central'), (4, 'Defensa central'), (5, 'Lateral izquierdo'),
                (6, 'Mediocampista defensivo'), (7, 'Extremo derecho'), (8, 'Mediocampista central'), (9, 'Delantero centro'),
                (10, 'Mediocampista ofensivo'), (11, 'Extremo izquierdo'), (12, 'Portero'), (13, 'Defensa central'),
                (14, 'Interior derecho'), (15, 'Volante izquierdo'), (16, 'Segundo delantero')) AS p (dorsal, posicion);
+
+WITH nuevas AS (
+    INSERT INTO personas (codigo, nombre, documento)
+    SELECT gen_random_uuid(), nombre, documento FROM semilla_jugadores
+    RETURNING id, documento
+)
+INSERT INTO jugadores (torneo_id, equipo_id, persona_id, numero, nombre, documento, dorsal, posicion, es_capitan, orden)
+SELECT s.torneo_id, s.equipo_id, n.id, s.numero, s.nombre, s.documento, s.dorsal, s.posicion, s.es_capitan, s.orden
+  FROM semilla_jugadores s JOIN nuevas n ON n.documento = s.documento;
 
 -- ---------------------------------------------------------------- noticias
 INSERT INTO noticias (titulo, cuerpo, autor, rol_autor, fecha, aprobado)
@@ -76,11 +85,11 @@ INSERT INTO comentarios (noticia_id, autor, texto)
 SELECT id, 'Andrés', '¡Qué buena noticia!' FROM noticias WHERE titulo = '¡Arranca la Liga AlphaSport!';
 
 -- ---------------------------------------------------------------- usuarios de demostracion
--- Claves de demostracion del prototipo (123 y 321) guardadas con bcrypt; el login las usara en el siguiente sprint.
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- Claves de demostracion del prototipo (las del README), guardadas como hash PBKDF2-SHA256: el mismo formato
+-- que valida AutenticacionService (ClavesPbkdf2). Para otra clave: java -cp bin alphasport.service.ClavesPbkdf2 <clave>
 INSERT INTO usuarios (nombre, username, email, password_hash, rol)
-VALUES ('Administrador', 'admin', 'admin@alphasport.local', crypt('123', gen_salt('bf')), 'ADMIN'),
-       ('Visitante', 'visitante', 'visitante@alphasport.local', crypt('321', gen_salt('bf')), 'VISITANTE')
+VALUES ('Administrador', 'admin', 'admin@alphasport.local', 'pbkdf2_sha256$600000$ORYWJGZO2MLaUsJJD1StqA$eJmZnrPDP4/FNdM4k5l/HEFmhFxS4qPKtrYueWmiJB8', 'ADMIN'),
+       ('Visitante', 'visitante', 'visitante@alphasport.local', 'pbkdf2_sha256$600000$sleF8gem07Djtx8KO31+QQ$YrnucN8AoK6aG/heRS6AhI4oRY2WAGF7eHy89aGrAc4', 'VISITANTE')
 ON CONFLICT (username) DO NOTHING;
 
 COMMIT;

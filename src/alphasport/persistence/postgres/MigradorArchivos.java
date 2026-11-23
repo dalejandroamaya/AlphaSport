@@ -45,7 +45,7 @@ public final class MigradorArchivos {
         if (base.existe()) {
             return "Campeonato: la base de datos ya tiene uno en curso; no se cambió.";
         }
-        Campeonato c = archivo.cargar();
+        Campeonato c = archivo.cargar().orElseThrow();
         base.guardar(c);
         return "Campeonato: «" + c.getNombreCampeonato() + "» (" + c.getEquipos().size() + " equipos, " + c.getPartidos().size() + " partidos).";
     }
@@ -64,7 +64,7 @@ public final class MigradorArchivos {
     }
 
     private static String noticias(ConexionDB conexion, Path carpeta) throws PersistenciaException {
-        PostgresRepositorioNoticias base = new PostgresRepositorioNoticias(conexion, carpeta.resolve("imagenes"));
+        PostgresRepositorioNoticias base = new PostgresRepositorioNoticias(conexion);
         if (!base.publicadas().isEmpty() || !base.pendientes().isEmpty()) {
             return "Noticias: la base de datos ya tiene noticias; no se cambió.";
         }

@@ -863,7 +863,8 @@ let tarjetasTemp = [];
 let cambiosTemp = [];
 /** XI inicial que se está editando: id del equipo → Set con los ids de los titulares. */
 let titularesTemp = new Map();
-const TITULARES = 11;
+// Los límites del partido (titulares y minuto máximo) los da el servicio en el catálogo: son de ReglasPartido.
+const reglasPartido = () => catalogo.reglasPartido;
 
 /** Administrador: editor de la previa o del resultado (según la pestaña). Visitante: detalle del partido. */
 function abrirSegunRol(id) {
@@ -1083,14 +1084,13 @@ async function agregarTarjeta() {
   let tipo = $('tjTipo').value;
   let fechas = Math.max(1, parseInt($('tjFechas').value, 10) || 1);
   const minuto = $('tjMinuto').value.trim() === '' ? 0 : parseInt($('tjMinuto').value, 10);
-  if (!(minuto >= 0 && minuto <= 130)) { errorPartido('El minuto de la tarjeta debe estar entre 1 y 130 (o vacío si no se sabe).'); $('tjMinuto').focus(); return; }
+  if (!(minuto >= 0 && minuto <= reglasPartido().minutoMaximo)) { errorPartido(`El minuto de la tarjeta debe estar entre 1 y ${reglasPartido().minutoMaximo} (o vacío si no se sabe).`); $('tjMinuto').focus(); return; }
   const delJugador = tarjetasTemp.filter(t => t.jugador === jugador.id);
   // Las confirmaciones se abren encima del partido, sin cerrarlo: el foco vuelve a «Agregar» al responder.
   if (partidoEditando.suspendidos.some(t => t.jugador === jugador.id)) {
     const seguir = await mensaje('Jugador suspendido', `${jugador.nombre} estaba suspendido para este partido. ¿Registrar la tarjeta de todas formas?`, { confirmar: true, textoSi: 'Registrar tarjeta' });
     if (!seguir) return;
   }
-  if (tipo === 'ROJA' && delJugador.some(t => t.tipo === 'ROJA')) { errorPartido(`${jugador.nombre} ya fue expulsado en este partido.`); return; }
   if (tipo === 'AMARILLA' && delJugador.some(t => t.tipo === 'AMARILLA')) {
     const roja = await mensaje('Doble amarilla', `${jugador.nombre} ya tiene una amarilla en este partido. ¿Registrar la segunda como ROJA (expulsión, 1 fecha)?`, { confirmar: true, textoSi: 'Sí, roja' });
     if (roja) { tipo = 'ROJA'; fechas = 1; }
@@ -1131,18 +1131,8 @@ function agregarGol() {
   const autor = equipoAutor && equipoAutor.jugadores.find(j => j.id === Number($('glAutor').value));
   if (!autor) { errorPartido('Ese equipo no tiene jugadores registrados. Agréguelos en la sección Equipos.'); return; }
   const minuto = $('glMinuto').value.trim() === '' ? 0 : parseInt($('glMinuto').value, 10);
-  if (!(minuto >= 0 && minuto <= 130)) { errorPartido('El minuto del gol debe estar entre 1 y 130 (o vacío si no se sabe).'); $('glMinuto').focus(); return; }
-  // No puede haber más goles registrados que los del marcador escrito arriba.
-  const campo = idEq === p.local ? 'ptGL' : 'ptGV';
-  const enMarcador = parseInt($(campo).value, 10) || 0, registrados = golesTemp.filter(g => g.equipo === idEq).length;
-  if (registrados >= enMarcador) {
-    const nombre = idEq === p.local ? p.localNombre : p.visitanteNombre;
-    errorPartido(`${nombre} tiene ${plural(enMarcador, '1 gol', enMarcador + ' goles')} en el marcador y ya ${plural(registrados, 'hay 1 registrado', `hay ${registrados} registrados`)}. Suba primero el marcador.`);
-    $(campo).focus();
-    return;
-  }
+  if (!(minuto >= 0 && minuto <= reglasPartido().minutoMaximo)) { errorPartido(`El minuto del gol debe estar entre 1 y ${reglasPartido().minutoMaximo} (o vacío si no se sabe).`); $('glMinuto').focus(); return; }
   const asistente = contra ? null : (equipoPorId(idEq).jugadores.find(j => j.id === Number($('glAsistente').value)) || null);
-  if (asistente && asistente.id === autor.id) { errorPartido(`${autor.nombre} no puede darse la asistencia a sí mismo.`); return; }
   errorPartido('');
   golesTemp.push({
     equipo: idEq, minuto, enContra: contra, autor: autor.id, autorNombre: autor.nombre, autorDorsal: autor.dorsal,
@@ -1166,7 +1156,7 @@ const plantillaDe = idEquipo => {
   return e ? e.jugadores.filter(j => j.id).sort((a, b) => a.dorsal - b.dorsal) : [];
 };
 /** Cuántos titulares necesita un equipo: 11, o toda la plantilla si tiene menos. */
-const necesariosXI = idEquipo => Math.min(TITULARES, plantillaDe(idEquipo).length);
+const necesariosXI = idEquipo => Math.min(reglasPartido().titulares, plantillaDe(idEquipo).length);
 
 /**
  * XI inicial. La lista se construye UNA vez al abrir el partido (construir = true); después solo
@@ -1284,17 +1274,8 @@ function agregarCambio() {
   const sale = equipo && equipo.jugadores.find(j => j.id === Number($('cbSale').value));
   const entra = equipo && equipo.jugadores.find(j => j.id === Number($('cbEntra').value));
   const minuto = parseInt($('cbMinuto').value, 10);
-  if (!(minuto >= 1 && minuto <= 130)) { errorPartido('Escriba el minuto del cambio (entre 1 y 130).'); $('cbMinuto').focus(); return; }
-  const titulares = titularesTemp.get(idEquipo);
-  if (titulares.size !== necesariosXI(idEquipo) || !titulares.size) {
-    errorPartido(`Antes de registrar cambios escoja el XI inicial de ${equipo.nombre} (${titulares.size}/${necesariosXI(idEquipo)}).`);
-    $('xiEquipos').scrollIntoView({ block: 'nearest' });
-    return;
-  }
+  if (!(minuto >= 1 && minuto <= reglasPartido().minutoMaximo)) { errorPartido(`Escriba el minuto del cambio (entre 1 y ${reglasPartido().minutoMaximo}).`); $('cbMinuto').focus(); return; }
   if (!sale || !entra) { errorPartido('Escoja el jugador que sale y el que entra. Si no aparecen, registre la plantilla en Equipos.'); return; }
-  const { salieron, entraron } = movimientos(idEquipo);
-  if (salieron.has(sale.id)) { errorPartido(`${sale.nombre} ya salió en otro cambio.`); return; }
-  if (salieron.has(entra.id) || entraron.has(entra.id)) { errorPartido(`${entra.nombre} ya participó en otro cambio y no puede volver a entrar.`); return; }
   errorPartido('');
   cambiosTemp.push({ equipo: idEquipo, minuto, sale: sale.id, saleNombre: sale.nombre, saleDorsal: sale.dorsal, entra: entra.id, entraNombre: entra.nombre, entraDorsal: entra.dorsal });
   renderCambiosTemp();
@@ -1352,26 +1333,8 @@ function datosFormPartido() {
   };
 }
 
-/** Un XI empezado tiene que quedar completo (o vacío) antes de guardar. */
-function xiCompletos() {
-  for (const [idEq, elegidos] of titularesTemp) {
-    const necesarios = necesariosXI(idEq);
-    if (elegidos.size && elegidos.size !== necesarios) {
-      errorPartido(`El XI inicial de ${equipoPorId(idEq).nombre} tiene ${elegidos.size} de ${necesarios} jugadores. Complételo o pulse «Limpiar».`);
-      $('xiEquipos').scrollIntoView({ block: 'nearest' });
-      return false;
-    }
-  }
-  return true;
-}
-
 async function guardarPartido(accionPartido) {
   if (accionPartido === 'guardar' && !golesCompletos()) return;
-  // Un XI empezado tiene que quedar completo (o vacío), en la previa o con el resultado.
-  if (accionPartido === 'guardar' && !xiCompletos()) {
-    if ($('ptAlineacion').hidden) plegarAlineacion(false);
-    return;
-  }
   if (accionPartido === 'guardar' && horasEditorVotacion() === null) {
     errorPartido(`El tiempo de votación debe estar entre ${catalogo.votacion.minimo} y ${catalogo.votacion.maximo} horas.`);
     $('vtHoras').focus();

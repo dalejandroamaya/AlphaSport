@@ -6,6 +6,13 @@
 -- =====================================================================
 BEGIN;
 
+-- Version del esquema: la sube cada archivo de database/migraciones.
+CREATE TABLE esquema_version (
+    version      INTEGER PRIMARY KEY,
+    aplicada_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO esquema_version (version) VALUES (2);
+
 -- ---------------------------------------------------------------- usuarios
 -- Base para el login y el modulo Fantasy del siguiente sprint.
 CREATE TABLE usuarios (
@@ -105,11 +112,24 @@ CREATE TABLE directores_tecnicos (
     nacionalidad  VARCHAR(80)  NOT NULL DEFAULT ''
 );
 
+-- La persona detras de cada jugador: la misma en todas las temporadas y copias del historial.
+-- codigo es un UUID que crea el programa, asi un respaldo de otra base nunca se mezcla con esta.
+-- No se borra con el torneo: es la llave que usaran el historial del jugador y el modulo Fantasy.
+CREATE TABLE personas (
+    id         SERIAL PRIMARY KEY,
+    codigo     UUID         NOT NULL UNIQUE,
+    nombre     VARCHAR(200) NOT NULL,
+    documento  VARCHAR(60)  NOT NULL DEFAULT '',
+    creado_en  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Un jugador que sale de la plantilla no se borra (activo = FALSE): sus goles, tarjetas y votos lo siguen usando.
+-- nombre y documento son los de esa temporada; persona_id dice quien es.
 CREATE TABLE jugadores (
     id          SERIAL PRIMARY KEY,
     torneo_id   INTEGER      NOT NULL REFERENCES torneos (id) ON DELETE CASCADE,
     equipo_id   INTEGER      NOT NULL REFERENCES equipos (id) ON DELETE CASCADE,
+    persona_id  INTEGER      NOT NULL REFERENCES personas (id),
     numero      INTEGER      NOT NULL,
     nombre      VARCHAR(200) NOT NULL,
     documento   VARCHAR(60)  NOT NULL DEFAULT '',
@@ -125,6 +145,9 @@ CREATE TABLE jugadores (
         WHERE (activo) DEFERRABLE INITIALLY DEFERRED
 );
 CREATE UNIQUE INDEX jugadores_un_capitan ON jugadores (equipo_id) WHERE es_capitan AND activo;
+-- Una persona juega una sola vez en cada torneo.
+CREATE UNIQUE INDEX jugadores_persona_unica ON jugadores (torneo_id, persona_id);
+CREATE INDEX jugadores_persona ON jugadores (persona_id);
 
 -- ---------------------------------------------------------------- fases
 CREATE TABLE fases (
@@ -197,6 +220,7 @@ CREATE TABLE partidos (
     -- resultado
     estado                VARCHAR(12)  NOT NULL DEFAULT 'PENDIENTE'
                               CHECK (estado IN ('PENDIENTE', 'EN_JUEGO', 'JUGADO', 'APLAZADO', 'SUSPENDIDO')),
+    walkover              BOOLEAN      NOT NULL DEFAULT FALSE,   -- se gano por W.O.: no se jugo
     goles_local           INTEGER      NOT NULL DEFAULT 0 CHECK (goles_local >= 0),
     goles_visitante       INTEGER      NOT NULL DEFAULT 0 CHECK (goles_visitante >= 0),
     penales_local         INTEGER      CHECK (penales_local >= 0),
@@ -360,7 +384,7 @@ SELECT p.id AS partido_id, p.torneo_id, p.numero AS partido_numero, l.nombre AS 
    AND p.votacion_cerrada_en IS NULL
    AND p.finalizado_en <= CURRENT_TIMESTAMP
    AND p.finalizado_en + make_interval(hours => p.horas_votacion) > CURRENT_TIMESTAMP
-   AND p.observaciones NOT LIKE 'W.O.%'
+   AND NOT p.walkover
    AND (EXISTS (SELECT 1 FROM alineaciones a WHERE a.partido_id = p.id AND a.titular)
         OR EXISTS (SELECT 1 FROM eventos_partido e WHERE e.partido_id = p.id));
 

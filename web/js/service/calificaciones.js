@@ -20,7 +20,6 @@ const Calificaciones = (() => {
   const texto = v => redondear(v).toFixed(1);
   const conSigno = v => (v >= 0 ? '+' : '−') + texto(Math.abs(v));
 
-  const esWalkover = p => String(p.obs || '').startsWith('W.O.');
   const esPortero = j => GRUPOS_POSICIONES[0].posiciones.some(x => x.toLowerCase() === String(j.posicion || '').toLowerCase());
 
   /** Ids de quienes jugaron por ese equipo: titulares, ingresados y cualquiera con gol, asistencia o tarjeta. */
@@ -103,7 +102,7 @@ const Calificaciones = (() => {
   function calcular(c, p, ahora, dispositivo) {
     let motivo = '', local = [], visitante = [];
     if (!P.jugado(p)) motivo = 'Las calificaciones aparecen cuando el partido termina.';
-    else if (esWalkover(p)) motivo = 'Partido definido por W.O.: no se jugó, así que no hay calificaciones.';
+    else if (P.walkover(p)) motivo = 'Partido definido por W.O.: no se jugó, así que no hay calificaciones.';
     else {
       local = calificar(c, p, p.local, dispositivo);
       visitante = calificar(c, p, p.visitante, dispositivo);
@@ -117,5 +116,5 @@ const Calificaciones = (() => {
     };
   }
 
-  return { calcular, notaSistema, redondear, participantes, esWalkover };
+  return { calcular, notaSistema, redondear, participantes };
 })();

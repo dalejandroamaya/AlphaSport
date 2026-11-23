@@ -58,6 +58,8 @@ public class Presentador {
                 "semillaMaximoEquipos", alphasport.service.DatosPrueba.MAXIMO_EQUIPOS, "configuracion", configuracion(new ConfiguracionTorneo()),
                 "formaciones", Arrays.stream(Formacion.values()).map(Formacion::getTexto).collect(Collectors.toList()),
                 "formacionPorDefecto", Formacion.POR_DEFECTO.getTexto(),
+                // Limites del partido para las pantallas: la regla esta en ReglasPartido.
+                "reglasPartido", mapa("titulares", alphasport.service.ReglasPartido.TITULARES, "minutoMaximo", alphasport.service.ReglasPartido.MINUTO_MAXIMO),
                 // [REQ-07] Duracion de la votacion del publico: opciones rapidas y limites del campo de horas.
                 "votacion", mapa("opciones", List.of(12, 24, 48), "minimo", ReglasVotacion.HORAS_MINIMO,
                         "maximo", ReglasVotacion.HORAS_MAXIMO, "porDefecto", ReglasVotacion.HORAS_POR_DEFECTO));
@@ -173,6 +175,7 @@ public class Presentador {
         m.put("visitanteNombre", c.nombreDe(p.getIdVisitante()));
         m.put("estado", p.getEstado().name());
         m.put("jugado", p.isJugado());
+        m.put("walkover", p.isWalkover());
         m.put("gl", p.getGolesLocal());
         m.put("gv", p.getGolesVisitante());
         m.put("pl", p.getPenalesLocal());
@@ -196,7 +199,7 @@ public class Presentador {
         m.put("suspendidos", suspendidos);
         // [REQ-07] Votacion del publico: horas programadas, si se puede votar ahora, cuando cierra (ms; 0 = sin hora
         // de cierre), si el administrador la cerro antes de tiempo y cuantos votos lleva.
-        m.put("votacion", mapa("horas", p.getHorasVotacion(), "abierta", servicio.votacionAbierta(p),
+        m.put("votacion", mapa("horas", p.getHorasVotacion(), "abierta", servicio.votacion().votacionAbierta(p),
                 "cierraEn", ReglasVotacion.cierraEn(p), "cerradaAntes", ReglasVotacion.cerradaAntes(p), "votos", p.getVotos().size()));
         return m;
     }
@@ -456,9 +459,9 @@ public class Presentador {
      */
     public List<Object> votaciones(String dispositivo) {
         List<Object> lista = new ArrayList<>();
-        for (Partido p : servicio.votacionesAbiertas()) {
+        for (Partido p : servicio.votacion().votacionesAbiertas()) {
             lista.add(mapa("partido", partido(servicio.getCampeonato(), p, servicio.sanciones()),
-                    "calificaciones", calificaciones(servicio.calificaciones(p.getId(), dispositivo))));
+                    "calificaciones", calificaciones(servicio.votacion().calificaciones(p.getId(), dispositivo))));
         }
         return lista;
     }

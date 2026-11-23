@@ -58,15 +58,22 @@ final class EquipoDAO {
                 idEquipo, Sql.texto(dt.getNombre()), Sql.texto(dt.getDocumento()), Sql.texto(dt.getNacionalidad()));
     }
 
-    /** es_capitan no se toca: todavia no se edita en el programa. */
+    /**
+     * es_capitan no se toca: todavia no se edita en el programa. La persona se busca por su codigo y toma el
+     * ultimo nombre y documento; la fila del jugador guarda los de esta temporada.
+     */
     private void guardarJugador(Connection con, int idTorneo, int idEquipo, Jugador j, int orden) throws SQLException {
+        int persona = Sql.insertar(con, """
+                INSERT INTO personas (codigo, nombre, documento) VALUES (CAST(? AS uuid), ?, ?)
+                ON CONFLICT (codigo) DO UPDATE SET nombre = EXCLUDED.nombre, documento = EXCLUDED.documento
+                RETURNING id""", j.getCodigoPersona(), Sql.texto(j.getNombre()), Sql.texto(j.getDocumento()));
         Sql.cambiar(con, """
-                INSERT INTO jugadores (torneo_id, equipo_id, numero, nombre, documento, dorsal, posicion, foto_ruta, activo, orden)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?)
-                ON CONFLICT (torneo_id, numero) DO UPDATE SET equipo_id = EXCLUDED.equipo_id, nombre = EXCLUDED.nombre,
-                    documento = EXCLUDED.documento, dorsal = EXCLUDED.dorsal, posicion = EXCLUDED.posicion,
+                INSERT INTO jugadores (torneo_id, equipo_id, persona_id, numero, nombre, documento, dorsal, posicion, foto_ruta, activo, orden)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?)
+                ON CONFLICT (torneo_id, numero) DO UPDATE SET equipo_id = EXCLUDED.equipo_id, persona_id = EXCLUDED.persona_id,
+                    nombre = EXCLUDED.nombre, documento = EXCLUDED.documento, dorsal = EXCLUDED.dorsal, posicion = EXCLUDED.posicion,
                     foto_ruta = EXCLUDED.foto_ruta, activo = TRUE, orden = EXCLUDED.orden""",
-                idTorneo, idEquipo, j.getId(), Sql.texto(j.getNombre()), Sql.texto(j.getDocumento()), j.getDorsal(),
+                idTorneo, idEquipo, persona, j.getId(), Sql.texto(j.getNombre()), Sql.texto(j.getDocumento()), j.getDorsal(),
                 Sql.texto(j.getPosicion()), Sql.nulo(j.getFoto()), orden);
     }
 
@@ -75,9 +82,11 @@ final class EquipoDAO {
      * con los datos que guardo el partido.
      */
     int crearInactivo(Connection con, int idTorneo, int idEquipo, int numero, String nombre, int dorsal) throws SQLException {
+        String limpio = nombre == null || nombre.isBlank() ? "Jugador retirado" : nombre;
+        int persona = Sql.insertar(con, "INSERT INTO personas (codigo, nombre) VALUES (gen_random_uuid(), ?) RETURNING id", limpio);
         return Sql.insertar(con, """
-                INSERT INTO jugadores (torneo_id, equipo_id, numero, nombre, dorsal, activo) VALUES (?, ?, ?, ?, ?, FALSE) RETURNING id""",
-                idTorneo, idEquipo, numero, nombre == null || nombre.isBlank() ? "Jugador retirado" : nombre, Math.max(0, Math.min(99, dorsal)));
+                INSERT INTO jugadores (torneo_id, equipo_id, persona_id, numero, nombre, dorsal, activo) VALUES (?, ?, ?, ?, ?, ?, FALSE) RETURNING id""",
+                idTorneo, idEquipo, persona, numero, limpio, Math.max(0, Math.min(99, dorsal)));
     }
 
     /** Equipos del torneo con su tecnico y su plantilla activa. */
@@ -102,10 +111,12 @@ final class EquipoDAO {
             return e;
         }, idTorneo);
         Sql.listar(con, """
-                SELECT equipo_id, numero, nombre, documento, dorsal, posicion, foto_ruta FROM jugadores
-                 WHERE torneo_id = ? AND activo ORDER BY equipo_id, orden, numero""", rs -> {
+                SELECT j.equipo_id, j.numero, j.nombre, j.documento, j.dorsal, j.posicion, j.foto_ruta, p.codigo::text AS persona
+                  FROM jugadores j JOIN personas p ON p.id = j.persona_id
+                 WHERE j.torneo_id = ? AND j.activo ORDER BY j.equipo_id, j.orden, j.numero""", rs -> {
             Jugador j = new Jugador(rs.getString("nombre"), rs.getString("documento"), rs.getInt("dorsal"), rs.getString("posicion"));
             j.setId(rs.getInt("numero"));
+            j.setCodigoPersona(rs.getString("persona"));
             j.setFoto(Sql.texto(rs.getString("foto_ruta")));
             return porId.get(rs.getInt("equipo_id")).getJugadores().add(j);
         }, idTorneo);

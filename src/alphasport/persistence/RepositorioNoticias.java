@@ -3,9 +3,10 @@ package alphasport.persistence;
 import alphasport.model.Comentario;
 import alphasport.model.Noticia;
 import java.util.List;
+import java.util.Optional;
 
 /**
- * Noticias, comentarios y sus fotos. El programa usa PostgreSQL
+ * Noticias y sus comentarios (las fotos van en un {@link RepositorioImagenes}). El programa usa PostgreSQL
  * ({@link alphasport.persistence.postgres.PostgresRepositorioNoticias}); las versiones en memoria y en archivo
  * quedan para las pruebas y para pasar los datos anteriores a la base de datos.
  */
@@ -17,8 +18,8 @@ public interface RepositorioNoticias {
     /** Las que esperan moderacion, la mas reciente primero. */
     List<Noticia> pendientes() throws PersistenciaException;
 
-    /** La noticia con sus comentarios, o null si no existe. */
-    Noticia buscar(int id) throws PersistenciaException;
+    /** La noticia con sus comentarios, o vacio si no existe. */
+    Optional<Noticia> buscar(int id) throws PersistenciaException;
 
     /** Guarda una noticia nueva y le pone su id. */
     void insertar(Noticia noticia) throws PersistenciaException;
@@ -32,17 +33,9 @@ public interface RepositorioNoticias {
     /** Guarda un comentario nuevo y le pone su id. */
     void insertarComentario(int idNoticia, Comentario comentario) throws PersistenciaException;
 
-    /** false si ese comentario no existe en la noticia. */
+    /** false si la noticia o ese comentario no existen (nunca falla por eso). */
     boolean eliminarComentario(int idNoticia, int idComentario) throws PersistenciaException;
 
     /** true si la foto es de una noticia publicada (o de cualquiera, con {@code incluirPendientes}). */
     boolean imagenVisible(String nombre, boolean incluirPendientes) throws PersistenciaException;
-
-    /** Guarda los bytes de una foto y devuelve su nombre (lo que se anota en Noticia.imagenRuta). */
-    String guardarImagen(byte[] datos, String extension) throws PersistenciaException;
-
-    /** Bytes de una foto guardada, o null si no existe. */
-    byte[] leerImagen(String nombre) throws PersistenciaException;
-
-    void eliminarImagen(String nombre) throws PersistenciaException;
 }
