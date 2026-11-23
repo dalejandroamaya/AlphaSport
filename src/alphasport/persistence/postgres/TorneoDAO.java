@@ -23,9 +23,51 @@ final class TorneoDAO {
     record Cabecera(int id, int version, String codigo) {
     }
 
-    Cabecera actual(Connection con) throws SQLException {
-        return Sql.uno(con, "SELECT id, version, codigo FROM torneos WHERE situacion = 'ACTUAL'",
+    /** Campeonato en curso con su organizador (0 y null si no tiene dueno). */
+    record Activo(String codigo, int propietario, String organizador) {
+    }
+
+    /** Todos los torneos en curso (puede haber varios), del mas antiguo al mas nuevo. */
+    List<Cabecera> actuales(Connection con) throws SQLException {
+        return Sql.listar(con, "SELECT id, version, codigo FROM torneos WHERE situacion = 'ACTUAL' ORDER BY id",
                 rs -> new Cabecera(rs.getInt(1), rs.getInt(2), rs.getString(3)));
+    }
+
+    /** El torneo en curso con ese codigo, o null. */
+    Cabecera actual(Connection con, String codigo) throws SQLException {
+        return Sql.uno(con, "SELECT id, version, codigo FROM torneos WHERE codigo = ? AND situacion = 'ACTUAL'",
+                rs -> new Cabecera(rs.getInt(1), rs.getInt(2), rs.getString(3)), codigo);
+    }
+
+    /** Los campeonatos en curso con el nombre de su organizador (LEFT JOIN: tambien los que no tienen dueno). */
+    List<Activo> activos(Connection con) throws SQLException {
+        return Sql.listar(con, """
+                SELECT t.codigo, t.propietario_id, u.nombre
+                  FROM torneos t LEFT JOIN usuarios u ON u.id = t.propietario_id
+                 WHERE t.situacion = 'ACTUAL'
+                 ORDER BY t.id""", rs -> new Activo(rs.getString(1), rs.getInt(2), rs.getString(3)));
+    }
+
+    /**
+     * Un Organizador toma un campeonato sin dueno (y su copia del historial, si la hay). El WHERE pide que siga
+     * sin dueno: si dos lo intentan a la vez, solo el primero lo consigue.
+     *
+     * @return true si lo tomo
+     */
+    boolean tomar(Connection con, String codigo, int propietario) throws SQLException {
+        int tomados = Sql.cambiar(con, """
+                UPDATE torneos SET propietario_id = ?, version = version + 1, actualizado_en = CURRENT_TIMESTAMP
+                 WHERE codigo = ? AND situacion = 'ACTUAL' AND propietario_id IS NULL""", propietario, codigo);
+        if (tomados == 1) {
+            Sql.cambiar(con, "UPDATE torneos SET propietario_id = ? WHERE codigo = ? AND situacion = 'ARCHIVADO' AND propietario_id IS NULL",
+                    propietario, codigo);
+        }
+        return tomados == 1;
+    }
+
+    /** Las noticias de un torneo pasan a otro (al cambiar de formato el torneo se rehace con otro id). */
+    void moverNoticias(Connection con, int desde, int hacia) throws SQLException {
+        Sql.cambiar(con, "UPDATE noticias SET torneo_id = ? WHERE torneo_id = ?", hacia, desde);
     }
 
     /** Archivados, el mas reciente primero. */
@@ -35,8 +77,8 @@ final class TorneoDAO {
     }
 
     int insertar(Connection con, Campeonato c, String situacion) throws SQLException {
-        return Sql.insertar(con, "INSERT INTO torneos (codigo, situacion, nombre, formato) VALUES (?, ?, ?, ?) RETURNING id",
-                c.getCodigo(), situacion, c.getNombreCampeonato(), c.getFormato().name());
+        return Sql.insertar(con, "INSERT INTO torneos (codigo, situacion, nombre, formato, propietario_id) VALUES (?, ?, ?, ?, ?) RETURNING id",
+                c.getCodigo(), situacion, c.getNombreCampeonato(), c.getFormato().name(), c.getPropietario() > 0 ? c.getPropietario() : null);
     }
 
     /**
@@ -146,6 +188,7 @@ final class TorneoDAO {
             r.setAscensos(rs.getInt("ascensos"));
             Campeonato c = new Campeonato(rs.getString("nombre"), TipoFormato.valueOf(rs.getString("formato")), r);
             c.setCodigo(rs.getString("codigo"));
+            c.setPropietario(rs.getInt("propietario_id")); // 0 si es NULL (sin dueno)
             c.setPasoActual(rs.getInt("paso_actual"));
             c.setSemilla(rs.getLong("semilla"));
             c.setFechaArchivo(rs.getDate("fecha_archivo") == null ? null : rs.getDate("fecha_archivo").toLocalDate().toString());

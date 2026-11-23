@@ -427,7 +427,7 @@ public final class PruebaPostgres {
         }
         // Tabla de posiciones: las mismas cifras que calcula el programa.
         Map<Integer, ConsultasDAO.Posicion> enSql = new java.util.HashMap<>();
-        consultas.tablaPosiciones(0).forEach(x -> enSql.put(x.equipo(), x));
+        consultas.tablaPosiciones(c.getCodigo(), 0).forEach(x -> enSql.put(x.equipo(), x));
         boolean tabla = enSql.size() == 6 && s.getMotor().tablaDeFase(0).stream().allMatch(f -> {
             ConsultasDAO.Posicion x = enSql.get(f.getIdEquipo());
             return x.pts() == f.getPuntos() && x.pj() == f.getJugados() && x.pg() == f.getGanados() && x.pe() == f.getEmpatados()
@@ -436,23 +436,23 @@ public final class PruebaPostgres {
         // Ultima alineacion y notas.
         Partido p = c.getPartidos().get(0);
         jugarCompleto(s, p);
-        List<ConsultasDAO.Titular> ultima = consultas.ultimaAlineacion(p.getIdLocal());
+        List<ConsultasDAO.Titular> ultima = consultas.ultimaAlineacion(c.getCodigo(), p.getIdLocal());
         boolean alineacion = ultima.stream().map(ConsultasDAO.Titular::jugador).toList().equals(p.getTitularesLocal())
                 && ultima.get(0).formacion().equals("4-4-2") && ultima.get(0).partido() == p.getId()
-                && consultas.ultimaAlineacion(c.getPartidos().get(1).getIdLocal()).stream().noneMatch(t -> t.partido() != p.getId());
+                && consultas.ultimaAlineacion(c.getCodigo(), c.getPartidos().get(1).getIdLocal()).stream().noneMatch(t -> t.partido() != p.getId());
         int portero = c.buscarEquipo(p.getIdLocal()).getJugadores().get(0).getId();
         s.votacion().votarJugador(p.getId(), portero, 10, "dispositivo-A1");
         CalificacionesPartido notas = s.votacion().calificaciones(p.getId(), null);
         List<CalificacionesPartido.Calificacion> todas = new ArrayList<>(notas.local());
         todas.addAll(notas.visitante());
-        List<ConsultasDAO.Nota> guardadas = consultas.notas(p.getId());
+        List<ConsultasDAO.Nota> guardadas = consultas.notas(c.getCodigo(), p.getId());
         boolean hibrida = guardadas.size() == todas.size() && todas.stream().allMatch(n -> guardadas.stream().anyMatch(g -> g.jugador() == n.idJugador()
                 && g.sistema() == n.notaSistema() && g.notaFinal() == n.notaFinal() && g.votos() == n.votos() && g.mvp() == n.mvp()));
         // Votaciones activas: las mismas que ve el visitante.
-        List<Integer> activas = consultas.votacionesActivas().stream().map(ConsultasDAO.VotacionActiva::partido).toList();
+        List<Integer> activas = consultas.votacionesActivas(c.getCodigo()).stream().map(ConsultasDAO.VotacionActiva::partido).toList();
         boolean votaciones = activas.equals(s.votacion().votacionesAbiertas().stream().map(Partido::getId).toList()) && activas.equals(List.of(p.getId()));
         s.votacion().cerrarVotacion(p.getId());
-        votaciones &= consultas.votacionesActivas().isEmpty() && s.votacion().votacionesAbiertas().isEmpty();
+        votaciones &= consultas.votacionesActivas(c.getCodigo()).isEmpty() && s.votacion().votacionesAbiertas().isEmpty();
         if (!(tabla && alineacion && hibrida && votaciones)) {
             System.out.println("  tabla=" + tabla + " alineacion=" + alineacion + " hibrida=" + hibrida + " votaciones=" + votaciones + " " + activas);
         }
@@ -661,7 +661,7 @@ public final class PruebaPostgres {
         boolean sinNotas = otro.buscarPartido(p.getId()).getGolesVisitante() == 3 && !notas.disponible() && notas.motivoSinCalificaciones().contains("W.O.")
                 && contar(db, "SELECT COUNT(*) FROM calificaciones_partido") == 0;
         boolean sinVotos = falla(ReglaNegocioException.class, () -> s.votacion().votarJugador(p.getId(), xi.get(0), 8, "dispositivo-A1"))
-                && s.votacion().votacionesAbiertas().isEmpty() && new ConsultasDAO(db).votacionesActivas().isEmpty();
+                && s.votacion().votacionesAbiertas().isEmpty() && new ConsultasDAO(db).votacionesActivas(s.getCampeonato().getCodigo()).isEmpty();
         // Lo decide el campo, no el texto: cambiar la observacion de un W.O. no lo convierte en partido jugado...
         Partido reclamo = copia(p);
         reclamo.setObservaciones("Reclamo en estudio");
@@ -680,7 +680,7 @@ public final class PruebaPostgres {
         conTexto.setObservaciones("W.O. solicitado, pero el partido se jugó");
         s.partidos().guardarPartido(otroPartido.getId(), conTexto, false);
         porCampo &= s.votacion().calificaciones(otroPartido.getId(), null).disponible() && s.votacion().votacionesAbiertas().contains(otroPartido)
-                && new ConsultasDAO(db).votacionesActivas().size() == 2;
+                && new ConsultasDAO(db).votacionesActivas(s.getCampeonato().getCodigo()).size() == 2;
         s.votacion().cerrarVotacion(otroPartido.getId());
         // Se borra el W.O. y el partido se juega: ahora si tiene notas y votacion.
         Partido borrado = copia(p);
@@ -692,7 +692,7 @@ public final class PruebaPostgres {
         jugado.setGolesLocal(1);
         s.partidos().guardarPartido(p.getId(), jugado, false);
         boolean normal = s.votacion().calificaciones(p.getId(), null).disponible() && s.votacion().votacionesAbiertas().equals(List.of(p))
-                && new ConsultasDAO(db).votacionesActivas().size() == 1;
+                && new ConsultasDAO(db).votacionesActivas(s.getCampeonato().getCodigo()).size() == 1;
         // Retirar un equipo da por W.O. sus partidos pendientes.
         Partido pendiente = s.getCampeonato().getPartidos().stream().filter(x -> !x.isJugado()).findFirst().orElseThrow();
         s.equipos().quitarEquipo(pendiente.getIdLocal());
