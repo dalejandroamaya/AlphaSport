@@ -85,7 +85,7 @@ const DetallePartido = (() => {
       lineas.push(ordenada.map(x => fichaJugador(x.j)));
     }
     // Suplentes: el resto de la plantilla por dorsal (vacío mientras no se confirme el XI).
-    const suplentes = !confirmada ? [] : equipo.jugadores.filter(j => !xi.includes(j)).sort((a, b) => a.dorsal - b.dorsal).map(fichaJugador);
+    const suplentes = !confirmada ? [] : equipo.jugadores.filter(j => !xi.includes(j)).sort(porLinea).map(fichaJugador);
     return { formacion, formacionElegida: !!elegida, confirmada, lineas, suplentes, dt: (equipo && equipo.dt && equipo.dt.nombre) || '' };
   }
 

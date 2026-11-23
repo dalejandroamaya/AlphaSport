@@ -2,6 +2,7 @@ package alphasport.model;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.List;
 
 public class Campeonato implements Serializable {
 
@@ -23,6 +24,8 @@ public class Campeonato implements Serializable {
     private long semilla = System.currentTimeMillis();
     private String codigo;        // identifica el campeonato dentro del historial
     private String fechaArchivo;  // cuando se guardo en el historial
+    // Ascensos y descensos con los que empezo esta temporada (null en archivos anteriores = ninguno)
+    private ArrayList<MovimientoDivision> movimientos = new ArrayList<>();
 
     public Campeonato() {
     }
@@ -279,6 +282,15 @@ public class Campeonato implements Serializable {
 
     public void setCodigo(String codigo) {
         this.codigo = codigo;
+    }
+
+    /** Ascensos y descensos de la temporada anterior que dejaron a cada equipo en su division. */
+    public List<MovimientoDivision> getMovimientos() {
+        return movimientos == null ? List.of() : java.util.Collections.unmodifiableList(movimientos);
+    }
+
+    public void setMovimientos(List<MovimientoDivision> movimientos) {
+        this.movimientos = new ArrayList<>(movimientos);
     }
 
     public String getFechaArchivo() {

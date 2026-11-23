@@ -87,7 +87,7 @@ const Calificaciones = (() => {
       };
     });
     // Titulares primero y luego los que entraron; dentro de cada grupo, por dorsal.
-    return lista.sort((a, b) => (a.titular === b.titular ? a.dorsal - b.dorsal : a.titular ? -1 : 1));
+    return lista.sort((a, b) => (a.titular === b.titular ? lineaDe(a.posicion) - lineaDe(b.posicion) || a.dorsal - b.dorsal : a.titular ? -1 : 1));
   }
 
   /** MVP: nota final más alta; empates por goles, asistencias, nota del sistema, titular, local y dorsal. */

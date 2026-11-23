@@ -264,7 +264,7 @@ function render() {
   $('sobreEstado').textContent = c.terminado ? 'Terminado' : c.iniciado ? 'En curso' : 'Por iniciar';
   document.querySelector('.marcador-principal').classList.toggle('terminado', c.terminado);
   $('btnCampeon').hidden = !c.terminado;
-  $('btnAvanzar').textContent = c.terminado ? 'Terminar e iniciar otro' : c.iniciado ? 'Cerrar ronda y avanzar' : 'Iniciar campeonato';
+  $('btnAvanzar').textContent = c.terminado ? textoTerminado(c) : c.iniciado ? 'Cerrar ronda y avanzar' : 'Iniciar campeonato';
   $('btnAvanzar').classList.toggle('dorado', c.terminado);
   $('menuSiguiente').disabled = !c.puedeSiguiente;
   $('menuSiguiente').textContent = c.textoSiguiente || 'Siguiente torneo corto (Clausura)…';
@@ -486,7 +486,7 @@ function renderEquipos() {
         ? `<button type="button" class="escudo-boton" data-escudo-equipo="${e.id}" title="Cambiar o quitar el escudo de ${esc(e.nombre)}">${escudoEquipoHtml(e)}</button>`
         : escudoEquipoHtml(e)}
       <div class="equipo-datos">
-        <h3>${esc(e.nombre)}${e.retirado ? ' <span class="etiqueta retirado">Retirado</span>' : ''}</h3>
+        <h3>${esc(e.nombre)}${e.retirado ? ' <span class="etiqueta retirado">Retirado</span>' : ''}${marcaMovimiento(e)}</h3>
         <p class="sutil pequeno">${ICONO.persona}DT: ${e.dt ? esc(e.dt.nombre) : 'Sin asignar'} · ${e.jugadores.length === 1 ? '1 jugador' : e.jugadores.length + ' jugadores'}</p>
         <p class="sutil pequeno">${ICONO.estadio}${esc(e.estadio) || 'Sin estadio'}</p>
       </div>
@@ -500,15 +500,24 @@ function renderEquipos() {
     $('gridEquipos').innerHTML = vacioHtml('Todavía no hay equipos. Escriba un nombre arriba y pulse «Agregar».');
     return;
   }
+  // Constancia del paso de temporada: quién subió y quién bajó.
+  const movimientos = E.campeonato.resumenMovimientos
+    ? `<p class="sutil aviso-movimientos">Ascensos y descensos de «${esc(E.campeonato.movimientos[0].temporadaAnterior)}»: ${esc(E.campeonato.resumenMovimientos)}</p>` : '';
   // Liga con divisiones: un bloque por división (Liga A, Liga B...).
   $('gridEquipos').classList.toggle('por-divisiones', conDivisiones);
-  $('gridEquipos').innerHTML = conDivisiones
+  $('gridEquipos').innerHTML = movimientos + (conDivisiones
     ? divisiones.map(d => {
       const equipos = E.equipos.filter(e => e.division === d.indice);
       return `<section class="bloque-division"><h3>${esc(d.nombre)} <span class="sutil pequeno">${plural(equipos.length, '1 equipo', equipos.length + ' equipos')}</span></h3>
         <div class="grid-equipos">${equipos.map(tarjeta).join('') || '<p class="sutil">Sin equipos en esta división.</p>'}</div></section>`;
     }).join('')
-    : E.equipos.map(tarjeta).join('');
+    : E.equipos.map(tarjeta).join(''));
+}
+
+/** «↑ Ascendió» o «↓ Descendió» si el equipo empezó esta temporada en otra división. */
+function marcaMovimiento(e) {
+  const mv = (E.campeonato.movimientos || []).find(x => x.equipo === e.id);
+  return mv ? ` <span class="etiqueta ${mv.ascenso ? 'jugado' : 'retirado'}" title="${mv.ascenso ? 'Subió' : 'Bajó'} de la ${esc(mv.desde)} a la ${esc(mv.hasta)}: terminó ${mv.puesto}° en «${esc(mv.temporadaAnterior)}».">${mv.ascenso ? '↑ Ascendió' : '↓ Descendió'}</span>` : '';
 }
 
 /** Barra de divisiones (solo administrador, formato Liga): ver, agregar y quitar divisiones antes de iniciar. */
@@ -607,7 +616,7 @@ function limpiarFormJugador() {
 }
 
 function renderJugadores() {
-  jugadoresTemp.sort((a, b) => a.dorsal - b.dorsal);
+  jugadoresTemp.sort(porLinea); // Portería, Defensa, Mediocampo, Ataque
   $('tablaJugadores').innerHTML = jugadoresTemp.length
     ? jugadoresTemp.map((j, i) => `<tr><td><button type="button" class="foto-boton-fila" data-foto-fila="${i}" title="${j.foto ? 'Cambiar o quitar la foto' : 'Subir la foto'} de ${esc(j.nombre)}">${fotoCedulaHtml(j.foto, j.nombre, 'mini')}</button></td>
         <td class="num"><span class="dorsal">${j.dorsal}</span></td><td>${esc(j.nombre)}</td><td>${esc(j.documento)}</td>
@@ -1153,7 +1162,7 @@ function movimientos(idEquipo) {
 
 const plantillaDe = idEquipo => {
   const e = equipoPorId(idEquipo);
-  return e ? e.jugadores.filter(j => j.id).sort((a, b) => a.dorsal - b.dorsal) : [];
+  return e ? e.jugadores.filter(j => j.id).sort(porLinea) : [];
 };
 /** Cuántos titulares necesita un equipo: 11, o toda la plantilla si tiene menos. */
 const necesariosXI = idEquipo => Math.min(reglasPartido().titulares, plantillaDe(idEquipo).length);
@@ -1994,6 +2003,10 @@ async function crearDesdeFormulario(e) {
   if (!r.ok) { mensaje('Error', r.error); return; }
   $('dlgNuevo').close();
   mostrarVista('equipos');
+  if (mismos && r.mensaje) { // los mismos equipos de una liga terminada: se aplicaron los ascensos y descensos
+    mensaje('Ascensos y descensos', `Se creó el campeonato. Se aplicaron los ascensos y descensos de la temporada anterior.\n\n${r.mensaje}`);
+    return;
+  }
   aviso(mismos ? `Campeonato creado con ${E.equipos.length} equipos. El anterior quedó en el historial.` : 'Campeonato creado. Ahora registre los equipos.');
 }
 
@@ -2184,8 +2197,12 @@ function descargarPremios() {
 
 /* ---------------------------------------------------------------- avanzar y campeon */
 
+/** Botón principal con el campeonato terminado: en una liga o torneo corto sigue la temporada siguiente. */
+const textoTerminado = c => (c.puedeSiguiente ? 'Iniciar la siguiente temporada' : 'Terminar e iniciar otro');
+
 async function avanzar() {
   if (E.campeonato.terminado) {
+    if (E.campeonato.puedeSiguiente) { accionMenu('siguiente'); return; } // aplica los ascensos y descensos
     await servicio.ejecutar('archivar');
     abrirNuevo(false);
     return;
@@ -2196,7 +2213,7 @@ async function avanzar() {
   if (E.campeonato.terminado) {
     mostrarVista(E.llaves.length ? 'llaves' : 'posiciones');
     await verCampeon();
-    aviso('El campeonato quedó guardado en el historial. Use «Terminar e iniciar otro» para el siguiente.');
+    aviso(`El campeonato quedó guardado en el historial. Use «${textoTerminado(E.campeonato)}» para el siguiente.`);
   } else {
     if (iniciaba) mostrarVista('partidos');
     aviso(r.mensaje);

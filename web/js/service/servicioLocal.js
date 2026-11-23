@@ -186,14 +186,18 @@ function crearServicioLocal() {
         // Sin llaves (formato Liga) la interfaz oculta la sección «Llaves».
         usaLlaves: usaLlaves(c), esLiga: c.formato === 'LIGA',
         divisiones: Array.from({ length: c.formato === 'LIGA' ? numeroDivisiones(c) : 1 }, (_, d) => ({ indice: d, nombre: nombreDivision(d), equipos: equiposDeDivision(c, d).length })),
-        ascensos: c.config.ascensos == null ? 2 : c.config.ascensos, maximoDivisiones: MAXIMO_DIVISIONES
+        ascensos: c.config.ascensos == null ? 2 : c.config.ascensos, maximoDivisiones: MAXIMO_DIVISIONES,
+        // Ascensos y descensos con los que empezó esta temporada (como en Java).
+        movimientos: (c.movimientos || []).map(mv => ({ equipo: mv.idEquipo, nombre: mv.nombreEquipo, ascenso: mv.divisionNueva < mv.divisionAnterior,
+          desde: nombreDivision(mv.divisionAnterior), hasta: nombreDivision(mv.divisionNueva), puesto: mv.puesto, temporadaAnterior: mv.temporadaAnterior })),
+        resumenMovimientos: resumenMovimientos(c.movimientos)
       },
       equipos: c.equipos.map(e => ({
         id: e.id, nombre: e.nombre, estadio: e.estadio || '', retirado: !!e.retirado, division: divisionDe(c, e),
         escudo: e.escudo || '',
         dt: e.dt ? Object.assign({}, e.dt) : null,
-        jugadores: e.jugadores.map(j => ({
-          id: j.id || 0, nombre: j.nombre, documento: j.documento || '', dorsal: j.dorsal, posicion: j.posicion, foto: j.foto || '',
+        jugadores: e.jugadores.slice().sort(porLinea).map(j => ({ // Portería, Defensa, Mediocampo, Ataque (como en Java)
+          id: j.id || 0, nombre: j.nombre, documento: j.documento || '', dorsal: j.dorsal, posicion: j.posicion, linea: lineaDe(j.posicion), foto: j.foto || '',
           amarillas: j.id ? m.contarTarjetas(j.id, 'AMARILLA') : 0, rojas: j.id ? m.contarTarjetas(j.id, 'ROJA') : 0,
           pendientes: j.id ? m.fechasPendientesDe(j.id) : 0
         }))
@@ -291,6 +295,7 @@ function crearServicioLocal() {
       if (usados.has(j.dorsal)) throw new ErrorRegla(`El dorsal ${j.dorsal} ya está en uso.`);
       usados.add(j.dorsal);
     }
+    validarDocumentos(existente, d.jugadores); // un documento, un jugador (como ReglasPlantilla en Java)
     let equipo = existente;
     if (!equipo) { exigirNoIniciado(); const division = divisionConMenosEquipos(c); equipo = m.agregarEquipo(nombre); equipo.division = division; }
     equipo.nombre = nombre;
@@ -298,10 +303,75 @@ function crearServicioLocal() {
     equipo.dt = d.dt && String(d.dt.nombre || '').trim()
       ? { nombre: d.dt.nombre.trim(), documento: String(d.dt.documento || '').trim(), nacionalidad: String(d.dt.nacionalidad || '').trim() } : null;
     equipo.jugadores = d.jugadores.map(j => ({
-      id: j.id || m.nuevoIdJugador(), nombre: j.nombre.trim(), documento: String(j.documento || '').trim(), dorsal: j.dorsal,
+      id: j.id || m.nuevoIdJugador(), nombre: j.nombre.trim(), documento: limpiarDocumento(j.documento), dorsal: j.dorsal,
       posicion: j.posicion, foto: fotoValida(j.foto, 'jugador')
     }));
     if ('escudo' in d) equipo.escudo = fotoValida(d.escudo, 'escudo');
+  }
+
+  /* Ascensos y descensos al pasar de temporada: como CampeonatoService.movimientos y MovimientoDivision en Java. */
+  const conAscensos = camp => camp.formato === 'LIGA' && tieneDivisiones(camp) && (camp.config.ascensos == null ? 2 : camp.config.ascensos) > 0;
+  /** Los «ascensos» últimos de cada división bajan y los primeros de la de abajo suben (cada división conserva al menos un equipo). */
+  function movimientosDeLaTemporada() {
+    const k = c.config.ascensos == null ? 2 : c.config.ascensos, n = c.fases[0].grupos.length, lista = [];
+    for (let dv = 0; dv + 1 < n; dv++) {
+      const arriba = m.tablaDeGrupo(0, dv).map(f => f.id), abajo = m.tablaDeGrupo(0, dv + 1).map(f => f.id);
+      const cuantos = Math.max(0, Math.min(k, Math.min(arriba.length, abajo.length) - 1));
+      for (let i = 0; i < cuantos; i++) {
+        lista.push({ idEquipo: abajo[i], nombreEquipo: m.nombre(abajo[i]), divisionAnterior: dv + 1, divisionNueva: dv, puesto: i + 1, temporadaAnterior: c.nombre });
+      }
+      for (let i = arriba.length - cuantos; i < arriba.length; i++) {
+        lista.push({ idEquipo: arriba[i], nombreEquipo: m.nombre(arriba[i]), divisionAnterior: dv, divisionNueva: dv + 1, puesto: i + 1, temporadaAnterior: c.nombre });
+      }
+    }
+    return lista;
+  }
+  /** «Suben a la Liga A: X. Bajan a la Liga B: Y.» por cada par de divisiones. */
+  function resumenMovimientos(lista) {
+    const partes = [], ultima = Math.max(0, ...(lista || []).map(mv => Math.max(mv.divisionAnterior, mv.divisionNueva)));
+    for (let dv = 0; dv < ultima; dv++) {
+      const suben = (lista || []).filter(mv => mv.divisionNueva < mv.divisionAnterior && mv.divisionNueva === dv).map(mv => mv.nombreEquipo);
+      const bajan = (lista || []).filter(mv => mv.divisionNueva > mv.divisionAnterior && mv.divisionAnterior === dv).map(mv => mv.nombreEquipo);
+      if (suben.length || bajan.length) partes.push(`Suben a la ${nombreDivision(dv)}: ${suben.join(', ')}. Bajan a la ${nombreDivision(dv + 1)}: ${bajan.join(', ')}.`);
+    }
+    return partes.join(' ');
+  }
+
+  /* Documentos: como ReglasPlantilla en Java. Se guardan sin espacios de más y se comparan sin espacios ni mayúsculas. */
+  const limpiarDocumento = doc => String(doc || '').trim().replace(/\s+/g, ' ');
+  const claveDocumento = doc => String(doc || '').replace(/\s+/g, '').toUpperCase();
+  const describir = j => `#${j.dorsal} ${String(j.nombre || '').trim()}`;
+  function validarDocumentos(equipo, plantilla) {
+    const enUso = new Map();
+    for (const otro of c.equipos) {
+      if (otro === equipo) continue;
+      for (const j of otro.jugadores) {
+        const clave = claveDocumento(j.documento);
+        if (clave && !enUso.has(clave)) enUso.set(clave, `${describir(j)} de ${otro.nombre}`);
+      }
+    }
+    const enPlantilla = new Map();
+    for (const j of plantilla) {
+      const clave = claveDocumento(j.documento);
+      if (!clave) continue;
+      if (enUso.has(clave)) {
+        throw new ErrorRegla(`El documento ${limpiarDocumento(j.documento)} de ${String(j.nombre).trim()} ya está registrado: es de ${enUso.get(clave)}. Revise el número.`);
+      }
+      if (enPlantilla.has(clave)) {
+        throw new ErrorRegla(`El documento ${limpiarDocumento(j.documento)} está repetido en la plantilla: ${describir(enPlantilla.get(clave))} y ${describir(j)}. Cada jugador debe tener su propio documento.`);
+      }
+      enPlantilla.set(clave, j);
+    }
+  }
+
+  /** Cambia los documentos ya usados por el siguiente número libre (la misma semilla repite documentos). */
+  function documentosLibres(jugadores, usados) {
+    for (const j of jugadores) {
+      let doc = String(j.documento || '');
+      while (claveDocumento(doc) && usados.has(claveDocumento(doc))) doc = /^\d{1,15}$/.test(doc) ? String(Number(doc) + 1) : doc + '1';
+      usados.add(claveDocumento(doc));
+      j.documento = doc;
+    }
   }
 
   /*
@@ -431,6 +501,9 @@ function crearServicioLocal() {
       throw new ErrorRegla(completar ? 'Todos los equipos ya tienen plantilla. Indique cuántos equipos nuevos crear.' : 'Indique cuántos equipos de prueba crear.');
     }
     const r = DatosPrueba.generar(semilla, pedidos, c.equipos.map(e => e.nombre), sinPlantilla.length);
+    const documentos = new Set(c.equipos.flatMap(e => e.jugadores.map(j => claveDocumento(j.documento))).filter(Boolean));
+    r.equipos.forEach(e => documentosLibres(e.jugadores, documentos));
+    r.plantillas.forEach(p => documentosLibres(p, documentos));
     const conIds = jugadores => jugadores.map(j => Object.assign(j, { id: m.nuevoIdJugador() }));
     for (const e of r.equipos) {
       const division = divisionConMenosEquipos(c); // reparte los equipos entre las divisiones
@@ -573,9 +646,20 @@ function crearServicioLocal() {
       if (!nombre) throw new ErrorRegla('Escriba el nombre del campeonato.');
       if (!d.config.criterios.length) throw new ErrorRegla('Escoja al menos un criterio de desempate.');
       const nuevo = nuevoCampeonato(nombre, d.formato, Object.assign(configuracionPorDefecto(), d.config));
-      if (d.mismosEquipos && c) importarEquipos(nuevo, c.equipos);
+      nuevo.movimientos = [];
+      if (d.mismosEquipos && c) {
+        // Como en Java: con los mismos equipos de una liga terminada (y las mismas divisiones) se aplican los ascensos y descensos.
+        const mismaLiga = d.formato === 'LIGA' && numeroDivisiones(nuevo) === numeroDivisiones(c);
+        const calculados = mismaLiga && conAscensos(c) && m.terminado() ? movimientosDeLaTemporada() : [];
+        importarEquipos(nuevo, c.equipos);
+        for (const mv of calculados) {
+          const e = nuevo.equipos.find(x => x.nombre === mv.nombreEquipo);
+          if (e) { e.division = mv.divisionNueva; nuevo.movimientos.push(Object.assign({}, mv, { idEquipo: e.id })); }
+        }
+      }
       archivarActual();
       usar(nuevo);
+      return resumenMovimientos(nuevo.movimientos);
     },
     cancelar: () => {
       exigir();
@@ -597,30 +681,20 @@ function crearServicioLocal() {
       const nombre = String(d.nombre || '').trim();
       if (!nombre) throw new ErrorRegla('Escriba el nombre del nuevo torneo.');
       if (c.formato !== 'TORNEO_CORTO' && c.formato !== 'LIGA') throw new ErrorRegla('La siguiente temporada solo existe en los formatos Liga y Apertura/Clausura.');
-      const nuevaDivision = new Map();
-      let movimientos = '';
-      const k = c.config.ascensos == null ? 2 : c.config.ascensos;
-      if (tieneDivisiones(c) && k > 0) {
+      let movimientos = [];
+      if (conAscensos(c)) {
         if (!m.terminado()) throw new ErrorRegla('Termine la temporada (hasta tener campeón) para saber quién asciende y quién desciende.');
-        const n = c.fases[0].grupos.length, partes = [];
-        for (let dv = 0; dv + 1 < n; dv++) {
-          const arriba = m.tablaDeGrupo(0, dv).map(f => f.id), abajo = m.tablaDeGrupo(0, dv + 1).map(f => f.id);
-          const cuantos = Math.min(k, Math.min(arriba.length, abajo.length) - 1); // cada división conserva al menos un equipo
-          if (cuantos <= 0) continue;
-          const bajan = arriba.slice(arriba.length - cuantos), suben = abajo.slice(0, cuantos);
-          bajan.forEach(id => nuevaDivision.set(id, dv + 1));
-          suben.forEach(id => nuevaDivision.set(id, dv));
-          partes.push(`Suben a la ${nombreDivision(dv)}: ${suben.map(id => m.nombre(id)).join(', ')}. Bajan a la ${nombreDivision(dv + 1)}: ${bajan.map(id => m.nombre(id)).join(', ')}.`);
-        }
-        movimientos = partes.join(' ');
+        movimientos = movimientosDeLaTemporada();
       }
       archivarActual();
       const copia = JSON.parse(JSON.stringify(c));
       Object.assign(copia, { nombre, partidos: [], fases: [], paso: 0, campeon: -1, semilla: Math.floor(Math.random() * 2147483647), codigo: nuevoCodigo(), fechaArchivo: null });
       copia.equipos = copia.equipos.filter(e => !e.retirado);
-      copia.equipos.forEach(e => { if (nuevaDivision.has(e.id)) e.division = nuevaDivision.get(e.id); });
+      // La copia conserva los ids de los equipos; queda constancia de por qué cada uno está en su división.
+      movimientos.forEach(mv => { const e = copia.equipos.find(x => x.id === mv.idEquipo); if (e) e.division = mv.divisionNueva; });
+      copia.movimientos = movimientos;
       usar(copia);
-      return movimientos;
+      return resumenMovimientos(movimientos);
     },
     'equipo/division': d => {
       exigirLigaSinIniciar();

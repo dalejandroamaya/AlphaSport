@@ -35,6 +35,7 @@ final class CampeonatoDAO {
     private final EquipoDAO equipos = new EquipoDAO();
     private final FaseDAO fases = new FaseDAO();
     private final PartidoDAO partidos = new PartidoDAO(equipos);
+    private final MovimientoDAO movimientos = new MovimientoDAO();
 
     TorneoDAO torneos() {
         return torneos;
@@ -45,6 +46,7 @@ final class CampeonatoDAO {
         c.getEquipos().addAll(equipos.listar(con, idTorneo));
         c.getFases().addAll(fases.listar(con, idTorneo));
         c.getPartidos().addAll(partidos.listar(con, idTorneo));
+        c.setMovimientos(movimientos.listar(con, idTorneo));
         return c;
     }
 
@@ -64,6 +66,9 @@ final class CampeonatoDAO {
             orden++;
         }
         Map<Integer, Integer> idsEquipos = equipos.ids(con, idTorneo);
+        if (cambio("M", antes, ahora)) {
+            movimientos.guardar(con, idTorneo, c.getMovimientos(), idsEquipos);
+        }
         for (int i = 0; i < c.getFases().size(); i++) {
             if (cambio("F" + i, antes, ahora)) {
                 fases.guardar(con, idTorneo, i, c.getFases().get(i), idsEquipos);
@@ -129,6 +134,7 @@ final class CampeonatoDAO {
         for (Partido p : c.getPartidos()) {
             h.porParte.put("P" + p.getId(), huella(p));
         }
+        h.porParte.put("M", huella(new ArrayList<>(c.getMovimientos())));
         return h;
     }
 

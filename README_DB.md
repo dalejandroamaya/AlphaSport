@@ -24,7 +24,7 @@ java -cp "bin;lib/*" alphasport.ui.AlphaSportApp
 4. Clic derecho en `alphasport_db` → **Query Tool**.
 5. Botón **Open File** (carpeta) → `database/schema.sql` → **Execute** (F5). Debe decir *Query returned successfully*.
 6. Opcional, para empezar con datos de prueba: abra `database/seed.sql` y ejecútelo igual.
-7. Clic derecho en **Schemas → public → Tables → Refresh**: aparecen 20 tablas, y 4 en **Views**.
+7. Clic derecho en **Schemas → public → Tables → Refresh**: aparecen 21 tablas, y 4 en **Views**.
 
 Los dos archivos van en una transacción: si algo falla no cambian nada. `schema.sql` no borra datos (si las tablas ya existen, avisa y no hace nada) y `seed.sql` no hace nada si ya hay un campeonato en curso.
 
@@ -81,6 +81,7 @@ Ejecute **Prueba de PostgreSQL (PruebaPostgres)**: debe terminar en `TODO BIEN`.
 | `torneos`, `torneo_criterios`, `divisiones` | El campeonato en curso (`ACTUAL`) y los del historial (`ARCHIVADO`), con sus reglas. Al empezar otro campeonato, el anterior pasa al historial con sus mismos ids |
 | `equipos`, `directores_tecnicos`, `jugadores` | Plantillas. Un jugador que sale queda con `activo = FALSE`: sus goles y votos lo siguen usando |
 | `personas` | Quién es cada jugador (`codigo` UUID): la misma persona en todas las temporadas y copias del historial. No se borra con el torneo |
+| `movimientos_division` | Ascensos y descensos con los que empezó cada temporada: de qué división venía cada equipo, a cuál pasó y en qué puesto terminó |
 | `fases`, `fase_participantes`, `fase_grupos`, `fase_cuadro` | Fases, grupos y llaves |
 | `partidos` | Fixture, previa, resultado y votación (`horas_votacion`, `finalizado_en`, `votacion_cerrada_en`) |
 | `alineaciones` | Titulares y suplentes de cada partido |
@@ -116,5 +117,6 @@ UPDATE torneos SET version = version + 1 WHERE situacion = 'ACTUAL';
 | PostgreSQL rechazó el usuario o la contraseña… | Corrija `db.user` y `db.password` en `db.properties` |
 | La base de datos … no existe | Paso 2 |
 | … no tiene las tablas de AlphaSport | Ejecute `database/schema.sql` |
+| Hay jugadores con el mismo documento (al ejecutar `003_documento_unico.sql`) | El mensaje dice cuáles, con su id. Corrija el documento de uno de ellos (`UPDATE jugadores SET documento = '…' WHERE id = …;`) y vuelva a ejecutar la migración |
 
 Para empezar de cero (**borra todos los datos**): en pgAdmin, clic derecho en `alphasport_db` → **Delete**, y repita el paso 2.

@@ -148,23 +148,15 @@ public class DetallePartido {
             lineas.add(puestos);
         }
         List<Jugador> suplentes = !confirmada ? List.of() : equipo.getJugadores().stream().filter(j -> !xi.contains(j))
-                .sorted(Comparator.comparingInt(Jugador::getDorsal)).toList();
+                .sorted(Jugador.POR_LINEA).toList();
         return new Alineacion(formacion.getTexto(), elegida != null, confirmada, lineas, suplentes,
                 equipo == null ? null : equipo.getDirectorTecnico());
     }
 
-    /** 0 portero, 1 defensa, 2 mediocampo, 3 ataque (segun Jugador.GRUPOS_POSICIONES). */
+    /** 0 portero, 1 defensa, 2 mediocampo, 3 ataque (Jugador.getLinea); una posicion desconocida va al medio. */
     static int grupo(Jugador j) {
-        String posicion = j.getPosicion() == null ? "" : j.getPosicion();
-        for (int g = 0; g < Jugador.GRUPOS_POSICIONES.length; g++) {
-            String[] grupo = Jugador.GRUPOS_POSICIONES[g];
-            for (int k = 1; k < grupo.length; k++) {
-                if (grupo[k].equalsIgnoreCase(posicion)) {
-                    return g;
-                }
-            }
-        }
-        return 2; // posicion desconocida: al medio
+        int linea = j.getLinea();
+        return linea == Jugador.SIN_LINEA ? 2 : linea;
     }
 
     /** 0 izquierda, 1 centro, 2 derecha. */
