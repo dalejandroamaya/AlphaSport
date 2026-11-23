@@ -9,6 +9,7 @@ import alphasport.model.Formacion;
 import alphasport.model.Gol;
 import alphasport.model.Jugador;
 import alphasport.model.Partido;
+import alphasport.model.Permiso;
 import alphasport.model.Tarjeta;
 import alphasport.model.TipoFormato;
 import alphasport.model.Usuario;
@@ -57,14 +58,22 @@ public class ApiControlador {
     /** Usuario con sesion abierta; null si nadie ha iniciado sesion. */
     private Usuario usuarioActual;
 
-    /** Rutas de ejecutar() que no exigen ser administrador. Todo lo demas si (lista blanca). */
+    /** Rutas de ejecutar() que no exigen sesion. */
     private static final Set<String> RUTAS_PUBLICAS = Set.of("login", "login/visitante", "logout");
 
     /**
-     * Lo unico que un visitante puede crear: proponer noticias (quedan pendientes), comentar y, [REQ-07],
-     * calificar a los jugadores de un partido terminado.
+     * Permiso que exige cada ruta de ejecutar(). Lo que no esta en la lista exige gestionar el campeonato
+     * (lista blanca: una ruta nueva queda protegida aunque se olvide agregarla aqui).
      */
-    private static final Set<String> RUTAS_VISITANTE = Set.of("noticia/proponer", "noticia/comentar", "calificacion/votar");
+    private static Permiso permisoDe(String ruta) {
+        return switch (ruta) {
+            case "noticia/proponer" -> Permiso.PROPONER_NOTICIA;
+            case "noticia/comentar" -> Permiso.COMENTAR;
+            case "calificacion/votar" -> Permiso.VOTAR_JUGADORES; // [REQ-07] solo los visitantes
+            default -> ruta.startsWith("noticia/") || ruta.startsWith("comentario/") ? Permiso.MODERAR_NOTICIAS
+                    : Permiso.GESTIONAR_CAMPEONATO;
+        };
+    }
 
     public Usuario getUsuarioActual() {
         return usuarioActual;
@@ -77,25 +86,35 @@ public class ApiControlador {
         }
     }
 
-    /** Lanza PERMISO si el usuario no puede modificar datos. */
-    public void exigirAdministrador() {
+    /** Lanza LOGIN si no hay sesion y PERMISO si el rol no tiene ese permiso. */
+    public void exigir(Permiso permiso) {
         exigirSesion();
-        if (!usuarioActual.puedeEditar()) {
+        if (!usuarioActual.puede(permiso)) {
             throw new ReglaNegocioException("PERMISO", "Su rol (" + usuarioActual.getRol().getNombre()
-                    + ") es de solo lectura: no puede crear, editar ni eliminar.");
+                    + ") no puede " + permiso.getAccion() + ".");
         }
     }
 
-    /** Datos de la sesion para la interfaz: {usuario, rol, puedeEditar}. */
+    /** Lanza PERMISO si el usuario no puede modificar datos. */
+    public void exigirAdministrador() {
+        exigir(Permiso.GESTIONAR_CAMPEONATO);
+    }
+
+    private boolean puede(Permiso permiso) {
+        return usuarioActual != null && usuarioActual.puede(permiso);
+    }
+
+    /** Datos de la sesion para la interfaz: {usuario, rol, puedeEditar, permisos}. */
     public Map<String, Object> sesion() {
         return usuarioActual == null ? null
                 : Presentador.mapa("usuario", usuarioActual.getNombre(), "rol", usuarioActual.getRol().name(),
-                        "rolNombre", usuarioActual.getRol().getNombre(), "puedeEditar", usuarioActual.puedeEditar());
+                        "rolNombre", usuarioActual.getRol().getNombre(), "puedeEditar", usuarioActual.puedeEditar(),
+                        "permisos", usuarioActual.getRol().getPermisos().stream().map(Permiso::name).sorted().toList());
     }
 
     public Map<String, Object> consultar(String ruta) {
         if (!ruta.equals("catalogo") && !ruta.equals("sesion")) {
-            exigirSesion(); // consultar es solo lectura: basta con haber iniciado sesion
+            exigir(Permiso.VER); // consultar es solo lectura
             servicio.sincronizar();
         }
         if (ruta.startsWith("partido/")) {
@@ -120,10 +139,8 @@ public class ApiControlador {
     }
 
     public Map<String, Object> ejecutar(String ruta, Map<String, Object> cuerpo) throws Exception {
-        if (RUTAS_VISITANTE.contains(ruta)) {
-            exigirSesion();       // cualquiera con sesion: proponer noticias y comentar
-        } else if (!RUTAS_PUBLICAS.contains(ruta)) {
-            exigirAdministrador(); // toda accion que modifica datos pasa por aqui
+        if (!RUTAS_PUBLICAS.contains(ruta)) {
+            exigir(permisoDe(ruta)); // toda accion que modifica datos pasa por aqui
         }
         servicio.sincronizar(); // otro programa pudo cambiar la base de datos
         if (ruta.startsWith("noticia/") || ruta.startsWith("comentario/")) {
@@ -181,9 +198,6 @@ public class ApiControlador {
      * del sistema al registrar goles y tarjetas. Devuelve las calificaciones actualizadas.
      */
     private Map<String, Object> votar(Map<String, Object> cuerpo) throws Exception {
-        if (usuarioActual.puedeEditar()) {
-            throw new ReglaNegocioException("PERMISO", "Las calificaciones del público son de los visitantes: el administrador no vota.");
-        }
         int idPartido = entero(cuerpo.get("partido"));
         String dispositivo = texto(cuerpo, "dispositivo");
         Map<Integer, Integer> notas = new LinkedHashMap<>();
@@ -201,8 +215,8 @@ public class ApiControlador {
 
     /** Noticias para la interfaz: el feed publico para todos y las pendientes solo para el administrador. */
     private Map<String, Object> noticiasJson() {
-        boolean admin = usuarioActual != null && usuarioActual.puedeEditar();
-        return Presentador.noticias(noticias.publicadas(), admin ? noticias.pendientes() : List.of(), admin);
+        boolean moderador = puede(Permiso.MODERAR_NOTICIAS);
+        return Presentador.noticias(noticias.publicadas(), moderador ? noticias.pendientes() : List.of(), moderador);
     }
 
     private String ejecutarNoticia(String ruta, Map<String, Object> cuerpo) throws Exception {
@@ -247,7 +261,7 @@ public class ApiControlador {
 
     public byte[] imagenNoticia(String nombre) throws Exception {
         exigirSesion();
-        return noticias.imagen(nombre, usuarioActual.puedeEditar());
+        return noticias.imagen(nombre, usuarioActual.puede(Permiso.MODERAR_NOTICIAS));
     }
 
     public Map<String, Object> respuesta(String mensaje) {

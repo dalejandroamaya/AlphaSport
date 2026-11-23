@@ -61,6 +61,7 @@ public class SimulacionFormatos {
         probarNoticias();
         probarPreviaYResultado();
         probarReglasPartido();
+        probarPermisos();
         probarCalificaciones();
         probarFotos();
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
@@ -563,6 +564,57 @@ public class SimulacionFormatos {
         return local.applyAsDouble(9) == 10.0 && local.applyAsDouble(8) == 5.0 && local.applyAsDouble(5) == -1.0
                 && f.local().stream().filter(x -> x.dorsal() == 9).findFirst().orElseThrow().desglose().contains("Gol ×2: +8.0")
                 && f.idMvp() == f.local().stream().filter(x -> x.dorsal() == 9).findFirst().orElseThrow().idJugador();
+    }
+
+    /** [A3] Cada ruta exige un permiso y cada rol es un conjunto de permisos. */
+    private static void probarPermisos() {
+        boolean correcto;
+        try {
+            alphasport.model.Rol admin = alphasport.model.Rol.ADMINISTRADOR, visitante = alphasport.model.Rol.VISITANTE;
+            boolean roles = admin.puede(alphasport.model.Permiso.GESTIONAR_CAMPEONATO) && !admin.puede(alphasport.model.Permiso.VOTAR_JUGADORES)
+                    && visitante.puede(alphasport.model.Permiso.VOTAR_JUGADORES) && !visitante.puede(alphasport.model.Permiso.MODERAR_NOTICIAS)
+                    && admin.puedeEditar() && !visitante.puedeEditar();
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-permisos")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-permisos")));
+            alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService());
+            java.util.function.Function<Accion, String> codigo = accion -> {
+                try {
+                    accion.correr();
+                    return "OK";
+                } catch (ReglaNegocioException e) {
+                    return e.getCodigo();
+                } catch (Exception e) {
+                    return e.toString();
+                }
+            };
+            boolean sinSesion = codigo.apply(() -> api.consultar("estado")).equals("LOGIN")
+                    && codigo.apply(() -> api.ejecutar("noticia/comentar", java.util.Map.of("id", 1, "autor", "A", "texto", "Hola"))).equals("LOGIN");
+            api.ejecutar("login/visitante", java.util.Map.of());
+            @SuppressWarnings("unchecked")
+            List<String> permisosVisitante = (List<String>) api.sesion().get("permisos");
+            boolean comoVisitante = codigo.apply(() -> api.ejecutar("nuevo", java.util.Map.of())).equals("PERMISO")
+                    && codigo.apply(() -> api.ejecutar("noticia/aprobar", java.util.Map.of("id", 1))).equals("PERMISO")
+                    && codigo.apply(() -> api.ejecutar("ruta/que/no/existe", java.util.Map.of())).equals("PERMISO") // lista blanca
+                    && codigo.apply(() -> api.ejecutar("noticia/proponer", java.util.Map.of("titulo", "Propuesta de prueba",
+                            "cuerpo", "Texto de la propuesta.", "autor", "Ana"))).equals("OK")
+                    && permisosVisitante.contains("VOTAR_JUGADORES") && !permisosVisitante.contains("GESTIONAR_CAMPEONATO");
+            api.ejecutar("login", java.util.Map.of("usuario", "admin", "clave", "123"));
+            boolean comoAdmin = codigo.apply(() -> api.ejecutar("calificacion/votar", java.util.Map.of("partido", 1, "jugador", 1, "valor", 7,
+                    "dispositivo", "x"))).equals("PERMISO") && api.getNoticias().pendientes().size() == 1
+                    && ((java.util.Map<?, ?>) api.consultar("noticias").get("noticias")).toString().contains("Propuesta de prueba");
+            correcto = roles && sinSesion && comoVisitante && comoAdmin;
+            if (!correcto) {
+                System.out.println("  roles=" + roles + " sinSesion=" + sinSesion + " comoVisitante=" + comoVisitante + " comoAdmin=" + comoAdmin);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Permisos por rol: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
     }
 
     private interface Accion {
