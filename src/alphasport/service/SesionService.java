@@ -43,7 +43,7 @@ public class SesionService {
      * @return el token de la sesion
      * @throws ReglaNegocioException con codigo LOGIN si el usuario o la clave no coinciden.
      */
-    public String iniciar(String nombre, String clave) {
+    public String iniciar(String nombre, String clave) throws alphasport.persistence.PersistenciaException {
         return abrir(autenticacion.iniciarSesion(nombre, clave));
     }
 

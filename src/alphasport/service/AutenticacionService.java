@@ -1,35 +1,41 @@
 package alphasport.service;
 
+import alphasport.model.CuentaUsuario;
 import alphasport.model.Rol;
 import alphasport.model.Usuario;
-import java.util.Map;
+import alphasport.persistence.PersistenciaException;
+import alphasport.persistence.RepositorioUsuarios;
+import alphasport.persistence.RepositorioUsuariosEnMemoria;
+import java.util.Optional;
 
 /**
- * Valida el acceso a la aplicacion y devuelve el usuario con su rol.
- * Prototipo: las cuentas estan en memoria (sin base de datos).
+ * Valida el acceso a la aplicacion y devuelve el usuario con su rol. Las cuentas las da un
+ * {@link RepositorioUsuarios}: el servicio no sabe si estan en memoria o en la base de datos.
  */
 public class AutenticacionService {
 
-    /** Cuenta demostrativa: clave y rol. */
-    private record Cuenta(String clave, Rol rol) {
+    private final RepositorioUsuarios usuarios;
+
+    public AutenticacionService(RepositorioUsuarios usuarios) {
+        this.usuarios = usuarios;
     }
 
-    private static final Map<String, Cuenta> CUENTAS = Map.of(
-            "admin", new Cuenta("123", Rol.ADMINISTRADOR),
-            "visitante", new Cuenta("321", Rol.VISITANTE));
+    /** Con las cuentas de demostracion (admin y visitante). */
+    public AutenticacionService() {
+        this(RepositorioUsuariosEnMemoria.demostracion());
+    }
 
     /**
      * Inicia sesion con usuario y clave.
      *
      * @throws ReglaNegocioException con codigo LOGIN si los datos no coinciden.
      */
-    public Usuario iniciarSesion(String usuario, String clave) {
-        String nombre = usuario == null ? "" : usuario.trim().toLowerCase();
-        Cuenta cuenta = CUENTAS.get(nombre);
-        if (cuenta == null || !cuenta.clave().equals(clave)) {
+    public Usuario iniciarSesion(String usuario, String clave) throws PersistenciaException {
+        Optional<CuentaUsuario> cuenta = usuarios.buscar(usuario);
+        if (cuenta.isEmpty() || !cuenta.get().clave().equals(clave)) {
             throw new ReglaNegocioException("LOGIN", "Usuario o contraseña incorrectos.");
         }
-        return new Usuario(nombre, cuenta.rol());
+        return cuenta.get().comoUsuario();
     }
 
     /** Acceso de solo lectura sin contraseña (boton «Entrar como visitante»). */

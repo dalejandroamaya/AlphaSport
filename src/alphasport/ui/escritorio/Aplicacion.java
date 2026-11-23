@@ -8,7 +8,6 @@ import static alphasport.ui.escritorio.Datos.n;
 import static alphasport.ui.escritorio.Datos.s;
 
 import alphasport.model.Usuario;
-import alphasport.service.AutenticacionService;
 import alphasport.service.CampeonatoService;
 import alphasport.service.ReglaNegocioException;
 import alphasport.ui.ApiControlador;
@@ -141,7 +140,7 @@ public class Aplicacion extends Application {
         this.stage = stage;
         try {
             servicio = Arranque.servicio();
-            api = new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias());
+            api = new ApiControlador(servicio, Arranque.autenticacion(), Arranque.noticias());
         } catch (alphasport.persistence.PersistenciaException e) {
             avisarSinDatos(e);
             return;

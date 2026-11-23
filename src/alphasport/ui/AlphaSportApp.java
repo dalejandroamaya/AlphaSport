@@ -1,6 +1,5 @@
 package alphasport.ui;
 
-import alphasport.service.AutenticacionService;
 import alphasport.service.CampeonatoService;
 import java.awt.Desktop;
 import java.net.URI;
@@ -17,7 +16,7 @@ public class AlphaSportApp {
         ServidorWeb servidor;
         try {
             servicio = Arranque.servicio();
-            servidor = new ServidorWeb(Arranque.CARPETA_WEB, servicio, new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias()));
+            servidor = new ServidorWeb(Arranque.CARPETA_WEB, servicio, new ApiControlador(servicio, Arranque.autenticacion(), Arranque.noticias()));
         } catch (alphasport.persistence.PersistenciaException e) {
             System.err.println(e.getMessage());
             System.exit(1);

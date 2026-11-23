@@ -2,10 +2,12 @@ package alphasport.ui;
 
 import alphasport.persistence.ArchivoRepositorioFotos;
 import alphasport.persistence.PersistenciaException;
+import alphasport.persistence.RepositorioUsuariosEnMemoria;
 import alphasport.persistence.postgres.ConexionDB;
 import alphasport.persistence.postgres.PostgresRepositorioCampeonato;
 import alphasport.persistence.postgres.PostgresRepositorioHistorial;
 import alphasport.persistence.postgres.PostgresRepositorioNoticias;
+import alphasport.service.AutenticacionService;
 import alphasport.service.CampeonatoService;
 import alphasport.service.FotosService;
 import alphasport.service.NoticiasService;
@@ -34,6 +36,14 @@ public final class Arranque {
             conexion = nueva;
         }
         return conexion;
+    }
+
+    /**
+     * Cuentas para iniciar sesion: por ahora las de demostracion. Con el login, aqui se pasara el repositorio
+     * de la tabla usuarios; nada mas cambia.
+     */
+    public static AutenticacionService autenticacion() {
+        return new AutenticacionService(RepositorioUsuariosEnMemoria.demostracion());
     }
 
     public static NoticiasService noticias() throws PersistenciaException {
