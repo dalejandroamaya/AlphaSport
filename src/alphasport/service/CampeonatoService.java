@@ -7,6 +7,7 @@ import alphasport.model.Equipo;
 import alphasport.model.Jugador;
 import alphasport.model.Partido;
 import alphasport.model.TipoFormato;
+import alphasport.persistence.NotaJugador;
 import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.RepositorioCampeonato;
 import alphasport.persistence.RepositorioFotosEnMemoria;
@@ -465,6 +466,19 @@ public class CampeonatoService {
         motor.aplicarEdicion(partido, datos, afecta);
         ReglasVotacion.marcarFinal(partido, reloj.millis()); // [REQ-07] abre (o descarta) la votacion del publico
         guardar();
+        guardarNotas(idPartido);
+    }
+
+    /** Deja en la base de datos las notas del partido tal como las calcula CalculadoraCalificaciones. */
+    private void guardarNotas(int idPartido) throws PersistenciaException {
+        CalificacionesPartido c = calificaciones(idPartido, null);
+        List<NotaJugador> notas = new ArrayList<>();
+        for (List<CalificacionesPartido.Calificacion> lado : List.of(c.local(), c.visitante())) {
+            for (CalificacionesPartido.Calificacion n : lado) {
+                notas.add(new NotaJugador(n.idJugador(), n.notaSistema(), n.votos(), n.promedioPublico(), n.notaFinal(), n.mvp()));
+            }
+        }
+        repositorio.guardarNotas(idPartido, notas);
     }
 
     /** [REQ-07] Calificaciones de un partido; {@code dispositivo} sirve para mostrar el voto propio (puede ser null). */
@@ -483,6 +497,7 @@ public class CampeonatoService {
         exigirCampeonato();
         ReglasVotacion.votar(campeonato, buscarPartido(idPartido), notas, dispositivo, reloj.millis());
         guardar();
+        guardarNotas(idPartido);
         return calificaciones(idPartido, dispositivo);
     }
 
