@@ -1010,7 +1010,8 @@ public final class PruebaPostgres {
         boolean migracion = aviso.contains("mismo documento") && aviso.contains(doc);
         sql(db, "UPDATE jugadores SET documento = 'OTRO-" + otro + "' WHERE numero = " + otro);
         script(db, "database/migraciones/003_documento_unico.sql");
-        migracion &= contar(db, "SELECT COUNT(*) FROM pg_constraint WHERE conname = 'jugadores_documento_unico'") == 1;
+        migracion &= contar(db, "SELECT COUNT(*) FROM pg_constraint WHERE conname = 'jugadores_documento_unico'"
+                + " AND connamespace = to_regnamespace(current_schema())") == 1; // solo en el esquema de la prueba, no en public
         if (!(base && migracion)) {
             System.out.println("  base=" + base + " (" + error + ") migracion=" + migracion + " (" + aviso + ")");
         }
