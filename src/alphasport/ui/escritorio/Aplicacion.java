@@ -141,11 +141,11 @@ public class Aplicacion extends Application {
         this.stage = stage;
         try {
             servicio = Arranque.servicio();
+            api = new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias());
         } catch (alphasport.persistence.PersistenciaException e) {
             avisarSinDatos(e);
             return;
         }
-        api = new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias());
         catalogo = api.consultar("catalogo");
         dialogos = new Dialogos(this);
         Fotos.usar(this);

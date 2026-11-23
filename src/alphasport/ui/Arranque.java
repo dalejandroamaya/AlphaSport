@@ -27,7 +27,7 @@ public final class Arranque {
      * datos/noticias.dat (y las fotos en datos/imagenes/). Para dejarlas SOLO en memoria (se
      * pierden al cerrar) basta con cambiar esta linea por: new RepositorioNoticiasEnMemoria().
      */
-    public static NoticiasService noticias() {
+    public static NoticiasService noticias() throws PersistenciaException {
         return new NoticiasService(new ArchivoRepositorioNoticias(CARPETA_DATOS));
     }
 

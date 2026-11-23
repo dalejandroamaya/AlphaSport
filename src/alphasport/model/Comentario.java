@@ -29,6 +29,11 @@ public class Comentario implements Serializable {
         return id;
     }
 
+    /** Lo pone el repositorio al guardar. */
+    public void setId(int id) {
+        this.id = id;
+    }
+
     public String getAutor() {
         return autor;
     }
