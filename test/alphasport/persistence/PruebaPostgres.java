@@ -231,16 +231,23 @@ public final class PruebaPostgres {
     }
 
     private static boolean probarSeed(ConexionDB db) throws Exception {
-        // pgcrypto vive en public: aqui solo se prueban los datos.
-        String texto = Files.readString(Path.of("database/seed.sql")).replaceAll("(?m)^(BEGIN|COMMIT);\\s*$", "");
-        sql(db, texto.substring(0, texto.indexOf("-- ---------------------------------------------------------------- usuarios")));
+        script(db, "database/seed.sql");
         CampeonatoService s = servicio(db);
+        // Las claves de demostracion quedan como hash, en el formato que valida AutenticacionService.
+        alphasport.service.ClavesPbkdf2 claves = new alphasport.service.ClavesPbkdf2();
+        String hashAdmin = db.ejecutar(con -> {
+            try (var st = con.createStatement(); var rs = st.executeQuery("SELECT password_hash FROM usuarios WHERE username = 'admin'")) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        });
+        boolean usuarios = claves.coincide("123", hashAdmin) && !claves.coincide("321", hashAdmin) && !hashAdmin.contains("123")
+                && contar(db, "SELECT COUNT(*) FROM usuarios") == 2;
         boolean leido = s.getCampeonato().getEquipos().size() == 6 && s.getCampeonato().getEquipos().stream().allMatch(e -> e.getJugadores().size() == 16)
                 && contar(db, "SELECT COUNT(*) FROM jugadores WHERE es_capitan") == 6;
         s.avanzar(); // el torneo de prueba se puede iniciar y seguir usando
         s.guardarEquipo(1, "Pumas del Sur", "", null, s.getCampeonato().buscarEquipo(1).getJugadores());
         boolean capitan = contar(db, "SELECT COUNT(*) FROM jugadores WHERE es_capitan") == 6; // guardar no borra el capitan
-        return leido && capitan && s.getCampeonato().getPartidos().size() == 15 && seLeeIgual(db, s);
+        return usuarios && leido && capitan && s.getCampeonato().getPartidos().size() == 15 && seLeeIgual(db, s);
     }
 
     /* ---------------------------------------------------------------- campeonatos */

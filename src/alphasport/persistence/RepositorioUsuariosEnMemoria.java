@@ -16,11 +16,16 @@ public class RepositorioUsuariosEnMemoria implements RepositorioUsuarios {
         cuentas.forEach(c -> this.cuentas.put(clave(c.usuario()), c));
     }
 
-    /** Las cuentas de demostracion: admin (administrador) y visitante (solo lectura). */
+    /**
+     * Las cuentas de demostracion: admin (administrador) y visitante (solo lectura). Solo se guarda el hash de
+     * sus claves (las del README); se generan con {@code java ... alphasport.service.ClavesPbkdf2 <clave>}.
+     */
     public static RepositorioUsuariosEnMemoria demostracion() {
         return new RepositorioUsuariosEnMemoria(List.of(
-                new CuentaUsuario("admin", "Administrador", Rol.ADMINISTRADOR, "123"),
-                new CuentaUsuario("visitante", "Visitante", Rol.VISITANTE, "321")));
+                new CuentaUsuario("admin", "Administrador", Rol.ADMINISTRADOR,
+                        "pbkdf2_sha256$600000$ORYWJGZO2MLaUsJJD1StqA$eJmZnrPDP4/FNdM4k5l/HEFmhFxS4qPKtrYueWmiJB8"),
+                new CuentaUsuario("visitante", "Visitante", Rol.VISITANTE,
+                        "pbkdf2_sha256$600000$sleF8gem07Djtx8KO31+QQ$YrnucN8AoK6aG/heRS6AhI4oRY2WAGF7eHy89aGrAc4")));
     }
 
     @Override

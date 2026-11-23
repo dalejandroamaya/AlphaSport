@@ -63,6 +63,7 @@ public class SimulacionFormatos {
         probarReglasPartido();
         probarPermisos();
         probarServidorWeb();
+        probarClaves();
         probarCalificaciones();
         probarFotos();
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
@@ -697,6 +698,40 @@ public class SimulacionFormatos {
             s.getOutputStream().write(("GET /api/catalogo HTTP/1.1\r\nHost: pagina-ajena.example\r\nConnection: close\r\n\r\n")
                     .getBytes(java.nio.charset.StandardCharsets.US_ASCII));
             return new java.io.BufferedReader(new java.io.InputStreamReader(s.getInputStream(), java.nio.charset.StandardCharsets.US_ASCII)).readLine();
+        }
+    }
+
+    /** [A8] Las claves se guardan y se comparan como hash; las cuentas vienen de un RepositorioUsuarios. */
+    private static void probarClaves() {
+        boolean correcto;
+        try {
+            ClavesPbkdf2 rapido = new ClavesPbkdf2(1000); // pocas iteraciones: solo para que la prueba sea rapida
+            String h = rapido.hash("secreta"), otro = rapido.hash("secreta");
+            String alterado = h.substring(0, h.length() - 2) + (h.endsWith("AA") ? "BB" : "AA");
+            boolean hash = h.startsWith(ClavesPbkdf2.PREFIJO + "$1000$") && !h.contains("secreta") && !h.equals(otro)
+                    && rapido.coincide("secreta", h) && rapido.coincide("secreta", otro) && !rapido.coincide("Secreta", h)
+                    && !rapido.coincide("secreta", alterado) && !rapido.coincide("secreta", "secreta") && !rapido.coincide(null, h)
+                    && !rapido.coincide("secreta", "$2a$06$bcrypt-no-soportado") && h.length() <= 255;
+            // Otro repositorio de cuentas (como sera la tabla usuarios) sin cambiar el servicio.
+            AutenticacionService propia = new AutenticacionService(new alphasport.persistence.RepositorioUsuariosEnMemoria(List.of(
+                    new alphasport.model.CuentaUsuario("ana", "Ana", alphasport.model.Rol.ADMINISTRADOR, rapido.hash("clave-de-ana")))), rapido);
+            boolean repositorio = propia.iniciarSesion("  ANA ", "clave-de-ana").puedeEditar()
+                    && rechaza(() -> propia.iniciarSesion("ana", "otra")) && rechaza(() -> propia.iniciarSesion("admin", "123"));
+            // Las cuentas de demostracion siguen entrando con sus claves de siempre.
+            AutenticacionService demo = new AutenticacionService();
+            boolean demostracion = demo.iniciarSesion("admin", "123").puedeEditar() && !demo.iniciarSesion("visitante", "321").puedeEditar()
+                    && rechaza(() -> demo.iniciarSesion("admin", "321")) && rechaza(() -> demo.iniciarSesion("nadie", "123"));
+            correcto = hash && repositorio && demostracion;
+            if (!correcto) {
+                System.out.println("  hash=" + hash + " repositorio=" + repositorio + " demostracion=" + demostracion);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Claves con hash y cuentas por repositorio: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
         }
     }
 

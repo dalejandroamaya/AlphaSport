@@ -85,11 +85,11 @@ INSERT INTO comentarios (noticia_id, autor, texto)
 SELECT id, 'Andrés', '¡Qué buena noticia!' FROM noticias WHERE titulo = '¡Arranca la Liga AlphaSport!';
 
 -- ---------------------------------------------------------------- usuarios de demostracion
--- Claves de demostracion del prototipo (123 y 321) guardadas con bcrypt; el login las usara en el siguiente sprint.
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- Claves de demostracion del prototipo (las del README), guardadas como hash PBKDF2-SHA256: el mismo formato
+-- que valida AutenticacionService (ClavesPbkdf2). Para otra clave: java -cp bin alphasport.service.ClavesPbkdf2 <clave>
 INSERT INTO usuarios (nombre, username, email, password_hash, rol)
-VALUES ('Administrador', 'admin', 'admin@alphasport.local', crypt('123', gen_salt('bf')), 'ADMIN'),
-       ('Visitante', 'visitante', 'visitante@alphasport.local', crypt('321', gen_salt('bf')), 'VISITANTE')
+VALUES ('Administrador', 'admin', 'admin@alphasport.local', 'pbkdf2_sha256$600000$ORYWJGZO2MLaUsJJD1StqA$eJmZnrPDP4/FNdM4k5l/HEFmhFxS4qPKtrYueWmiJB8', 'ADMIN'),
+       ('Visitante', 'visitante', 'visitante@alphasport.local', 'pbkdf2_sha256$600000$sleF8gem07Djtx8KO31+QQ$YrnucN8AoK6aG/heRS6AhI4oRY2WAGF7eHy89aGrAc4', 'VISITANTE')
 ON CONFLICT (username) DO NOTHING;
 
 COMMIT;

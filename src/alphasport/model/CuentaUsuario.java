@@ -6,9 +6,9 @@ package alphasport.model;
  *
  * @param usuario nombre para entrar (username), en minusculas
  * @param nombre  nombre que se muestra
- * @param clave   clave guardada de la cuenta
+ * @param claveHash hash de la clave (nunca la clave): ver alphasport.service.VerificadorClaves
  */
-public record CuentaUsuario(String usuario, String nombre, Rol rol, String clave) {
+public record CuentaUsuario(String usuario, String nombre, Rol rol, String claveHash) {
 
     /** El usuario con su rol, para la sesion. */
     public Usuario comoUsuario() {

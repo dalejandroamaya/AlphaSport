@@ -8,6 +8,7 @@ import alphasport.persistence.postgres.PostgresRepositorioCampeonato;
 import alphasport.persistence.postgres.PostgresRepositorioHistorial;
 import alphasport.persistence.postgres.PostgresRepositorioNoticias;
 import alphasport.service.AutenticacionService;
+import alphasport.service.ClavesPbkdf2;
 import alphasport.service.CampeonatoService;
 import alphasport.service.FotosService;
 import alphasport.service.NoticiasService;
@@ -43,7 +44,7 @@ public final class Arranque {
      * de la tabla usuarios; nada mas cambia.
      */
     public static AutenticacionService autenticacion() {
-        return new AutenticacionService(RepositorioUsuariosEnMemoria.demostracion());
+        return new AutenticacionService(RepositorioUsuariosEnMemoria.demostracion(), new ClavesPbkdf2());
     }
 
     public static NoticiasService noticias() throws PersistenciaException {

@@ -10,19 +10,25 @@ import java.util.Optional;
 
 /**
  * Valida el acceso a la aplicacion y devuelve el usuario con su rol. Las cuentas las da un
- * {@link RepositorioUsuarios}: el servicio no sabe si estan en memoria o en la base de datos.
+ * {@link RepositorioUsuarios} (el servicio no sabe si estan en memoria o en la base de datos) y la clave se
+ * compara con su hash con un {@link VerificadorClaves}: en ningun lado se guarda la clave.
  */
 public class AutenticacionService {
 
     private final RepositorioUsuarios usuarios;
+    private final VerificadorClaves verificador;
+    /** Hash de una clave que nadie usa: con un usuario que no existe se hace el mismo trabajo (no se nota en el tiempo). */
+    private final String hashFicticio;
 
-    public AutenticacionService(RepositorioUsuarios usuarios) {
+    public AutenticacionService(RepositorioUsuarios usuarios, VerificadorClaves verificador) {
         this.usuarios = usuarios;
+        this.verificador = verificador;
+        this.hashFicticio = verificador.hash(java.util.UUID.randomUUID().toString());
     }
 
-    /** Con las cuentas de demostracion (admin y visitante). */
+    /** Con las cuentas de demostracion (admin y visitante) y PBKDF2. */
     public AutenticacionService() {
-        this(RepositorioUsuariosEnMemoria.demostracion());
+        this(RepositorioUsuariosEnMemoria.demostracion(), new ClavesPbkdf2());
     }
 
     /**
@@ -32,7 +38,8 @@ public class AutenticacionService {
      */
     public Usuario iniciarSesion(String usuario, String clave) throws PersistenciaException {
         Optional<CuentaUsuario> cuenta = usuarios.buscar(usuario);
-        if (cuenta.isEmpty() || !cuenta.get().clave().equals(clave)) {
+        boolean coincide = verificador.coincide(clave == null ? "" : clave, cuenta.map(CuentaUsuario::claveHash).orElse(hashFicticio));
+        if (cuenta.isEmpty() || !coincide) {
             throw new ReglaNegocioException("LOGIN", "Usuario o contraseña incorrectos.");
         }
         return cuenta.get().comoUsuario();
