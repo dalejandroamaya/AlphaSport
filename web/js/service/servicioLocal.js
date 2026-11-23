@@ -291,6 +291,7 @@ function crearServicioLocal() {
       if (usados.has(j.dorsal)) throw new ErrorRegla(`El dorsal ${j.dorsal} ya está en uso.`);
       usados.add(j.dorsal);
     }
+    validarDocumentos(existente, d.jugadores); // un documento, un jugador (como ReglasPlantilla en Java)
     let equipo = existente;
     if (!equipo) { exigirNoIniciado(); const division = divisionConMenosEquipos(c); equipo = m.agregarEquipo(nombre); equipo.division = division; }
     equipo.nombre = nombre;
@@ -298,10 +299,47 @@ function crearServicioLocal() {
     equipo.dt = d.dt && String(d.dt.nombre || '').trim()
       ? { nombre: d.dt.nombre.trim(), documento: String(d.dt.documento || '').trim(), nacionalidad: String(d.dt.nacionalidad || '').trim() } : null;
     equipo.jugadores = d.jugadores.map(j => ({
-      id: j.id || m.nuevoIdJugador(), nombre: j.nombre.trim(), documento: String(j.documento || '').trim(), dorsal: j.dorsal,
+      id: j.id || m.nuevoIdJugador(), nombre: j.nombre.trim(), documento: limpiarDocumento(j.documento), dorsal: j.dorsal,
       posicion: j.posicion, foto: fotoValida(j.foto, 'jugador')
     }));
     if ('escudo' in d) equipo.escudo = fotoValida(d.escudo, 'escudo');
+  }
+
+  /* Documentos: como ReglasPlantilla en Java. Se guardan sin espacios de más y se comparan sin espacios ni mayúsculas. */
+  const limpiarDocumento = doc => String(doc || '').trim().replace(/\s+/g, ' ');
+  const claveDocumento = doc => String(doc || '').replace(/\s+/g, '').toUpperCase();
+  const describir = j => `#${j.dorsal} ${String(j.nombre || '').trim()}`;
+  function validarDocumentos(equipo, plantilla) {
+    const enUso = new Map();
+    for (const otro of c.equipos) {
+      if (otro === equipo) continue;
+      for (const j of otro.jugadores) {
+        const clave = claveDocumento(j.documento);
+        if (clave && !enUso.has(clave)) enUso.set(clave, `${describir(j)} de ${otro.nombre}`);
+      }
+    }
+    const enPlantilla = new Map();
+    for (const j of plantilla) {
+      const clave = claveDocumento(j.documento);
+      if (!clave) continue;
+      if (enUso.has(clave)) {
+        throw new ErrorRegla(`El documento ${limpiarDocumento(j.documento)} de ${String(j.nombre).trim()} ya está registrado: es de ${enUso.get(clave)}. Revise el número.`);
+      }
+      if (enPlantilla.has(clave)) {
+        throw new ErrorRegla(`El documento ${limpiarDocumento(j.documento)} está repetido en la plantilla: ${describir(enPlantilla.get(clave))} y ${describir(j)}. Cada jugador debe tener su propio documento.`);
+      }
+      enPlantilla.set(clave, j);
+    }
+  }
+
+  /** Cambia los documentos ya usados por el siguiente número libre (la misma semilla repite documentos). */
+  function documentosLibres(jugadores, usados) {
+    for (const j of jugadores) {
+      let doc = String(j.documento || '');
+      while (claveDocumento(doc) && usados.has(claveDocumento(doc))) doc = /^\d{1,15}$/.test(doc) ? String(Number(doc) + 1) : doc + '1';
+      usados.add(claveDocumento(doc));
+      j.documento = doc;
+    }
   }
 
   /*
@@ -431,6 +469,9 @@ function crearServicioLocal() {
       throw new ErrorRegla(completar ? 'Todos los equipos ya tienen plantilla. Indique cuántos equipos nuevos crear.' : 'Indique cuántos equipos de prueba crear.');
     }
     const r = DatosPrueba.generar(semilla, pedidos, c.equipos.map(e => e.nombre), sinPlantilla.length);
+    const documentos = new Set(c.equipos.flatMap(e => e.jugadores.map(j => claveDocumento(j.documento))).filter(Boolean));
+    r.equipos.forEach(e => documentosLibres(e.jugadores, documentos));
+    r.plantillas.forEach(p => documentosLibres(p, documentos));
     const conIds = jugadores => jugadores.map(j => Object.assign(j, { id: m.nuevoIdJugador() }));
     for (const e of r.equipos) {
       const division = divisionConMenosEquipos(c); // reparte los equipos entre las divisiones

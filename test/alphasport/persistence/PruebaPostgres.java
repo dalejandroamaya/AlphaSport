@@ -70,6 +70,7 @@ public final class PruebaPostgres {
         probar("Noticias y comentarios", PruebaPostgres::probarNoticias);
         probar("Migración de los archivos anteriores", PruebaPostgres::probarMigracion);
         probar("Contratos: PostgreSQL, archivo y memoria responden igual", PruebaPostgres::probarContratos);
+        probar("Documento único también en la base de datos", PruebaPostgres::probarDocumentoUnico);
         probar("Migraciones del esquema (database/migraciones)", PruebaPostgres::probarMigraciones);
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
         System.exit(fallos == 0 ? 0 : 1);
@@ -765,6 +766,7 @@ public final class PruebaPostgres {
 
     /** Deja la base como la creaba la primera version de schema.sql. */
     private static void volverAVersionCero(ConexionDB db) throws Exception {
+        sql(db, "ALTER TABLE jugadores DROP CONSTRAINT jugadores_documento_unico");
         sql(db, "ALTER TABLE jugadores DROP COLUMN persona_id");
         sql(db, "DROP TABLE personas");
         sql(db, "DROP VIEW v_votaciones_activas");
@@ -829,6 +831,46 @@ public final class PruebaPostgres {
             System.out.println("  copia=" + copia + " reemplaza=" + reemplaza + " siguiente=" + siguiente + " respaldado=" + respaldado + " borrado=" + borrado);
         }
         return copia && reemplaza && siguiente && respaldado && borrado;
+    }
+
+    /* ---------------------------------------------------------------- documento unico */
+
+    /**
+     * La base de datos tampoco acepta dos jugadores activos del torneo con el mismo documento (aunque alguien se
+     * salte el servicio), con un mensaje claro; y la migracion 003 no se aplica si ya hay repetidos: dice cuales.
+     */
+    private static boolean probarDocumentoUnico(ConexionDB db) throws Exception {
+        CampeonatoService s = liga(db, 4);
+        String doc = s.getCampeonato().getEquipos().get(0).getJugadores().get(0).getDocumento();
+        int otro = s.getCampeonato().getEquipos().get(1).getJugadores().get(0).getId();
+        String error = "";
+        try {
+            sql(db, "UPDATE jugadores SET documento = ' " + doc.toLowerCase() + " ' WHERE numero = " + otro
+                    + " AND torneo_id = (SELECT id FROM torneos WHERE situacion = 'ACTUAL')");
+        } catch (PersistenciaException e) {
+            error = e.getMessage();
+        }
+        boolean base = error.contains("mismo documento");
+        // Un jugador que salio de la plantilla (inactivo) no cuenta, y en otro torneo (el historial) tampoco.
+        sql(db, "UPDATE jugadores SET activo = FALSE WHERE numero = " + otro);
+        sql(db, "UPDATE jugadores SET documento = '" + doc + "' WHERE numero = " + otro);
+        // La migracion avisa con nombres si encuentra repetidos.
+        sql(db, "ALTER TABLE jugadores DROP CONSTRAINT jugadores_documento_unico");
+        sql(db, "UPDATE jugadores SET activo = TRUE WHERE numero = " + otro);
+        String aviso = "";
+        try {
+            script(db, "database/migraciones/003_documento_unico.sql");
+        } catch (PersistenciaException e) {
+            aviso = e.getMessage();
+        }
+        boolean migracion = aviso.contains("mismo documento") && aviso.contains(doc);
+        sql(db, "UPDATE jugadores SET documento = 'OTRO-" + otro + "' WHERE numero = " + otro);
+        script(db, "database/migraciones/003_documento_unico.sql");
+        migracion &= contar(db, "SELECT COUNT(*) FROM pg_constraint WHERE conname = 'jugadores_documento_unico'") == 1;
+        if (!(base && migracion)) {
+            System.out.println("  base=" + base + " (" + error + ") migracion=" + migracion + " (" + aviso + ")");
+        }
+        return base && migracion;
     }
 
     /* ---------------------------------------------------------------- contratos (LSP) */

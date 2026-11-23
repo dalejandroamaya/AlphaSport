@@ -65,6 +65,7 @@ public class SimulacionFormatos {
         probarServidorWeb();
         probarClaves();
         probarOrdenPorLinea();
+        probarDocumentoUnico();
         probarCalificaciones();
         probarFotos();
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
@@ -793,6 +794,72 @@ public class SimulacionFormatos {
         System.out.println("Plantillas ordenadas por línea (Portería a Ataque): " + (correcto ? "correcto" : "MAL"));
         if (!correcto) {
             fallos++;
+        }
+    }
+
+    /** Un numero de documento es de un solo jugador del campeonato (sin contar espacios ni mayusculas). */
+    private static void probarDocumentoUnico() {
+        boolean correcto;
+        try {
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-documento")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-documento")));
+            servicio.crear("Documentos", TipoFormato.LIGA, new ConfiguracionTorneo(), false);
+            servicio.equipos().agregarEquipo("Rojos");
+            servicio.equipos().agregarEquipo("Azules");
+            int rojos = servicio.getCampeonato().getEquipos().get(0).getId(), azules = servicio.getCampeonato().getEquipos().get(1).getId();
+            java.util.function.Function<String[][], List<alphasport.model.Jugador>> plantilla = filas -> {
+                List<alphasport.model.Jugador> l = new ArrayList<>();
+                for (String[] f : filas) {
+                    l.add(new alphasport.model.Jugador(f[0], f[1], Integer.parseInt(f[2]), "Portero"));
+                }
+                return l;
+            };
+            servicio.equipos().guardarEquipo(rojos, "Rojos", "", null, plantilla.apply(new String[][]{{"Ana", "  10 20  30 ", "1"}, {"Bea", "", "2"}, {"Cris", "", "3"}}));
+            boolean limpia = servicio.buscarEquipo(rojos).getJugadores().get(0).getDocumento().equals("10 20 30");
+            // Mismo documento en la misma plantilla, en otro equipo (con otros espacios y mayusculas) o en un equipo nuevo.
+            String mensajeRepetido = mensaje(() -> servicio.equipos().guardarEquipo(rojos, "Rojos", "", null,
+                    plantilla.apply(new String[][]{{"Ana", "102030", "1"}, {"Dani", "10 2030", "4"}})));
+            String mensajeOtroEquipo = mensaje(() -> servicio.equipos().guardarEquipo(azules, "Azules", "", null,
+                    plantilla.apply(new String[][]{{"Eva", "1020 30", "1"}})));
+            boolean letras = servicio.getCampeonato().getEquipos().size() == 2;
+            servicio.equipos().guardarEquipo(azules, "Azules", "", null, plantilla.apply(new String[][]{{"Eva", "ab-1", "1"}}));
+            letras &= rechaza(() -> servicio.equipos().guardarEquipo(null, "Verdes", "", null, plantilla.apply(new String[][]{{"Fer", "AB-1", "1"}})))
+                    && servicio.getCampeonato().buscarEquipoPorNombre("Verdes") == null;
+            // Sin documento se permite, y el mismo jugador puede volver a guardarse con su documento.
+            servicio.equipos().guardarEquipo(rojos, "Rojos", "", null, new ArrayList<>(servicio.buscarEquipo(rojos).getJugadores()));
+            // Los datos de prueba con la misma semilla no repiten documentos.
+            servicio.equipos().cargarDatosPrueba(5, 2, false);
+            servicio.equipos().cargarDatosPrueba(5, 2, false);
+            java.util.Set<String> documentos = new java.util.HashSet<>();
+            boolean semilla = servicio.getCampeonato().getEquipos().stream().flatMap(e -> e.getJugadores().stream())
+                    .map(j -> ReglasPlantilla.claveDocumento(j.getDocumento())).filter(d -> !d.isEmpty()).allMatch(documentos::add)
+                    && servicio.getCampeonato().getEquipos().size() >= 5;
+            boolean mensajes = mensajeRepetido.contains("repetido en la plantilla") && mensajeRepetido.contains("#1 Ana")
+                    && mensajeOtroEquipo.contains("ya está registrado") && mensajeOtroEquipo.contains("#1 Ana de Rojos");
+            correcto = limpia && mensajes && letras && semilla;
+            if (!correcto) {
+                System.out.println("  limpia=" + limpia + " letras=" + letras + " semilla=" + semilla + "\n  " + mensajeRepetido + "\n  " + mensajeOtroEquipo);
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Documento único por jugador: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /** Mensaje de la ReglaNegocioException que lanza la accion ("" si no la lanza). */
+    private static String mensaje(Accion accion) {
+        try {
+            accion.correr();
+            return "";
+        } catch (ReglaNegocioException e) {
+            return e.getMessage();
+        } catch (Exception e) {
+            return e.toString();
         }
     }
 

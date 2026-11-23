@@ -11,7 +11,7 @@ CREATE TABLE esquema_version (
     version      INTEGER PRIMARY KEY,
     aplicada_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO esquema_version (version) VALUES (2);
+INSERT INTO esquema_version (version) VALUES (3);
 
 -- ---------------------------------------------------------------- usuarios
 -- Base para el login y el modulo Fantasy del siguiente sprint.
@@ -142,7 +142,11 @@ CREATE TABLE jugadores (
     UNIQUE (torneo_id, numero),
     -- Dorsal unico en la plantilla. Se revisa al final de la transaccion: asi dos jugadores pueden intercambiarlo.
     CONSTRAINT jugadores_dorsal_unico EXCLUDE USING btree (equipo_id WITH =, dorsal WITH =)
-        WHERE (activo) DEFERRABLE INITIALLY DEFERRED
+        WHERE (activo) DEFERRABLE INITIALLY DEFERRED,
+    -- Un documento es de un solo jugador del torneo (sin contar espacios ni mayusculas; sin documento se permite).
+    CONSTRAINT jugadores_documento_unico
+        EXCLUDE USING btree (torneo_id WITH =, (upper(regexp_replace(documento, '\s', '', 'g'))) WITH =)
+        WHERE (activo AND regexp_replace(documento, '\s', '', 'g') <> '') DEFERRABLE INITIALLY DEFERRED
 );
 CREATE UNIQUE INDEX jugadores_un_capitan ON jugadores (equipo_id) WHERE es_capitan AND activo;
 -- Una persona juega una sola vez en cada torneo.

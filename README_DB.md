@@ -116,5 +116,6 @@ UPDATE torneos SET version = version + 1 WHERE situacion = 'ACTUAL';
 | PostgreSQL rechazó el usuario o la contraseña… | Corrija `db.user` y `db.password` en `db.properties` |
 | La base de datos … no existe | Paso 2 |
 | … no tiene las tablas de AlphaSport | Ejecute `database/schema.sql` |
+| Hay jugadores con el mismo documento (al ejecutar `003_documento_unico.sql`) | El mensaje dice cuáles, con su id. Corrija el documento de uno de ellos (`UPDATE jugadores SET documento = '…' WHERE id = …;`) y vuelva a ejecutar la migración |
 
 Para empezar de cero (**borra todos los datos**): en pgAdmin, clic derecho en `alphasport_db` → **Delete**, y repita el paso 2.
