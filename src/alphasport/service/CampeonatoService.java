@@ -38,7 +38,7 @@ public class CampeonatoService {
     private boolean escribio;
     /** [REQ-07] Reloj para la hora de cierre de los partidos y la ventana de votacion (las pruebas lo adelantan). */
     private final Clock reloj;
-    /** Fotos de jugadores y escudos (por defecto en memoria; Arranque pone la carpeta datos/imagenes). */
+    /** Fotos de jugadores y escudos (por defecto en memoria; FabricaAplicacion pone la carpeta datos/imagenes). */
     private FotosService fotos = new FotosService(new RepositorioFotosEnMemoria());
     private Campeonato campeonato;
     private MotorCampeonato motor;

@@ -39,7 +39,7 @@ AlphaSport está organizado en cuatro capas: **ui → service → persistence �
 | **persistence** | `persistence` | Interfaces `RepositorioCampeonato`, `RepositorioHistorial` y `RepositorioNoticias`. El programa usa su versión en PostgreSQL; la de archivos queda para las pruebas y para migrar datos anteriores. `PersistenciaException` aísla los errores de almacenamiento. | No conoce las reglas del torneo. |
 | **model** | `model` | Entidades del dominio y enumeraciones. | No calcula tablas ni decide quién avanza. |
 
-La base de datos (PostgreSQL) está en `persistence.postgres`: `Arranque` entrega `PostgresRepositorioCampeonato`, `PostgresRepositorioHistorial` y `PostgresRepositorioNoticias` a los servicios. Ver «Base de datos» al final y [README_DB.md](../README_DB.md).
+La base de datos (PostgreSQL) está en `persistence.postgres`: `FabricaAplicacion` entrega `PostgresRepositorioCampeonato`, `PostgresRepositorioHistorial` y `PostgresRepositorioNoticias` a los servicios. Ver «Base de datos» al final y [README_DB.md](../README_DB.md).
 
 ## Capas en la versión web (`web/js/`)
 

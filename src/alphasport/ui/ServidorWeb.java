@@ -43,11 +43,19 @@ public class ServidorWeb {
     private final ApiControlador api;
     private HttpServer servidor;
     private int puerto;
+    /** Que hacer cuando el administrador pulsa «Cerrar programa» (por defecto, solo detener el servidor). */
+    private Runnable alSalir = () -> {
+    };
 
     public ServidorWeb(Path carpetaWeb, CampeonatoService servicio, ApiControlador api) {
         this.carpetaWeb = carpetaWeb.toAbsolutePath().normalize();
         this.servicio = servicio;
         this.api = api;
+    }
+
+    /** Accion extra al cerrar el programa desde la web (AlphaSportApp termina el proceso). */
+    public void alSalir(Runnable accion) {
+        this.alSalir = accion;
     }
 
     public int iniciar(int puertoInicial) throws IOException {
@@ -106,7 +114,7 @@ public class ServidorWeb {
                 responder(intercambio, 200, Presentador.mapa("ok", true));
                 new Thread(() -> {
                     detener();
-                    System.exit(0);
+                    alSalir.run();
                 }).start();
             } else if (metodo.equals("GET") && ruta.startsWith("foto/")) {
                 // Foto tipo cedula de un jugador o escudo de un equipo.

@@ -324,7 +324,7 @@ class Dialogos {
         StackPane panel = (StackPane) ((StackPane) v.getScene().getRoot()).getChildren().get(0);
         Region foto = new Region();
         foto.getStyleClass().add("foto-campeon");
-        foto.setStyle("-fx-background-image: url('" + alphasport.ui.Arranque.CARPETA_WEB.resolve("img").resolve("estadio-noche.jpg").toUri()
+        foto.setStyle("-fx-background-image: url('" + alphasport.ui.FabricaAplicacion.CARPETA_WEB.resolve("img").resolve("estadio-noche.jpg").toUri()
                 + "'); -fx-background-size: cover; -fx-background-position: center 60%;");
         Region velo = new Region();
         velo.getStyleClass().add("velo-campeon");

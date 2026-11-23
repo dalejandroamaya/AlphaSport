@@ -11,7 +11,7 @@ import alphasport.model.Usuario;
 import alphasport.service.CampeonatoService;
 import alphasport.service.ReglaNegocioException;
 import alphasport.ui.ApiControlador;
-import alphasport.ui.Arranque;
+import alphasport.ui.FabricaAplicacion;
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -100,6 +100,8 @@ public class Aplicacion extends Application {
     static final String ICONO_DADO = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18ZM12 7l3.5 2.6-1.3 4.1H9.8L8.5 9.6Z";
     static final String ICONO_ESTADIO = "M3 10c0-2 4-4 9-4s9 2 9 4v7c0 2-4 4-9 4s-9-2-9-4zM3 10c0 2 4 4 9 4s9-2 9-4";
 
+    /** Arma la conexion, los servicios y el controlador; se cierra al salir. */
+    private final FabricaAplicacion fabrica = new FabricaAplicacion();
     Stage stage;
     CampeonatoService servicio;
     ApiControlador api;
@@ -139,8 +141,8 @@ public class Aplicacion extends Application {
     public void start(Stage stage) {
         this.stage = stage;
         try {
-            servicio = Arranque.servicio();
-            api = new ApiControlador(servicio, Arranque.autenticacion(), Arranque.noticias());
+            servicio = fabrica.servicio();
+            api = fabrica.controlador();
         } catch (alphasport.persistence.PersistenciaException e) {
             avisarSinDatos(e);
             return;
@@ -169,6 +171,11 @@ public class Aplicacion extends Application {
         stage.show();
     }
 
+    @Override
+    public void stop() {
+        fabrica.close();
+    }
+
     /** Sin datos no se abre la ventana principal: se explica qué revisar. */
     private static void avisarSinDatos(Exception e) {
         javafx.scene.control.Alert alerta = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR, e.getMessage());
@@ -186,12 +193,12 @@ public class Aplicacion extends Application {
     }
 
     static Image imagen(String nombre) {
-        return new Image(Arranque.CARPETA_WEB.resolve("img").resolve(nombre).toUri().toString(), true);
+        return new Image(FabricaAplicacion.CARPETA_WEB.resolve("img").resolve(nombre).toUri().toString(), true);
     }
 
     /** Inter (regular, semibold y bold), la misma fuente de la web, guardada en web/fuentes. */
     private static void cargarFuentes() {
-        Path carpeta = Arranque.CARPETA_WEB.resolve("fuentes");
+        Path carpeta = FabricaAplicacion.CARPETA_WEB.resolve("fuentes");
         if (!Files.isDirectory(carpeta)) {
             return;
         }
@@ -259,7 +266,7 @@ public class Aplicacion extends Application {
         if (fotoFondo == null) {
             return;
         }
-        Path foto = Arranque.CARPETA_WEB.resolve("img").resolve(claro ? "estadio-dia.jpg" : "estadio-noche.jpg");
+        Path foto = FabricaAplicacion.CARPETA_WEB.resolve("img").resolve(claro ? "estadio-dia.jpg" : "estadio-noche.jpg");
         fotoFondo.setStyle("-fx-background-image: url('" + foto.toUri() + "'); -fx-background-size: cover; -fx-background-position: center 62%;");
     }
 
