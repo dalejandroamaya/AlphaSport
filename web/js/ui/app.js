@@ -4,8 +4,9 @@
 
 const CLAVE_PESTANA = 'alphasport.pestana';
 const ESTADOS_TEXTO = { PENDIENTE: 'Pendiente', EN_JUEGO: 'En juego', JUGADO: 'Jugado', APLAZADO: 'Aplazado', SUSPENDIDO: 'Suspendido' };
-/** Vistas que el visitante no ve (son de gestión) y vista con la que entra. */
+/** Vistas que el visitante no ve (son de gestión), la que solo ve el visitante [REQ-07] y vista con la que entra. */
 const VISTAS_SOLO_ADMIN = ['equipos', 'reglas'];
+const VISTAS_SOLO_VISITANTE = ['votaciones'];
 const VISTA_INICIAL_VISITANTE = 'partidos';
 
 let servicio = null;
@@ -18,7 +19,7 @@ let S = null;
 const puedeEditar = () => !!(S && S.puedeEditar);
 /** Si el formato no tiene llaves (Liga), la sección «Llaves» no se muestra a nadie. */
 const sinLlaves = () => E.hay && E.campeonato.usaLlaves === false;
-const puedeVer = vista => (vista !== 'llaves' || !sinLlaves()) && (puedeEditar() || !VISTAS_SOLO_ADMIN.includes(vista));
+const puedeVer = vista => (vista !== 'llaves' || !sinLlaves()) && !(puedeEditar() ? VISTAS_SOLO_VISITANTE : VISTAS_SOLO_ADMIN).includes(vista);
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch =>
@@ -159,6 +160,7 @@ async function entrarComoVisitante() {
 
 async function iniciarSesion(ruta, cuerpo) {
   const r = await servicio.ejecutar(ruta, cuerpo);
+  if (r.ok) olvidarVotaciones(); // otra sesión: sin las notas a medio elegir de la anterior
   $('loginError').hidden = r.ok;
   if (!r.ok) {
     $('loginError').textContent = r.error;
@@ -275,6 +277,8 @@ function render() {
   renderLlaves();
   renderEstadisticas();
   renderReglas();
+  contarVotaciones();
+  if (!$('vista-votaciones').hidden) renderVotaciones();
   if (!$('vista-noticias').hidden) renderNoticias();
 }
 
@@ -288,6 +292,7 @@ function mostrarVista(nombre) {
     b.setAttribute('aria-current', b.dataset.vista === nombre ? 'page' : 'false');
   });
   guardarPreferencia(CLAVE_PESTANA, nombre);
+  if (nombre === 'votaciones') renderVotaciones();
   if (nombre === 'noticias') renderNoticias(); // las noticias se piden al servicio al abrir la sección
 }
 
@@ -995,6 +1000,7 @@ function abrirPartido(id, previa) {
   const xiCompleto = [p.local, p.visitante].every(xiListo);
   plegarAlineacion(!editandoPrevia && xiCompleto);
   $('ptSinXI').hidden = editandoPrevia || xiCompleto;
+  abrirEditorVotacion(p); // [REQ-07] cuánto dura la votación del público
   actualizarResumenPrevia();
   actualizarFormPartido();
   $('dlgPartido').showModal();
@@ -1341,7 +1347,8 @@ function datosFormPartido() {
     titularesLocal: [...titularesTemp.get(partidoEditando.local)],
     titularesVisitante: [...titularesTemp.get(partidoEditando.visitante)],
     formacionLocal: $('fmLocal').value, formacionVisitante: $('fmVisitante').value,
-    fecha: $('ptFecha').value, hora: $('ptHora').value, sede: $('ptSede').value, obs: $('ptObs').value
+    fecha: $('ptFecha').value, hora: $('ptHora').value, sede: $('ptSede').value, obs: $('ptObs').value,
+    horasVotacion: horasEditorVotacion()
   };
 }
 
@@ -1363,6 +1370,11 @@ async function guardarPartido(accionPartido) {
   // Un XI empezado tiene que quedar completo (o vacío), en la previa o con el resultado.
   if (accionPartido === 'guardar' && !xiCompletos()) {
     if ($('ptAlineacion').hidden) plegarAlineacion(false);
+    return;
+  }
+  if (accionPartido === 'guardar' && horasEditorVotacion() === null) {
+    errorPartido(`El tiempo de votación debe estar entre ${catalogo.votacion.minimo} y ${catalogo.votacion.maximo} horas.`);
+    $('vtHoras').focus();
     return;
   }
   const cuerpo = { id: partidoEditando.id, datos: datosFormPartido(), accion: accionPartido, confirmado: false };
@@ -1556,7 +1568,6 @@ async function abrirDetalle(id, pestana = 'resumen') {
   }
   detalleActual = r;
   detallePestana = pestana;
-  avisoCalificacion = null;
   const p = r.partido;
   $('dpContexto').textContent = contextoPartido(p);
   $('dpCabecera').innerHTML = cabeceraDetalle(p);
@@ -1598,8 +1609,10 @@ function dibujarDetalle() {
     calificaciones: () => calificacionesHtml(d.calificaciones, p),
     caraACara: () => caraACaraHtml(d.caraACara, p),
     racha: () => rachaHtml(d.racha, p),
-    alineaciones: () => alineacionesCanchaHtml(d.alineaciones, p)
+    alineaciones: () => alineacionesHtml(d.alineaciones, p)
   };
+  // En «Alineaciones» el marcador se hace más bajo: así la cancha completa cabe sin desplazarse.
+  $('dlgDetalle').classList.toggle('con-cancha', detallePestana === 'alineaciones');
   $('dpPanel').innerHTML = (pestanas[detallePestana] || pestanas.resumen)();
 }
 
@@ -1636,169 +1649,11 @@ function caraACaraHtml(h, p) {
 function rachaHtml(r, p) {
   const columna = (equipo, partidos) => `<div class="detalle-racha">
       <h3 class="ficha-titulo">${esc(equipo)}</h3>
-      ${partidos.length ? `<div class="racha-cuadros"><span class="sutil">Últimos ${partidos.length}:</span>${partidos.map(x => formaHtml(x.resultado)).join('')}</div>
-        <p class="sutil pequeno">V = victoria · E = empate · D = derrota (el más reciente a la izquierda)</p>
+      ${partidos.length ? `<div class="racha-cuadros">${partidos.map(x => formaHtml(x.resultado)).join('')}</div>
         <ol class="detalle-lista">${partidos.map(x => filaPrevia(x, x.resultado)).join('')}</ol>`
       : '<p class="sutil">Sin partidos jugados todavía.</p>'}
     </div>`;
   return `<div class="detalle-columnas">${columna(p.localNombre, r.local)}${columna(p.visitanteNombre, r.visitante)}</div>`;
-}
-
-/* ---- [REQ-07] calificaciones de jugadores: nota del sistema + voto del público, MVP ---- */
-
-/** Último aviso de la pestaña (gracias o error) para mostrarlo al redibujar. */
-let avisoCalificacion = null;
-
-const notaTexto = v => Number(v || 0).toFixed(1);
-/** Verde desde 7.0, rojo por debajo de 5.0 y neutra en medio (igual que en el escritorio). */
-const claseNota = v => (v >= 7 ? 'nota-alta' : v < 5 ? 'nota-baja' : 'nota-media');
-
-/** «2 G · 1 A · 1 TA» (goles, asistencias, tarjetas; el portero, valla invicta o goles recibidos). */
-function accionesTexto(j) {
-  const partes = [];
-  if (j.goles) partes.push(j.goles + ' G');
-  if (j.asistencias) partes.push(j.asistencias + ' A');
-  if (j.amarillas) partes.push(j.amarillas + ' TA');
-  if (j.rojas) partes.push(j.rojas + ' TR');
-  if (j.portero) partes.push(j.golesRecibidos ? j.golesRecibidos + ' GR' : 'valla invicta');
-  return partes.join(' · ');
-}
-
-/** Explicación de la nota (tooltip): desglose del sistema y cuenta con el público. */
-function desgloseTexto(j) {
-  const lineas = [`#${j.dorsal} ${j.nombre}`, ...(j.desglose || []).map(x => '  ' + x), 'Nota del sistema: ' + notaTexto(j.notaSistema)];
-  lineas.push(j.votos
-    ? `Promedio del público: ${notaTexto(j.promedioPublico)} (${plural(j.votos, '1 voto', j.votos + ' votos')})\nNota final = (sistema + público) / 2 = ${notaTexto(j.notaFinal)}`
-    : 'Sin votos del público: la nota final es la del sistema.');
-  return lineas.join('\n');
-}
-
-const horaCierre = ms => new Date(ms).toLocaleString('es', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-function restanteTexto(ms) {
-  const minutos = Math.max(0, Math.floor((ms - Date.now()) / 60000)), horas = Math.floor(minutos / 60);
-  return 'quedan ' + (horas ? `${horas} h ${minutos % 60} min` : `${minutos} min`);
-}
-
-function calificacionesHtml(c, p) {
-  if (!c || !c.disponible) return vacioHtml((c && c.motivo) || 'Las calificaciones aparecen cuando el partido termina.');
-  const abierta = c.votacion === 'ABIERTA', puedeVotar = abierta && !puedeEditar();
-  const estadoTexto = {
-    ABIERTA: `Votación del público abierta: ${restanteTexto(c.cierraEn)} (cierra el ${horaCierre(c.cierraEn)}).` + (puedeVotar ? ' Califique a cada jugador del 1 al 10.' : ' Votan los visitantes.'),
-    CERRADA: `Votación cerrada${c.cierraEn ? ' el ' + horaCierre(c.cierraEn) : ''}: estas son las notas definitivas.`,
-    SIN_REGISTRO: 'Partido jugado antes de existir las votaciones: se muestra solo la nota del sistema.'
-  }[c.votacion] || '';
-  const todos = c.local.concat(c.visitante), mvp = todos.find(j => j.id === c.mvp);
-  const nombreEquipo = id => (id === p.local ? p.localNombre : p.visitanteNombre);
-  const voto = j => {
-    if (!puedeVotar) return '';
-    if (j.miVoto) return `<span class="chip chip-voto">Su voto: ${j.miVoto}</span>`;
-    return `<span class="voto-control">
-        <select data-voto-de="${j.id}" aria-label="Calificación para ${esc(j.nombre)}"><option value="">1–10</option>${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(v => `<option>${v}</option>`).join('')}</select>
-        <button type="button" class="btn mini" data-votar="${j.id}" disabled>Votar</button></span>`;
-  };
-  const fila = j => `<li class="fila-calificacion ${j.mvp ? 'fila-mvp' : ''}" title="${esc(desgloseTexto(j))}">
-      <b class="calificacion-dorsal">${j.dorsal}</b>
-      <div class="calificacion-textos">
-        <span class="calificacion-nombre">${esc(j.nombre)}${j.portero ? ' <span class="chip chip-portero">POR</span>' : ''}${j.mvp ? ' <span class="chip chip-mvp">★ MVP</span>' : ''}</span>
-        <span class="sutil pequeno">Sistema ${notaTexto(j.notaSistema)} · ${j.votos ? `Público ${notaTexto(j.promedioPublico)} (${plural(j.votos, '1 voto', j.votos + ' votos')})` : 'Público: sin votos'}${accionesTexto(j) ? ' · ' + esc(accionesTexto(j)) : ''}</span>
-      </div>
-      ${voto(j)}
-      <span class="nota ${claseNota(j.notaFinal)}">${notaTexto(j.notaFinal)}</span>
-    </li>`;
-  const columna = (equipo, jugadores) => {
-    const titulares = jugadores.filter(j => j.titular), banco = jugadores.filter(j => !j.titular);
-    return `<div class="calificacion-columna"><h3 class="ficha-titulo">${esc(equipo)}</h3>
-      ${jugadores.length ? `<ol class="lista-calificaciones">${titulares.map(fila).join('')}</ol>
-        ${banco.length ? `<p class="sutil pequeno">Ingresaron desde el banco</p><ol class="lista-calificaciones">${banco.map(fila).join('')}</ol>` : ''}`
-        : '<p class="sutil">No se registró quién jugó por este equipo.</p>'}</div>`;
-  };
-  const aviso = avisoCalificacion ? `<p class="${avisoCalificacion.error ? 'error' : 'calificacion-gracias'}" role="${avisoCalificacion.error ? 'alert' : 'status'}">${esc(avisoCalificacion.texto)}</p>` : '';
-  return `<p class="calificacion-estado ${abierta ? 'calificacion-abierta' : 'calificacion-cerrada'}">${esc(estadoTexto)}</p>
-    ${aviso}
-    ${mvp ? `<div class="tarjeta-mvp vidrio"><span class="mvp-estrella" aria-hidden="true">★</span>
-        <div><span class="mvp-titulo">MVP del partido</span><b class="mvp-nombre">#${mvp.dorsal} ${esc(mvp.nombre)}</b>
-          <span class="sutil pequeno">${esc(nombreEquipo(mvp.equipo))}${accionesTexto(mvp) ? ' · ' + esc(accionesTexto(mvp)) : ''}</span></div>
-        <span class="nota nota-mvp">${notaTexto(mvp.notaFinal)}</span></div>` : ''}
-    <div class="detalle-columnas">${columna(p.localNombre, c.local)}${columna(p.visitanteNombre, c.visitante)}</div>
-    <p class="sutil pequeno">Nota del sistema: 6.0 por jugar, +1.0 por gol, +0.5 por asistencia, −0.5 por amarilla, −2.0 por roja; el portero suma +1.5 con la valla invicta y resta 0.3 por gol recibido (entre 1.0 y 10.0). Con votos del público, la nota final es el promedio de las dos. Pase el mouse por un jugador para ver su desglose.</p>`;
-}
-
-/** Voto del visitante: lo registra el servicio (Java o web sola) y la pestaña se redibuja con las notas nuevas. */
-async function votarJugador(idJugador) {
-  const selector = document.querySelector(`[data-voto-de="${idJugador}"]`);
-  const valor = selector ? Number(selector.value) : 0;
-  if (!valor || !detalleActual) return;
-  const jugador = detalleActual.calificaciones.local.concat(detalleActual.calificaciones.visitante).find(j => j.id === idJugador);
-  const r = await servicio.ejecutar('calificacion/votar', { partido: detalleActual.partido.id, jugador: idJugador, valor, dispositivo: Almacen.dispositivo() });
-  if (r.ok) {
-    detalleActual.calificaciones = r.calificaciones;
-    avisoCalificacion = { texto: `¡Gracias! Su calificación de ${valor} a ${jugador ? jugador.nombre : 'este jugador'} quedó registrada.`, error: false };
-  } else if (r.codigo === 'LOGIN') {
-    volverAlLogin('Su sesión terminó. Inicie sesión de nuevo.');
-    return;
-  } else {
-    avisoCalificacion = { texto: r.error, error: true };
-  }
-  dibujarDetalle();
-}
-
-/** «Juan Carlos Pérez» -> «J. Pérez», para que quepa sobre la cancha. */
-function apellido(nombre) {
-  const partes = String(nombre).trim().split(/\s+/);
-  return partes.length < 2 ? nombre : partes[0].charAt(0) + '. ' + partes[partes.length - 1];
-}
-
-/**
- * Cancha vertical: el visitante arriba (ataca hacia abajo) y el local abajo. El portero
- * junto a su arco y la última línea cerca del medio campo (igual que en el escritorio).
- */
-function alineacionesCanchaHtml(a, p) {
-  const cambios = p.cambios || [];
-  const fichas = (al, arriba) => {
-    const lineas = al.lineas, ultima = Math.max(1, lineas.length - 1), arco = 0.93, frente = 0.55;
-    return lineas.map((linea, i) => {
-      const y = arco - (arco - frente) * i / ultima;
-      return linea.map((j, k) => {
-        const x = (k + 1) / (linea.length + 1);
-        const izq = ((arriba ? 1 - x : x) * 100).toFixed(2), arr = ((arriba ? 1 - y : y) * 100).toFixed(2);
-        // Si salió en un cambio, el minuto va debajo del nombre.
-        const salio = j && cambios.find(x => x.sale === j.id);
-        const titulo = j ? `#${j.dorsal} ${j.nombre} · ${j.posicion || ''}${salio ? ` · salió en el minuto ${salio.minuto}` : ''}` : 'Por confirmar';
-        const dorsal = `<span class="ficha-dorsal ${arriba ? 'ficha-visitante' : 'ficha-local'}">${j ? j.dorsal : '?'}</span>`;
-        // Con jugador: su foto tipo cédula (o «NN») con el dorsal encima. El administrador la toca para cambiarla.
-        const foto = !j ? dorsal : puedeEditar()
-          ? `<button type="button" class="ficha-foto ${arriba ? 'ficha-visitante' : 'ficha-local'}" data-foto-equipo="${arriba ? p.visitante : p.local}" data-foto-jugador="${j.id}"
-              title="${j.foto ? 'Cambiar o quitar la foto' : 'Subir la foto'} de ${esc(j.nombre)}">${fotoCedulaHtml(j.foto, j.nombre)}${dorsal}</button>`
-          : `<span class="ficha-foto ${arriba ? 'ficha-visitante' : 'ficha-local'}">${fotoCedulaHtml(j.foto, j.nombre)}${dorsal}</span>`;
-        return `<div class="ficha-cancha${j ? ' con-foto' : ''}" style="left:${izq}%;top:${arr}%" title="${esc(titulo)}">
-            ${foto}
-            ${j ? `<span class="ficha-nombre">${esc(apellido(j.nombre))}</span>` : ''}
-            ${salio ? `<span class="ficha-sale" aria-hidden="true">↓ ${minutoTexto(salio.minuto)}</span>` : ''}
-            <span class="solo-lector">${esc(titulo)}</span></div>`;
-      }).join('');
-    }).join('');
-  };
-  // Rótulo del equipo: formación, estado de la alineación y los cambios (quién entró por quién).
-  const rotulo = (equipo, al, donde, idEquipo) => {
-    const delEquipo = cambios.filter(x => x.equipo === idEquipo);
-    return `<div class="detalle-rotulo vidrio">
-      <span class="sutil pequeno">${donde}</span><b>${esc(equipo)}</b>
-      <span class="chip">Formación ${esc(al.formacion)}${al.formacionElegida ? '' : ' (por defecto)'}</span>
-      <span class="sutil pequeno">${al.confirmada ? 'Alineación confirmada' : 'Alineación por confirmar'}</span>
-      ${delEquipo.length ? `<span class="sutil pequeno">Cambios</span><ol class="rotulo-cambios">${delEquipo.map(x => `<li><b class="entra-txt">${minutoTexto(x.minuto)}</b>
-        <span><span>Entra #${x.entraDorsal} ${esc(x.entraNombre)}</span><small class="sale-txt">Sale #${x.saleDorsal} ${esc(x.saleNombre)}</small></span></li>`).join('')}</ol>` : ''}</div>`;
-  };
-  const nota = !a.local.confirmada || !a.visitante.confirmada
-    ? '<p class="sutil pequeno">Las casillas con «?» son puestos por confirmar: el XI inicial se registra al abrir el partido.</p>' : '';
-  return `<div class="detalle-alineaciones">
-      <div class="cancha" role="group" aria-label="Alineaciones sobre la cancha: ${esc(p.visitanteNombre)} arriba y ${esc(p.localNombre)} abajo">
-        <span class="cancha-medio"></span><span class="cancha-circulo"></span>
-        <span class="cancha-area arriba"></span><span class="cancha-area abajo"></span>
-        <span class="cancha-chica arriba"></span><span class="cancha-chica abajo"></span>
-        ${fichas(a.visitante, true)}${fichas(a.local, false)}
-      </div>
-      <div class="detalle-lado">${rotulo(p.visitanteNombre, a.visitante, 'Arriba', p.visitante)}${rotulo(p.localNombre, a.local, 'Abajo', p.local)}${nota}</div>
-    </div>`;
 }
 
 /* ---------------------------------------------------------------- noticias */
@@ -2445,14 +2300,8 @@ function conectarEventos() {
   $('btnVisitante').addEventListener('click', entrarComoVisitante);
   // Detalle del partido (cara a cara, racha y alineaciones)
   document.querySelectorAll('[data-dp]').forEach(b => b.addEventListener('click', () => { detallePestana = b.dataset.dp; dibujarDetalle(); }));
-  // [REQ-07] Calificaciones: «Votar» se habilita al elegir una nota y registra el voto del visitante.
-  $('dpPanel').addEventListener('change', e => {
-    const selector = e.target.closest('[data-voto-de]');
-    if (selector) document.querySelector(`[data-votar="${selector.dataset.votoDe}"]`).disabled = !selector.value;
-  });
+  conectarVotaciones(); // [REQ-07] votaciones.js
   $('dpPanel').addEventListener('click', async e => {
-    const boton = e.target.closest('[data-votar]');
-    if (boton) votarJugador(Number(boton.dataset.votar));
     // Fotos en la alineación: el administrador toca al jugador para cambiar o quitar su foto.
     const ficha = e.target.closest('[data-foto-jugador]');
     if (ficha && detalleActual) {

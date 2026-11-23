@@ -13,12 +13,14 @@ import alphasport.model.Tarjeta;
 import alphasport.model.TipoFormato;
 import alphasport.model.Usuario;
 import alphasport.service.AutenticacionService;
+import alphasport.service.CalificacionesPartido;
 import alphasport.service.CampeonatoService;
 import alphasport.service.NoticiasService;
 import alphasport.service.ReglaNegocioException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -103,6 +105,9 @@ public class ApiControlador {
             String dispositivo = partes.length > 1 ? partes[1] : null;
             return presentador.detallePartido(servicio.detallePartido(id), servicio.calificaciones(id, dispositivo));
         }
+        if (ruta.startsWith("votaciones/")) { // [REQ-07] votaciones abiertas: votaciones/{dispositivo}
+            return Presentador.mapa("ok", true, "votaciones", presentador.votaciones(ruta.substring("votaciones/".length())));
+        }
         return switch (ruta) {
             case "catalogo" -> presentador.catalogo();
             case "sesion" -> Presentador.mapa("ok", true, "sesion", sesion());
@@ -154,6 +159,10 @@ public class ApiControlador {
             case "equipo/escudo" -> mensaje = servicio.cambiarEscudo(entero(cuerpo.get("id")), texto(cuerpo, "imagen"));
             case "equipo/quitar" -> mensaje = servicio.quitarEquipo(entero(cuerpo.get("id")));
             case "partido" -> guardarPartido(cuerpo);
+            case "votacion/cerrar" -> {
+                servicio.cerrarVotacion(entero(cuerpo.get("partido")));
+                mensaje = "Votación cerrada: las notas finales quedaron definitivas.";
+            }
             case "criterios" -> servicio.cambiarCriterios(criterios(lista(cuerpo, "criterios")));
             case "archivar" -> servicio.archivarActual();
             case "historial/eliminar" -> servicio.eliminarDelHistorial(texto(cuerpo, "codigo"));
@@ -165,9 +174,9 @@ public class ApiControlador {
     /* ---------------------------------------------------------------- [REQ-07] calificaciones */
 
     /**
-     * Voto del publico: {partido, jugador, valor (1 a 10), dispositivo}. Solo votan los visitantes: el
-     * administrador ya influye en la nota del sistema al registrar goles y tarjetas. Devuelve las
-     * calificaciones actualizadas para redibujar la pestaña sin pedir todo el detalle.
+     * Voto del publico: {partido, dispositivo, votos: [{jugador, valor (1 a 10)}]} o, para un solo jugador,
+     * {partido, jugador, valor, dispositivo}. Solo votan los visitantes: el administrador ya influye en la nota
+     * del sistema al registrar goles y tarjetas. Devuelve las calificaciones actualizadas.
      */
     private Map<String, Object> votar(Map<String, Object> cuerpo) throws Exception {
         if (usuarioActual.puedeEditar()) {
@@ -175,9 +184,14 @@ public class ApiControlador {
         }
         int idPartido = entero(cuerpo.get("partido"));
         String dispositivo = texto(cuerpo, "dispositivo");
-        Map<String, Object> r = respuesta("¡Gracias! Su calificación quedó registrada.");
-        r.put("calificaciones", Presentador.calificaciones(
-                servicio.votarJugador(idPartido, entero(cuerpo.get("jugador")), entero(cuerpo.get("valor")), dispositivo)));
+        Map<Integer, Integer> notas = new LinkedHashMap<>();
+        for (Object o : cuerpo.containsKey("votos") ? lista(cuerpo, "votos") : List.<Object>of(cuerpo)) {
+            notas.put(entero(mapa(o).get("jugador")), entero(mapa(o).get("valor")));
+        }
+        CalificacionesPartido calificaciones = servicio.votarJugadores(idPartido, notas, dispositivo);
+        Map<String, Object> r = respuesta(notas.size() == 1 ? "¡Gracias! Su calificación quedó registrada."
+                : "¡Gracias! Sus " + notas.size() + " calificaciones quedaron registradas.");
+        r.put("calificaciones", Presentador.calificaciones(calificaciones));
         return r;
     }
 
@@ -303,7 +317,12 @@ public class ApiControlador {
                 datos.reiniciarResultado();
                 servicio.guardarPartido(id, datos, confirmado);
             }
-            default -> servicio.guardarPartido(id, datos, confirmado);
+            default -> {
+                if (d.containsKey("horasVotacion")) { // [REQ-07] cuanto dura la votacion (la carga rapida no lo envia)
+                    servicio.programarVotacion(datos, entero(d.get("horasVotacion")));
+                }
+                servicio.guardarPartido(id, datos, confirmado);
+            }
         }
     }
 

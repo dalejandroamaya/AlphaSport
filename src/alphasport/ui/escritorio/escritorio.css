@@ -522,7 +522,7 @@
 /* =====================================================================
    Detalle de partido: cara a cara, racha, alineaciones
    ===================================================================== */
-.detalle-cabecera { -fx-padding: 20 24; }
+.detalle-cabecera { -fx-padding: 12 24; }
 .detalle-equipo { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 18px; -fx-wrap-text: true; -fx-text-alignment: center; }
 .detalle-pestanas .tab { -fx-background-color: transparent; -fx-padding: 6 14; }
 .detalle-pestanas .tab .tab-label { -fx-text-fill: -sutil; -fx-font-family: "Inter SemiBold"; }
@@ -544,9 +544,9 @@
 .forma-E { -fx-background-color: #f7c75a; }
 .forma-D { -fx-background-color: #ff6b81; }
 
-/* Cancha */
+/* Cancha horizontal: el local a la izquierda y el visitante a la derecha */
 .cancha {
-    -fx-background-color: linear-gradient(from 0% 0% to 0% 12.5%, repeat, #1d7a49 50%, #1a6e42 50%);
+    -fx-background-color: linear-gradient(from 0% 0% to 12.5% 0%, repeat, #1d7a49 50%, #1a6e42 50%);
     -fx-background-radius: 14;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 24, 0, 0, 8);
 }
@@ -556,6 +556,8 @@
 .ficha-visitante { -fx-background-color: #0b1726; -fx-text-fill: #eef4ff; -fx-border-color: #f7c75a; }
 .ficha-nombre { -fx-text-fill: white; -fx-font-size: 11px; -fx-font-family: "Inter SemiBold"; -fx-alignment: center; -fx-text-alignment: center;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 4, 0.5, 0, 1); }
+/* Suplentes, debajo de la cancha */
+.suplente { -fx-background-color: -campo; -fx-background-radius: 6; -fx-padding: 3 8 3 4; }
 /* Cambio sobre la cancha: minuto en que salió el jugador */
 .ficha-sale { -fx-text-fill: #ffb3c0; -fx-font-size: 10px; -fx-font-family: "Inter SemiBold";
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 4, 0.5, 0, 1); }
@@ -583,19 +585,21 @@
 .calificacion-estado { -fx-padding: 10 14; -fx-background-radius: 14; -fx-border-radius: 14; -fx-font-family: "Inter SemiBold"; }
 .calificacion-abierta { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(46, 229, 152, 0.36); }
 .calificacion-cerrada { -fx-text-fill: -sutil; -fx-background-color: rgba(255, 255, 255, 0.05); -fx-border-color: -borde; }
-.calificacion-gracias { -fx-text-fill: -cesped; -fx-font-family: "Inter SemiBold"; }
 .tarjeta-mvp {
     -fx-padding: 14 18;
     -fx-border-color: rgba(247, 199, 90, 0.6);
     -fx-background-color: rgba(247, 199, 90, 0.55), linear-gradient(to right, rgba(247, 199, 90, 0.2), -vidrio 60%);
     -fx-background-insets: 0, 2 0 0 0;
 }
-.mvp-estrella { -fx-text-fill: -oro; -fx-font-size: 30px; }
 .mvp-titulo { -fx-text-fill: -oro-texto; -fx-font-family: "Inter SemiBold"; -fx-font-size: 12px; }
 .fila-calificacion { -fx-padding: 8 10; -fx-background-radius: 14; -fx-border-radius: 14; -fx-border-color: -borde; -fx-background-color: rgba(255, 255, 255, 0.03); }
 .raiz.claro .fila-calificacion { -fx-background-color: rgba(255, 255, 255, 0.6); }
 .fila-calificacion.fila-mvp { -fx-border-color: rgba(247, 199, 90, 0.65); -fx-background-color: rgba(247, 199, 90, 0.08); }
-.calificacion-dorsal { -fx-font-family: "Inter Bold"; -fx-text-fill: -sutil; }
+/* Votaciones (visitante): una tarjeta por partido; editor del tiempo (administrador) */
+.tarjeta-votacion { -fx-padding: 14 18; }
+.fila-calificacion.fila-votada { -fx-border-color: rgba(46, 229, 152, 0.36); }
+.chip-votacion, .raiz.claro .chip-votacion { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; }
+.votacion-abierta { -fx-text-fill: -cesped; -fx-font-family: "Inter SemiBold"; }
 /* La nota: pastilla con el número; verde alta, neutra media, rojo baja (el número siempre va escrito) */
 .nota { -fx-min-width: 52; -fx-alignment: center; -fx-padding: 5 10; -fx-background-radius: 10; -fx-font-family: "Inter Bold"; -fx-font-size: 17px; }
 .nota-alta { -fx-text-fill: #05080f; -fx-background-color: -cesped; }
@@ -863,6 +867,12 @@
 .tab-pane .tab:selected .tab-label, .detalle-pestanas .tab:selected .tab-label { -fx-text-fill: #03170d; }
 .raiz.claro .tab-pane .tab:selected .tab-label { -fx-text-fill: white; }
 .tab-pane .tab:focused .focus-indicator { -fx-border-color: transparent; }
+
+/* El MVP conserva su borde dorado sobre el panel plano. */
+.vidrio.tarjeta-mvp, .raiz.claro .vidrio.tarjeta-mvp {
+    -fx-background-color: linear-gradient(to right, rgba(247, 199, 90, 0.2), transparent 60%);
+    -fx-border-color: rgba(247, 199, 90, 0.6);
+}
 
 /* Menú «Cambiar / Eliminar» de fotos. */
 .menu-foto { -fx-background-radius: 8; -fx-border-radius: 8; }

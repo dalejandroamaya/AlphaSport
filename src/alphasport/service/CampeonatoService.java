@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -453,24 +454,8 @@ public class CampeonatoService {
                     + "«Avanzar» para generarlas de nuevo.\n\n¿Desea continuar?");
         }
         motor.aplicarEdicion(partido, datos, afecta);
-        marcarFinal(partido);
+        ReglasVotacion.marcarFinal(partido, reloj.millis()); // [REQ-07] abre (o descarta) la votacion del publico
         guardar();
-    }
-
-    /**
-     * [REQ-07] La primera vez que el partido queda JUGADO se guarda la hora de cierre: abre la votacion
-     * de 24 horas. Corregir despues el resultado no la mueve; si deja de estar jugado, se descarta
-     * junto con los votos.
-     */
-    private void marcarFinal(Partido partido) {
-        if (partido.isJugado()) {
-            if (partido.getFinalizadoEn() <= 0) {
-                partido.setFinalizadoEn(reloj.millis());
-            }
-        } else {
-            partido.setFinalizadoEn(0);
-            partido.getVotos().clear();
-        }
     }
 
     /** [REQ-07] Calificaciones de un partido; {@code dispositivo} sirve para mostrar el voto propio (puede ser null). */
@@ -479,13 +464,39 @@ public class CampeonatoService {
         return CalculadoraCalificaciones.calcular(campeonato, buscarPartido(idPartido), reloj.millis(), dispositivo);
     }
 
-    /** [REQ-07] Voto de un visitante (1 a 10) a un jugador; las reglas estan en CalculadoraCalificaciones.votar. */
+    /** [REQ-07] Voto de un visitante (1 a 10) a un jugador; las reglas estan en ReglasVotacion.votar. */
     public CalificacionesPartido votarJugador(int idPartido, int idJugador, int valor, String dispositivo) throws PersistenciaException {
+        return votarJugadores(idPartido, Map.of(idJugador, valor), dispositivo);
+    }
+
+    /** [REQ-07] Votos de un visitante a varios jugadores (id -> nota): se guardan todos o ninguno. */
+    public CalificacionesPartido votarJugadores(int idPartido, Map<Integer, Integer> notas, String dispositivo) throws PersistenciaException {
         exigirCampeonato();
-        Partido partido = buscarPartido(idPartido);
-        CalculadoraCalificaciones.votar(campeonato, partido, idJugador, valor, dispositivo, reloj.millis());
+        ReglasVotacion.votar(campeonato, buscarPartido(idPartido), notas, dispositivo, reloj.millis());
         guardar();
         return calificaciones(idPartido, dispositivo);
+    }
+
+    /** [REQ-07] Partidos que el publico puede votar ahora, primero los que cierran antes. */
+    public List<Partido> votacionesAbiertas() {
+        return campeonato == null ? List.of() : ReglasVotacion.abiertas(campeonato, reloj.millis());
+    }
+
+    /** [REQ-07] true si el publico puede votar ese partido ahora. */
+    public boolean votacionAbierta(Partido partido) {
+        return ReglasVotacion.abierta(campeonato, partido, reloj.millis());
+    }
+
+    /** [REQ-07] Programa en la copia que se esta editando cuantas horas dura la votacion (la guarda guardarPartido). */
+    public void programarVotacion(Partido datos, int horas) {
+        ReglasVotacion.programar(datos, horas, reloj.millis());
+    }
+
+    /** [REQ-07] El administrador cierra la votacion antes de tiempo. */
+    public void cerrarVotacion(int idPartido) throws PersistenciaException {
+        exigirCampeonato();
+        ReglasVotacion.cerrar(buscarPartido(idPartido), reloj.millis());
+        guardar();
     }
 
     public void darWalkover(int idPartido, Partido datos, int idGanador, boolean confirmado) throws PersistenciaException {

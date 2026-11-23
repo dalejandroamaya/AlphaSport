@@ -1128,6 +1128,9 @@ class Dialogos {
         VBox grupoFormacion = grupo("Formación táctica",
                 new HBox(14, campo(s(p, "localNombre"), formLocal), campo(s(p, "visitanteNombre"), formVisitante)));
 
+        // ---- [REQ-07] Cuánto dura la votación del público (se puede decidir en la previa o con el resultado)
+        EditorVotacion votacion = new EditorVotacion(app, p);
+
         // ---- Goles por jugador: autor, minuto y asistencia (opcional). Alimentan goleadores y asistencias.
         List<Map<String, Object>> goles = new ArrayList<>();
         for (Map<String, Object> g : l(p, "goles")) {
@@ -1448,7 +1451,7 @@ class Dialogos {
             Label ayudaPrevia = etiqueta("Lo que guarde aquí lo ve el visitante en la previa del partido y queda listo en «Registrar resultados» "
                     + "para anotar goles, tarjetas y cambios.", "sutil", "pequeno");
             ayudaPrevia.setWrapText(true);
-            contenido = cuerpo("Previa del partido · " + app.contexto(p), duelo, ayudaPrevia, grupoProgramacion, grupoFormacion, grupoXI, err, botones);
+            contenido = cuerpo("Previa del partido · " + app.contexto(p), duelo, ayudaPrevia, grupoProgramacion, grupoFormacion, grupoXI, votacion.nodo(), err, botones);
         } else {
             // ---- Resultados: marcador y eventos del juego. La alineación de la previa queda plegada
             // (se puede corregir aquí si cambió a última hora, pero no estorba).
@@ -1476,7 +1479,7 @@ class Dialogos {
                 textosPrevia.getChildren().add(sinXI);
             }
             contenido = cuerpo("Registrar resultado · " + app.contexto(p), marcador, new HBox(14, campo("Estado", estado), penales), cabeceraPrevia, alineacion,
-                    grupoGoles, grupoTarjetas, grupoCambios, err, botones);
+                    grupoGoles, grupoTarjetas, grupoCambios, votacion.nodo(), err, botones);
         }
         Stage v = ventana(previa ? "Previa del partido" : "Registrar resultado", contenido, 900);
         cancelar.setOnAction(e -> v.close());
@@ -1512,6 +1515,10 @@ class Dialogos {
                     }
                 }
             }
+            if (accion.equals("guardar") && votacion.horas() == null) {
+                mostrarError(err, votacion.error());
+                return;
+            }
             boolean penal = conPenales && hayPenales.isSelected();
             Map<String, Object> datos = mapa("estado", claveEstado.get(),
                     "gl", faltaLocal ? 0 : Integer.parseInt(gl.getText()), "gv", faltaVisitante ? 0 : Integer.parseInt(gv.getText()), "pl", penal ? pl.getValue() : -1, "pv", penal ? pv.getValue() : -1,
@@ -1519,6 +1526,9 @@ class Dialogos {
                     "titularesLocal", new ArrayList<>(titulares.get(idsEquipos[0])), "titularesVisitante", new ArrayList<>(titulares.get(idsEquipos[1])), "fecha", fecha.getValue() == null ? "" : fecha.getValue().toString(),
                     "hora", hora.getText(), "sede", sede.getText(), "obs", obs.getText(),
                     "formacionLocal", formacionElegida(formLocal), "formacionVisitante", formacionElegida(formVisitante));
+            if (votacion.horas() != null) {
+                datos.put("horasVotacion", votacion.horas());
+            }
             Map<String, Object> cuerpo = mapa("id", n(p, "id"), "datos", datos, "accion", accion, "confirmado", false);
             Map<String, Object> r = app.ejecutar("partido", cuerpo);
             if (!b(r, "ok") && s(r, "codigo").equals("CONFIRMAR")) {
@@ -1743,11 +1753,12 @@ class Dialogos {
 
     /**
      * Detalle del partido: resumen, calificaciones [REQ-07], cara a cara, racha y alineaciones. Lo usan
-     * visitante y administrador; solo el visitante puede votar (con el id anónimo de este equipo).
+     * visitante y administrador. No se vota aquí: «Ir a votar» lleva al visitante a «Votaciones».
      */
     void detallePartido(Map<String, Object> p) {
         StackPane contenedor = new StackPane();
         int[] pestana = {0};
+        boolean[] votar = {false}; // «Ir a votar»: la sección se abre cuando esta ventana ya se cerró
         java.util.function.BooleanSupplier[] armar = new java.util.function.BooleanSupplier[1];
         // El administrador toca la foto de un jugador o un escudo; al guardarse, el detalle se vuelve a dibujar ahí mismo.
         VistaDetallePartido.Edicion edicion = !app.puedeEditar() ? null : new VistaDetallePartido.Edicion() {
@@ -1765,15 +1776,15 @@ class Dialogos {
             }
         };
         try {
-            String dispositivo = Dispositivo.id();
-            VistaCalificaciones.Votante votante = (jugador, valor) -> app.ejecutar("calificacion/votar",
-                    mapa("partido", n(p, "id"), "jugador", jugador, "valor", valor, "dispositivo", dispositivo));
             armar[0] = () -> {
-                Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id") + "/" + dispositivo);
+                Map<String, Object> detalle = app.api.consultar("partido/" + n(p, "id"));
                 if (detalle == null || m(detalle, "partido") == null) {
                     return false;
                 }
-                Node vista = VistaDetallePartido.construir(detalle, !app.puedeEditar(), votante, edicion);
+                Node vista = VistaDetallePartido.construir(detalle, edicion, app.puedeEditar() ? null : () -> {
+                    votar[0] = true;
+                    contenedor.getScene().getWindow().hide();
+                });
                 if (vista.lookup(".detalle-pestanas") instanceof javafx.scene.control.TabPane pestanas) {
                     pestanas.getSelectionModel().select(pestana[0]);
                     pestanas.getSelectionModel().selectedIndexProperty().addListener((o, a, ahora) -> pestana[0] = ahora.intValue());
@@ -1792,9 +1803,20 @@ class Dialogos {
         }
         Button cerrar = boton("Cerrar", "primario");
         cerrar.setDefaultButton(true);
-        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), contenedor, acciones(cerrar)), 920);
+        // El ancho de la cancha horizontal (960) más los márgenes; nunca más ancho que la pantalla.
+        double ancho = Math.min(1024, javafx.stage.Screen.getPrimary().getVisualBounds().getWidth() - 126);
+        Stage v = ventana("Detalle del partido", cuerpo(app.contexto(p), contenedor, acciones(cerrar)), ancho);
         cerrar.setOnAction(e -> v.close());
+        // El foco empieza en las pestañas. Si lo ponía JavaFX al mostrar la ventana, además desplazaba el
+        // contenido hacia abajo: el marcador quedaba tapado y había que subir para verlo.
+        Node pestanas = contenedor.lookup(".detalle-pestanas");
+        if (pestanas != null) {
+            pestanas.requestFocus();
+        }
         v.showAndWait();
+        if (votar[0]) {
+            app.mostrarVista("votaciones");
+        }
     }
 
     void datosPrueba() {
