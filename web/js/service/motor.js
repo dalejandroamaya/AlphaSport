@@ -832,6 +832,7 @@ class Motor {
   static walkover(datos, partido, idGanador, motivo) {
     P.reiniciar(datos);
     datos.estado = 'JUGADO';
+    datos.walkover = true;
     if (partido.local === idGanador) datos.gl = 3; else datos.gv = 3;
     datos.obs = motivo;
   }

@@ -22,6 +22,8 @@ import java.util.Properties;
 public final class ConexionDB implements AutoCloseable {
 
     public static final Path ARCHIVO = Path.of("db.properties");
+    /** Version del esquema que necesita el programa (la ultima de database/migraciones). */
+    public static final int VERSION_ESQUEMA = 1;
 
     /** Datos de conexion. */
     public record Configuracion(String host, int puerto, String base, String usuario, String clave) {
@@ -101,17 +103,22 @@ public final class ConexionDB implements AutoCloseable {
         }
     }
 
-    /** Comprueba que se puede conectar y que ya se ejecuto schema.sql. */
+    /** Comprueba que se puede conectar, que ya se ejecuto schema.sql y que no faltan migraciones. */
     public void verificar() throws PersistenciaException {
-        boolean lista = ejecutar(con -> {
-            try (var st = con.createStatement(); var rs = st.executeQuery("SELECT to_regclass('torneos') IS NOT NULL")) {
-                rs.next();
-                return rs.getBoolean(1);
+        int version = ejecutar(con -> {
+            if (Sql.uno(con, "SELECT to_regclass('torneos') IS NOT NULL", rs -> rs.getBoolean(1))) {
+                return Sql.uno(con, "SELECT to_regclass('esquema_version') IS NOT NULL", rs -> rs.getBoolean(1))
+                        ? Sql.uno(con, "SELECT COALESCE(MAX(version), 0) FROM esquema_version", rs -> rs.getInt(1)) : 0;
             }
+            return -1;
         });
-        if (!lista) {
+        if (version < 0) {
             throw new PersistenciaException("La base de datos " + configuracion.base()
                     + " no tiene las tablas de AlphaSport. Ejecute database/schema.sql (ver README_DB.md).", null);
+        }
+        if (version < VERSION_ESQUEMA) {
+            throw new PersistenciaException("La base de datos " + configuracion.base() + " está en la versión " + version + " y el programa necesita la "
+                    + VERSION_ESQUEMA + ". Ejecute en orden los archivos de database/migraciones que falten (ver README_DB.md).", null);
         }
     }
 

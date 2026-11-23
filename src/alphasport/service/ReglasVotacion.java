@@ -59,7 +59,7 @@ public final class ReglasVotacion {
 
     /** true si el visitante puede votar ahora: abierta, sin W.O. y con jugadores que calificar. */
     public static boolean abierta(Campeonato c, Partido p, long ahora) {
-        return estado(p, ahora) == Votacion.ABIERTA && !CalculadoraCalificaciones.esWalkover(p)
+        return estado(p, ahora) == Votacion.ABIERTA && !p.isWalkover()
                 && (!CalculadoraCalificaciones.participantes(c, p, p.getIdLocal()).isEmpty()
                 || !CalculadoraCalificaciones.participantes(c, p, p.getIdVisitante()).isEmpty());
     }
@@ -129,7 +129,7 @@ public final class ReglasVotacion {
         if (dispositivo == null || !dispositivo.matches("[A-Za-z0-9-]{8,64}")) {
             throw new ReglaNegocioException("No se pudo identificar este dispositivo para registrar el voto.");
         }
-        if (CalculadoraCalificaciones.esWalkover(p)) {
+        if (p.isWalkover()) {
             throw new ReglaNegocioException("Partido definido por W.O.: no hay jugadores que calificar.");
         }
         switch (estado(p, ahora)) {

@@ -136,7 +136,7 @@ function crearServicioLocal() {
     return {
       id: p.id, fase: p.fase, grupo: p.grupo || '', grupoNombre: p.grupo ? nombreGrupo(c.fases[p.fase], p.grupo.charCodeAt(0) - 65) : '', ronda: p.ronda, nombreRonda: p.nombreRonda, pierna: p.pierna || 0,
       llave: p.llave || '', eliminatorio: !!p.eliminatorio, local: p.local, visitante: p.visitante,
-      localNombre: m.nombre(p.local), visitanteNombre: m.nombre(p.visitante), estado: p.estado, jugado: P.jugado(p),
+      localNombre: m.nombre(p.local), visitanteNombre: m.nombre(p.visitante), estado: p.estado, jugado: P.jugado(p), walkover: P.walkover(p),
       gl: p.gl, gv: p.gv, pl: p.pl, pv: p.pv, penales: P.tienePenales(p), ganador: P.jugado(p) ? P.ganador(p) : -1,
       fecha: p.fecha || 'Por definir', hora: p.hora || '', sede: p.sede || '', obs: p.obs || '',
       tarjetas: P.tarjetas(p).map(t => Object.assign({ minuto: 0 }, t)),
@@ -493,6 +493,8 @@ function crearServicioLocal() {
     } else if (accion === 'borrar') {
       P.reiniciar(datos);
     }
+    // Si al editar un W.O. se registra lo que pasó en la cancha, deja de ser W.O.
+    datos.walkover = P.walkover(datos) && P.resultadoDeWalkover(datos);
     if (P.jugado(datos)) {
       const necesita = m.requierePenales(p, datos.gl, datos.gv);
       if (necesita && (datos.pl === SIN_PENALES || datos.pl === datos.pv)) {

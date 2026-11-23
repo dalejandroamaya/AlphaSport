@@ -61,7 +61,7 @@ public final class CalculadoraCalificaciones {
         List<Calificacion> visitante = List.of();
         if (!partido.isJugado()) {
             motivo = "Las calificaciones aparecen cuando el partido termina.";
-        } else if (esWalkover(partido)) {
+        } else if (partido.isWalkover()) {
             motivo = "Partido definido por W.O.: no se jugó, así que no hay calificaciones.";
         } else {
             local = calificar(campeonato, partido, partido.getIdLocal(), dispositivo);
@@ -73,12 +73,6 @@ public final class CalculadoraCalificaciones {
         int idMvp = mvp(local, visitante);
         return new CalificacionesPartido(ReglasVotacion.estado(partido, ahora), ReglasVotacion.cierraEn(partido), motivo,
                 marcarMvp(local, idMvp), marcarMvp(visitante, idMvp), idMvp);
-    }
-
-    /** Un W.O. no se juega: el motor lo marca con la observacion «W.O. a favor de ...». */
-    static boolean esWalkover(Partido p) {
-        String obs = p.getObservaciones() == null ? "" : p.getObservaciones();
-        return obs.startsWith("W.O.");
     }
 
     /* ---------------------------------------------------------------- nota del sistema */

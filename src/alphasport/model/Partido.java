@@ -53,6 +53,7 @@ public class Partido implements Serializable {
     private String observaciones = "";
 
    
+    private Boolean walkover = false; // null en archivos anteriores: alli solo lo decia la observacion
     private long finalizadoEn;
     private int horasVotacion;      // 0 = por defecto (asi llegan los partidos de archivos anteriores)
     private long votacionCerradaEn; // hora en que el administrador la cerro antes de tiempo; 0 = no la cerro
@@ -124,6 +125,7 @@ public class Partido implements Serializable {
         getCambios().clear();
         getGoles().clear();
         // El XI inicial, la formacion y las horas de votacion NO se borran: se deciden antes del pitazo.
+        walkover = false;
         finalizadoEn = 0;
         votacionCerradaEn = 0;
         getVotos().clear();
@@ -163,6 +165,7 @@ public class Partido implements Serializable {
         hora = otro.hora;
         sede = otro.sede;
         observaciones = otro.observaciones;
+        walkover = otro.isWalkover();
         finalizadoEn = otro.finalizadoEn;
         horasVotacion = otro.horasVotacion;
         votacionCerradaEn = otro.votacionCerradaEn;
@@ -170,6 +173,25 @@ public class Partido implements Serializable {
         for (VotoJugador v : otro.getVotos()) {
             votos.add(v.copia());
         }
+    }
+
+    /** true si se gano por W.O.: no se jugo, asi que no tiene notas ni votacion. */
+    public boolean isWalkover() {
+        if (walkover == null) { // archivos guardados antes de existir este dato
+            walkover = isJugado() && observaciones != null
+                    && (observaciones.startsWith("W.O. a favor de ") || observaciones.startsWith("W.O. por retiro de "));
+        }
+        return walkover;
+    }
+
+    public void setWalkover(boolean walkover) {
+        this.walkover = walkover;
+    }
+
+    /** El resultado sigue siendo el de un W.O.: 3-0 y sin nada registrado de un partido jugado. */
+    public boolean tieneResultadoDeWalkover() {
+        return isJugado() && Math.max(golesLocal, golesVisitante) == 3 && Math.min(golesLocal, golesVisitante) == 0
+                && getGoles().isEmpty() && getTarjetas().isEmpty() && getCambios().isEmpty();
     }
 
     public String getMarcador() {

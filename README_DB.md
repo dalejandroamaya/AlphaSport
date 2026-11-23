@@ -24,9 +24,21 @@ java -cp "bin;lib/*" alphasport.ui.AlphaSportApp
 4. Clic derecho en `alphasport_db` → **Query Tool**.
 5. Botón **Open File** (carpeta) → `database/schema.sql` → **Execute** (F5). Debe decir *Query returned successfully*.
 6. Opcional, para empezar con datos de prueba: abra `database/seed.sql` y ejecútelo igual.
-7. Clic derecho en **Schemas → public → Tables → Refresh**: aparecen 18 tablas, y 4 en **Views**.
+7. Clic derecho en **Schemas → public → Tables → Refresh**: aparecen 19 tablas, y 4 en **Views**.
 
 Los dos archivos van en una transacción: si algo falla no cambian nada. `schema.sql` no borra datos (si las tablas ya existen, avisa y no hace nada) y `seed.sql` no hace nada si ya hay un campeonato en curso.
+
+### Si la base ya existía: migraciones
+
+Cuando cambia el esquema, el cambio llega también como un archivo en `database/migraciones/`. En el **Query Tool** de `alphasport_db` ejecute, **en orden**, los que falten. Cada uno va en una transacción y se puede repetir: si ya se aplicó, no cambia nada. Una base nueva creada con `schema.sql` no los necesita.
+
+Para saber en qué versión está su base (si la tabla no existe, es la 0):
+
+```sql
+SELECT MAX(version) FROM esquema_version;
+```
+
+Si falta alguna, el programa lo avisa al abrir y no toca los datos.
 
 ## 3. Credenciales
 

@@ -173,6 +173,7 @@ public class Presentador {
         m.put("visitanteNombre", c.nombreDe(p.getIdVisitante()));
         m.put("estado", p.getEstado().name());
         m.put("jugado", p.isJugado());
+        m.put("walkover", p.isWalkover());
         m.put("gl", p.getGolesLocal());
         m.put("gv", p.getGolesVisitante());
         m.put("pl", p.getPenalesLocal());

@@ -18,6 +18,7 @@ import alphasport.persistence.postgres.PostgresRepositorioHistorial;
 import alphasport.persistence.postgres.PostgresRepositorioNoticias;
 import alphasport.service.CalificacionesPartido;
 import alphasport.service.CampeonatoService;
+import alphasport.service.MotorCampeonato;
 import alphasport.service.NoticiasService;
 import alphasport.service.ReglaNegocioException;
 import alphasport.ui.Presentador;
@@ -66,6 +67,7 @@ public final class PruebaPostgres {
         probar("Historial: copias que no cambian con el campeonato actual", PruebaPostgres::probarHistorial);
         probar("Noticias y comentarios", PruebaPostgres::probarNoticias);
         probar("Migración de los archivos anteriores", PruebaPostgres::probarMigracion);
+        probar("Migraciones del esquema (database/migraciones)", PruebaPostgres::probarMigraciones);
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
         System.exit(fallos == 0 ? 0 : 1);
     }
@@ -490,6 +492,26 @@ public final class PruebaPostgres {
                 && contar(db, "SELECT COUNT(*) FROM calificaciones_partido") == 0;
         boolean sinVotos = falla(ReglaNegocioException.class, () -> s.votarJugador(p.getId(), xi.get(0), 8, "dispositivo-A1"))
                 && s.votacionesAbiertas().isEmpty() && new ConsultasDAO(db).votacionesActivas().isEmpty();
+        // Lo decide el campo, no el texto: cambiar la observacion de un W.O. no lo convierte en partido jugado...
+        Partido reclamo = copia(p);
+        reclamo.setObservaciones("Reclamo en estudio");
+        s.guardarPartido(p.getId(), reclamo, false);
+        boolean porCampo = servicio(db).buscarPartido(p.getId()).isWalkover() && !s.calificaciones(p.getId(), null).disponible()
+                && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 1;
+        // ...y registrar un gol si: el partido se jugo.
+        Partido conGol = copia(p);
+        conGol.setGoles(new ArrayList<>(List.of(new Gol(p.getIdVisitante(), 10, s.getCampeonato().buscarEquipo(p.getIdVisitante()).getJugadores().get(9), false, null))));
+        s.guardarPartido(p.getId(), conGol, false);
+        porCampo &= !servicio(db).buscarPartido(p.getId()).isWalkover() && s.calificaciones(p.getId(), null).disponible();
+        // Un partido jugado cuya observacion empieza por «W.O.» tiene notas y votacion.
+        Partido otroPartido = s.getCampeonato().getPartidos().get(1);
+        jugarCompleto(s, otroPartido);
+        Partido conTexto = copia(otroPartido);
+        conTexto.setObservaciones("W.O. solicitado, pero el partido se jugó");
+        s.guardarPartido(otroPartido.getId(), conTexto, false);
+        porCampo &= s.calificaciones(otroPartido.getId(), null).disponible() && s.votacionesAbiertas().contains(otroPartido)
+                && new ConsultasDAO(db).votacionesActivas().size() == 2;
+        s.cerrarVotacion(otroPartido.getId());
         // Se borra el W.O. y el partido se juega: ahora si tiene notas y votacion.
         Partido borrado = copia(p);
         borrado.reiniciarResultado();
@@ -506,10 +528,66 @@ public final class PruebaPostgres {
         s.quitarEquipo(pendiente.getIdLocal());
         boolean retiro = pendiente.isJugado() && pendiente.getGolesVisitante() == 3
                 && servicio(db).calificaciones(pendiente.getId(), null).motivoSinCalificaciones().contains("W.O.");
-        if (!(sinNotas && sinVotos && normal && retiro)) {
-            System.out.println("  sinNotas=" + sinNotas + " sinVotos=" + sinVotos + " normal=" + normal + " retiro=" + retiro);
+        if (!(sinNotas && sinVotos && porCampo && normal && retiro)) {
+            System.out.println("  sinNotas=" + sinNotas + " sinVotos=" + sinVotos + " porCampo=" + porCampo + " normal=" + normal + " retiro=" + retiro);
         }
-        return sinNotas && sinVotos && normal && retiro && seLeeIgual(db, s);
+        return sinNotas && sinVotos && porCampo && normal && retiro && seLeeIgual(db, s);
+    }
+
+    /** Un respaldo anterior no trae el campo: se deduce una vez del texto que escribia el programa. */
+    private static boolean walkoverAnterior() throws Exception {
+        Partido p = new Partido(1, 1, 2);
+        MotorCampeonato.darWalkover(p, 1, "W.O. a favor de A");
+        java.lang.reflect.Field campo = Partido.class.getDeclaredField("walkover");
+        campo.setAccessible(true);
+        campo.set(p, null);
+        Partido jugado = new Partido(2, 1, 2);
+        jugado.setEstado(EstadoPartido.JUGADO);
+        jugado.setObservaciones("W.O. solicitado, pero se jugó");
+        campo.set(jugado, null);
+        return p.isWalkover() && !jugado.isWalkover();
+    }
+
+    /** Las migraciones llevan una base anterior a la misma estructura que schema.sql y se pueden repetir. */
+    private static boolean probarMigraciones(ConexionDB db) throws Exception {
+        boolean anterior = walkoverAnterior();
+        CampeonatoService s = liga(db, 4);
+        Partido p = s.getCampeonato().getPartidos().get(0);
+        walkover(s, p, p.getIdLocal());
+        jugarCompleto(s, s.getCampeonato().getPartidos().get(1));
+        String antes = foto(s);
+        volverAVersionCero(db);
+        boolean avisa = falla(PersistenciaException.class, db::verificar);
+        List<Path> archivos = migraciones();
+        for (Path m : archivos) {
+            script(db, m.toString());
+        }
+        db.verificar();
+        boolean igual = foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 1;
+        for (Path m : archivos) {
+            script(db, m.toString()); // repetirlas no cambia nada
+        }
+        igual &= foto(servicio(db)).equals(antes) && contar(db, "SELECT MAX(version) FROM esquema_version") == ConexionDB.VERSION_ESQUEMA
+                && archivos.size() == ConexionDB.VERSION_ESQUEMA;
+        if (!(anterior && avisa && igual)) {
+            System.out.println("  anterior=" + anterior + " avisa=" + avisa + " igual=" + igual);
+        }
+        return anterior && avisa && igual;
+    }
+
+    private static List<Path> migraciones() throws Exception {
+        try (var archivos = Files.list(Path.of("database/migraciones"))) {
+            return archivos.filter(f -> f.toString().endsWith(".sql")).sorted().toList();
+        }
+    }
+
+    /** Deja la base como la creaba la primera version de schema.sql. */
+    private static void volverAVersionCero(ConexionDB db) throws Exception {
+        sql(db, "DROP VIEW v_votaciones_activas");
+        sql(db, "ALTER TABLE partidos DROP COLUMN walkover");
+        sql(db, "DROP TABLE esquema_version");
+        sql(db, "CREATE VIEW v_votaciones_activas AS SELECT p.id AS partido_id, p.torneo_id, p.numero AS partido_numero, ''::varchar(200) AS local,"
+                + " ''::varchar(200) AS visitante, p.goles_local, p.goles_visitante, p.horas_votacion, p.finalizado_en AS cierra_en, 0::bigint AS votos FROM partidos p");
     }
 
     private static boolean probarDosProgramas(ConexionDB db) throws Exception {

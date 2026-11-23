@@ -6,6 +6,13 @@
 -- =====================================================================
 BEGIN;
 
+-- Version del esquema: la sube cada archivo de database/migraciones.
+CREATE TABLE esquema_version (
+    version      INTEGER PRIMARY KEY,
+    aplicada_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT INTO esquema_version (version) VALUES (1);
+
 -- ---------------------------------------------------------------- usuarios
 -- Base para el login y el modulo Fantasy del siguiente sprint.
 CREATE TABLE usuarios (
@@ -197,6 +204,7 @@ CREATE TABLE partidos (
     -- resultado
     estado                VARCHAR(12)  NOT NULL DEFAULT 'PENDIENTE'
                               CHECK (estado IN ('PENDIENTE', 'EN_JUEGO', 'JUGADO', 'APLAZADO', 'SUSPENDIDO')),
+    walkover              BOOLEAN      NOT NULL DEFAULT FALSE,   -- se gano por W.O.: no se jugo
     goles_local           INTEGER      NOT NULL DEFAULT 0 CHECK (goles_local >= 0),
     goles_visitante       INTEGER      NOT NULL DEFAULT 0 CHECK (goles_visitante >= 0),
     penales_local         INTEGER      CHECK (penales_local >= 0),
@@ -360,7 +368,7 @@ SELECT p.id AS partido_id, p.torneo_id, p.numero AS partido_numero, l.nombre AS 
    AND p.votacion_cerrada_en IS NULL
    AND p.finalizado_en <= CURRENT_TIMESTAMP
    AND p.finalizado_en + make_interval(hours => p.horas_votacion) > CURRENT_TIMESTAMP
-   AND p.observaciones NOT LIKE 'W.O.%'
+   AND NOT p.walkover
    AND (EXISTS (SELECT 1 FROM alineaciones a WHERE a.partido_id = p.id AND a.titular)
         OR EXISTS (SELECT 1 FROM eventos_partido e WHERE e.partido_id = p.id));
 
