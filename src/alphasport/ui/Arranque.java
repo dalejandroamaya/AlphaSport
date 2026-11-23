@@ -4,6 +4,7 @@ import alphasport.persistence.ArchivoRepositorioCampeonato;
 import alphasport.persistence.ArchivoRepositorioFotos;
 import alphasport.persistence.ArchivoRepositorioHistorial;
 import alphasport.persistence.ArchivoRepositorioNoticias;
+import alphasport.persistence.PersistenciaException;
 import alphasport.service.CampeonatoService;
 import alphasport.service.FotosService;
 import alphasport.service.NoticiasService;
@@ -30,7 +31,7 @@ public final class Arranque {
         return new NoticiasService(new ArchivoRepositorioNoticias(CARPETA_DATOS));
     }
 
-    public static CampeonatoService servicio() {
+    public static CampeonatoService servicio() throws PersistenciaException {
         if (!Files.isRegularFile(CARPETA_WEB.resolve("index.html"))) {
             System.err.println("No se encontro la carpeta web/. Ejecute el programa desde la carpeta del proyecto.");
             System.exit(1);

@@ -139,7 +139,12 @@ public class Aplicacion extends Application {
     @Override
     public void start(Stage stage) {
         this.stage = stage;
-        servicio = Arranque.servicio();
+        try {
+            servicio = Arranque.servicio();
+        } catch (alphasport.persistence.PersistenciaException e) {
+            avisarSinDatos(e);
+            return;
+        }
         api = new ApiControlador(servicio, new AutenticacionService(), Arranque.noticias());
         catalogo = api.consultar("catalogo");
         dialogos = new Dialogos(this);
@@ -155,6 +160,16 @@ public class Aplicacion extends Application {
         mostrarLogin();
         stage.setMaximized(true);
         stage.show();
+    }
+
+    /** Sin datos no se abre la ventana principal: se explica qué revisar. */
+    private static void avisarSinDatos(Exception e) {
+        javafx.scene.control.Alert alerta = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR, e.getMessage());
+        alerta.setTitle("AlphaSport");
+        alerta.setHeaderText("No se pudieron abrir los datos");
+        alerta.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        alerta.showAndWait();
+        javafx.application.Platform.exit();
     }
 
     String hojaEstilos() {
