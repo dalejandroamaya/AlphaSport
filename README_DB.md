@@ -24,7 +24,7 @@ java -cp "bin;lib/*" alphasport.ui.AlphaSportApp
 4. Clic derecho en `alphasport_db` → **Query Tool**.
 5. Botón **Open File** (carpeta) → `database/schema.sql` → **Execute** (F5). Debe decir *Query returned successfully*.
 6. Opcional, para empezar con datos de prueba: abra `database/seed.sql` y ejecútelo igual.
-7. Clic derecho en **Schemas → public → Tables → Refresh**: aparecen 19 tablas, y 4 en **Views**.
+7. Clic derecho en **Schemas → public → Tables → Refresh**: aparecen 20 tablas, y 4 en **Views**.
 
 Los dos archivos van en una transacción: si algo falla no cambian nada. `schema.sql` no borra datos (si las tablas ya existen, avisa y no hace nada) y `seed.sql` no hace nada si ya hay un campeonato en curso.
 
@@ -80,6 +80,7 @@ Ejecute **Prueba de PostgreSQL (PruebaPostgres)**: debe terminar en `TODO BIEN`.
 |---|---|
 | `torneos`, `torneo_criterios`, `divisiones` | El campeonato en curso (`ACTUAL`) y las copias del historial (`ARCHIVADO`), con sus reglas |
 | `equipos`, `directores_tecnicos`, `jugadores` | Plantillas. Un jugador que sale queda con `activo = FALSE`: sus goles y votos lo siguen usando |
+| `personas` | Quién es cada jugador (`codigo` UUID): la misma persona en todas las temporadas y copias del historial. No se borra con el torneo |
 | `fases`, `fase_participantes`, `fase_grupos`, `fase_cuadro` | Fases, grupos y llaves |
 | `partidos` | Fixture, previa, resultado y votación (`horas_votacion`, `finalizado_en`, `votacion_cerrada_en`) |
 | `alineaciones` | Titulares y suplentes de cada partido |

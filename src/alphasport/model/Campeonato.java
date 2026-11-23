@@ -82,6 +82,7 @@ public class Campeonato implements Serializable {
                 Jugador copia = new Jugador(j.getNombre(), j.getDocumento(), j.getDorsal(), j.getPosicion());
                 copia.setId(nuevoIdJugador());
                 copia.setFoto(j.getFoto());
+                copia.setCodigoPersona(j.getCodigoPersona()); // es la misma persona
                 nuevo.agregarJugador(copia);
             }
         }

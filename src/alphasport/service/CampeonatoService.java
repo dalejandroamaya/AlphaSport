@@ -341,6 +341,9 @@ public class CampeonatoService {
         for (Jugador j : jugadores) {
             if (j.getId() == 0) {
                 j.setId(campeonato.nuevoIdJugador());
+            } else if (existente != null && campeonato.buscarJugador(existente.getId(), j.getId()) != null) {
+                // La pantalla reconstruye el jugador: sigue siendo la misma persona.
+                j.setCodigoPersona(campeonato.buscarJugador(existente.getId(), j.getId()).getCodigoPersona());
             }
             j.setFoto(fotos.resolver(j.getFoto(), false));
         }

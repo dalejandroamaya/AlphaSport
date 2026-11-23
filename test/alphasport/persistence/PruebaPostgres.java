@@ -444,6 +444,8 @@ public final class PruebaPostgres {
         CampeonatoService s = liga(db, 4);
         Partido p = s.getCampeonato().getPartidos().get(0);
         String jugadores = idsActuales(db, "jugadores"), partidos = idsActuales(db, "partidos"), equipos = idsActuales(db, "equipos");
+        String personas = personasActuales(db);
+        int plantilla = contar(db, "SELECT COUNT(*) FROM jugadores j JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ACTUAL'");
         jugarCompleto(s, p);
         int portero = p.getTitularesVisitante().get(0);
         s.votarJugador(p.getId(), portero, 8, "dispositivo-A1");
@@ -461,16 +463,57 @@ public final class PruebaPostgres {
         // Lo que apunta al jugador sigue apuntando al mismo.
         boolean votos = contar(db, "SELECT COUNT(*) FROM votos_publico v JOIN jugadores j ON j.id = v.jugador_id JOIN torneos t ON t.id = j.torneo_id"
                 + " WHERE t.situacion = 'ACTUAL' AND j.numero = " + portero) == 1;
-        // La siguiente temporada y «mismos equipos» conservan las plantillas.
-        String antes = plantillas(s.getCampeonato());
+        // Cada jugador es una persona; editarlo o archivarlo no la cambia y la copia del historial es la misma persona.
+        boolean unaPersona = personasActuales(db).equals(personas) && contar(db, "SELECT COUNT(*) FROM personas") == plantilla
+                && contar(db, "SELECT COUNT(*) FROM personas WHERE nombre LIKE '% Jr.'") == enviados.size()
+                && contar(db, "SELECT COUNT(*) FROM jugadores a JOIN torneos ta ON ta.id = a.torneo_id AND ta.situacion = 'ARCHIVADO'"
+                        + " JOIN torneos tb ON tb.codigo = ta.codigo AND tb.situacion = 'ACTUAL'"
+                        + " JOIN jugadores b ON b.torneo_id = tb.id AND b.numero = a.numero WHERE a.persona_id = b.persona_id") == plantilla;
+        // La siguiente temporada y «mismos equipos» conservan las plantillas y las personas.
+        String antes = plantillas(s.getCampeonato()), quienes = codigosPersonas(db);
         s.siguienteTemporada("Temporada 2");
-        boolean temporada = plantillas(servicio(db).getCampeonato()).equals(antes);
+        boolean temporada = plantillas(servicio(db).getCampeonato()).equals(antes) && codigosPersonas(db).equals(quienes);
         s.crear("Otro torneo", TipoFormato.LIGA, new ConfiguracionTorneo(), true);
-        boolean mismos = plantillas(servicio(db).getCampeonato()).equals(antes);
-        if (!(estables && votos && temporada && mismos)) {
-            System.out.println("  estables=" + estables + " votos=" + votos + " temporada=" + temporada + " mismos=" + mismos);
+        boolean mismos = plantillas(servicio(db).getCampeonato()).equals(antes) && codigosPersonas(db).equals(quienes)
+                && contar(db, "SELECT COUNT(*) FROM personas") == plantilla;
+        // Equipos nuevos son personas nuevas, aunque se llamen igual.
+        s.crear("Desde cero", TipoFormato.LIGA, new ConfiguracionTorneo(), false);
+        s.cargarDatosPrueba(7, 2, false);
+        boolean nuevas = contar(db, "SELECT COUNT(*) FROM personas") == plantilla + 2 * s.getCampeonato().getEquipos().get(0).getJugadores().size();
+        if (!(estables && votos && unaPersona && temporada && mismos && nuevas)) {
+            System.out.println("  estables=" + estables + " votos=" + votos + " unaPersona=" + unaPersona + " temporada=" + temporada
+                    + " mismos=" + mismos + " nuevas=" + nuevas);
         }
-        return estables && votos && temporada && mismos;
+        return estables && votos && unaPersona && temporada && mismos && nuevas;
+    }
+
+    /** numero del jugador -> id de su persona, en el campeonato en curso. */
+    private static String personasActuales(ConexionDB db) throws PersistenciaException {
+        return db.ejecutar(con -> {
+            try (var st = con.createStatement(); var rs = st.executeQuery("SELECT j.numero, j.persona_id FROM jugadores j"
+                    + " JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ACTUAL' ORDER BY j.numero")) {
+                StringBuilder texto = new StringBuilder();
+                while (rs.next()) {
+                    texto.append(rs.getInt(1)).append('=').append(rs.getInt(2)).append(' ');
+                }
+                return texto.toString();
+            }
+        });
+    }
+
+    /** Codigos de las personas de la plantilla en curso, por equipo y dorsal (los numeros cambian de una temporada a otra). */
+    private static String codigosPersonas(ConexionDB db) throws PersistenciaException {
+        return db.ejecutar(con -> {
+            try (var st = con.createStatement(); var rs = st.executeQuery("SELECT e.nombre, j.dorsal, p.codigo FROM jugadores j"
+                    + " JOIN torneos t ON t.id = j.torneo_id AND t.situacion = 'ACTUAL' JOIN equipos e ON e.id = j.equipo_id"
+                    + " JOIN personas p ON p.id = j.persona_id WHERE j.activo ORDER BY e.nombre, j.dorsal")) {
+                StringBuilder texto = new StringBuilder();
+                while (rs.next()) {
+                    texto.append(rs.getString(1)).append('#').append(rs.getInt(2)).append('=').append(rs.getString(3)).append(' ');
+                }
+                return texto.toString();
+            }
+        });
     }
 
     private static void walkover(CampeonatoService s, Partido p, int ganador) throws PersistenciaException {
@@ -555,6 +598,7 @@ public final class PruebaPostgres {
         Partido p = s.getCampeonato().getPartidos().get(0);
         walkover(s, p, p.getIdLocal());
         jugarCompleto(s, s.getCampeonato().getPartidos().get(1));
+        s.archivarActual(); // la copia del historial debe quedar con las mismas personas
         String antes = foto(s);
         volverAVersionCero(db);
         boolean avisa = falla(PersistenciaException.class, db::verificar);
@@ -563,16 +607,27 @@ public final class PruebaPostgres {
             script(db, m.toString());
         }
         db.verificar();
-        boolean igual = foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 1;
+        boolean igual = foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 2; // el campeonato y su copia
+        // Una persona por jugador, compartida por el campeonato en curso y su copia del historial.
+        int jugadores = contar(db, "SELECT COUNT(*) FROM jugadores j JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ACTUAL'");
+        boolean personas = jugadores > 0 && contar(db, "SELECT COUNT(*) FROM personas") == jugadores
+                && contar(db, "SELECT COUNT(DISTINCT persona_id) FROM jugadores") == jugadores
+                && contar(db, "SELECT COUNT(*) FROM jugadores j JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ARCHIVADO'") == jugadores;
+        // El programa sigue guardando sobre la base migrada.
+        CampeonatoService migrado = servicio(db);
+        Equipo e = migrado.getCampeonato().getEquipos().get(0);
+        migrado.guardarEquipo(e.getId(), e.getNombreEquipo() + " 2", e.getEstadio(), e.getDirectorTecnico(), new ArrayList<>(e.getJugadores()));
+        personas &= contar(db, "SELECT COUNT(*) FROM personas") == jugadores;
+        antes = foto(migrado);
         for (Path m : archivos) {
             script(db, m.toString()); // repetirlas no cambia nada
         }
         igual &= foto(servicio(db)).equals(antes) && contar(db, "SELECT MAX(version) FROM esquema_version") == ConexionDB.VERSION_ESQUEMA
                 && archivos.size() == ConexionDB.VERSION_ESQUEMA;
-        if (!(anterior && avisa && igual)) {
-            System.out.println("  anterior=" + anterior + " avisa=" + avisa + " igual=" + igual);
+        if (!(anterior && avisa && igual && personas)) {
+            System.out.println("  anterior=" + anterior + " avisa=" + avisa + " igual=" + igual + " personas=" + personas);
         }
-        return anterior && avisa && igual;
+        return anterior && avisa && igual && personas;
     }
 
     private static List<Path> migraciones() throws Exception {
@@ -583,6 +638,8 @@ public final class PruebaPostgres {
 
     /** Deja la base como la creaba la primera version de schema.sql. */
     private static void volverAVersionCero(ConexionDB db) throws Exception {
+        sql(db, "ALTER TABLE jugadores DROP COLUMN persona_id");
+        sql(db, "DROP TABLE personas");
         sql(db, "DROP VIEW v_votaciones_activas");
         sql(db, "ALTER TABLE partidos DROP COLUMN walkover");
         sql(db, "DROP TABLE esquema_version");

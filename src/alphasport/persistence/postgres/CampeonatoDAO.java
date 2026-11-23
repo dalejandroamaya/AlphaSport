@@ -16,7 +16,9 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Un campeonato completo (torneo, equipos, fases y partidos) repartido en sus tablas. Conserva los ids de las
@@ -95,17 +97,24 @@ final class CampeonatoDAO {
         }
     }
 
-    /** Los archivos muy viejos traen jugadores sin id: en la base de datos todos lo necesitan. */
+    /**
+     * Los archivos muy viejos traen jugadores sin id: en la base de datos todos lo necesitan. Una persona
+     * no puede estar dos veces en el mismo torneo: si un codigo se repite, el segundo pasa a ser otra persona.
+     */
     private static void numerarJugadores(Campeonato c) {
+        Set<String> personas = new HashSet<>();
         for (Equipo e : c.getEquipos()) {
             for (Jugador j : new ArrayList<>(e.getJugadores())) {
                 if (j.getId() <= 0) {
                     j.setId(c.nuevoIdJugador());
                 }
+                if (!personas.add(j.getCodigoPersona())) {
+                    j.setCodigoPersona(null);
+                    personas.add(j.getCodigoPersona());
+                }
             }
         }
     }
-
     /* ---------------------------------------------------------------- huellas */
 
     Huellas huellas(Campeonato c) throws PersistenciaException {

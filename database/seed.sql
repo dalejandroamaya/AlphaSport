@@ -50,20 +50,29 @@ SELECT e.id, d.nombre, d.documento, 'Colombia'
        AS d (numero, nombre, documento) ON d.numero = e.numero;
 
 -- ---------------------------------------------------------------- jugadores
--- 16 por equipo: el dorsal 10 es el capitan.
-INSERT INTO jugadores (torneo_id, equipo_id, numero, nombre, documento, dorsal, posicion, es_capitan, orden)
-SELECT e.torneo_id, e.id, (e.numero - 1) * 16 + p.dorsal,
+-- 16 por equipo: el dorsal 10 es el capitan. Cada uno es una persona nueva (el documento J0001... la identifica aqui).
+CREATE TEMP TABLE semilla_jugadores ON COMMIT DROP AS
+SELECT e.torneo_id, e.id AS equipo_id, (e.numero - 1) * 16 + p.dorsal AS numero,
        (ARRAY['Mateo','Samuel','Nicolás','Tomás','Daniel','Felipe','Andrés','Santiago','Esteban','Camilo','Julián','Sergio','Iván','Óscar','Kevin','David'])[1 + (p.dorsal * 5 + e.numero * 3) % 16]
          || ' ' ||
-       (ARRAY['Rojas','Gómez','Castro','Medina','Vargas','Ortiz','Salazar','Peña','Cardona','Ríos','Mejía','Torres','Parra','Lozano','Cruz','Molina','Arias'])[1 + (p.dorsal * 7 + e.numero * 4) % 17],
-       'J' || lpad(((e.numero - 1) * 16 + p.dorsal)::text, 4, '0'),
-       p.dorsal, p.posicion, p.dorsal = 10, p.dorsal - 1
+       (ARRAY['Rojas','Gómez','Castro','Medina','Vargas','Ortiz','Salazar','Peña','Cardona','Ríos','Mejía','Torres','Parra','Lozano','Cruz','Molina','Arias'])[1 + (p.dorsal * 7 + e.numero * 4) % 17] AS nombre,
+       'J' || lpad(((e.numero - 1) * 16 + p.dorsal)::text, 4, '0') AS documento,
+       p.dorsal, p.posicion, p.dorsal = 10 AS es_capitan, p.dorsal - 1 AS orden
   FROM equipos e
   JOIN torneos t ON t.id = e.torneo_id AND t.codigo = 'seed0001' AND t.situacion = 'ACTUAL',
        (VALUES (1, 'Portero'), (2, 'Lateral derecho'), (3, 'Defensa central'), (4, 'Defensa central'), (5, 'Lateral izquierdo'),
                (6, 'Mediocampista defensivo'), (7, 'Extremo derecho'), (8, 'Mediocampista central'), (9, 'Delantero centro'),
                (10, 'Mediocampista ofensivo'), (11, 'Extremo izquierdo'), (12, 'Portero'), (13, 'Defensa central'),
                (14, 'Interior derecho'), (15, 'Volante izquierdo'), (16, 'Segundo delantero')) AS p (dorsal, posicion);
+
+WITH nuevas AS (
+    INSERT INTO personas (codigo, nombre, documento)
+    SELECT gen_random_uuid(), nombre, documento FROM semilla_jugadores
+    RETURNING id, documento
+)
+INSERT INTO jugadores (torneo_id, equipo_id, persona_id, numero, nombre, documento, dorsal, posicion, es_capitan, orden)
+SELECT s.torneo_id, s.equipo_id, n.id, s.numero, s.nombre, s.documento, s.dorsal, s.posicion, s.es_capitan, s.orden
+  FROM semilla_jugadores s JOIN nuevas n ON n.documento = s.documento;
 
 -- ---------------------------------------------------------------- noticias
 INSERT INTO noticias (titulo, cuerpo, autor, rol_autor, fecha, aprobado)

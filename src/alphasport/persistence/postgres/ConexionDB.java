@@ -23,7 +23,7 @@ public final class ConexionDB implements AutoCloseable {
 
     public static final Path ARCHIVO = Path.of("db.properties");
     /** Version del esquema que necesita el programa (la ultima de database/migraciones). */
-    public static final int VERSION_ESQUEMA = 1;
+    public static final int VERSION_ESQUEMA = 2;
 
     /** Datos de conexion. */
     public record Configuracion(String host, int puerto, String base, String usuario, String clave) {
