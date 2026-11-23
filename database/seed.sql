@@ -1,8 +1,8 @@
 -- =====================================================================
 --  AlphaSport · datos iniciales de prueba
 --  Ejecutar despues de schema.sql. Crea un torneo configurado (liga sin
---  iniciar) con 6 equipos, sus tecnicos y 16 jugadores por equipo, dos
---  noticias y los usuarios de demostracion.
+--  iniciar) con 6 equipos, sus tecnicos y 16 jugadores por equipo, y dos
+--  noticias. No crea cuentas: cada persona se registra desde la app.
 --  Si ya hay un campeonato en curso no hace nada y avisa.
 -- =====================================================================
 BEGIN;
@@ -83,13 +83,5 @@ VALUES ('¡Arranca la Liga AlphaSport!', 'Seis equipos buscan el título. Consul
 
 INSERT INTO comentarios (noticia_id, autor, texto)
 SELECT id, 'Andrés', '¡Qué buena noticia!' FROM noticias WHERE titulo = '¡Arranca la Liga AlphaSport!';
-
--- ---------------------------------------------------------------- usuarios de demostracion
--- Claves de demostracion del prototipo (las del README), guardadas como hash PBKDF2-SHA256: el mismo formato
--- que valida AutenticacionService (ClavesPbkdf2). Para otra clave: java -cp bin alphasport.service.ClavesPbkdf2 <clave>
-INSERT INTO usuarios (nombre, username, email, password_hash, rol)
-VALUES ('Administrador', 'admin', 'admin@alphasport.local', 'pbkdf2_sha256$600000$ORYWJGZO2MLaUsJJD1StqA$eJmZnrPDP4/FNdM4k5l/HEFmhFxS4qPKtrYueWmiJB8', 'ADMIN'),
-       ('Visitante', 'visitante', 'visitante@alphasport.local', 'pbkdf2_sha256$600000$sleF8gem07Djtx8KO31+QQ$YrnucN8AoK6aG/heRS6AhI4oRY2WAGF7eHy89aGrAc4', 'VISITANTE')
-ON CONFLICT (username) DO NOTHING;
 
 COMMIT;

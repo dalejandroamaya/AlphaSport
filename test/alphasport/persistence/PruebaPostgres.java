@@ -226,9 +226,13 @@ public final class PruebaPostgres {
         boolean completas = tablas.containsAll(List.of("usuarios", "torneos", "divisiones", "equipos", "jugadores", "partidos", "alineaciones",
                 "eventos_partido", "noticias", "comentarios", "votos_publico", "calificaciones_partido", "v_tabla_posiciones",
                 "v_ultima_alineacion", "v_votaciones_activas", "v_calificaciones"));
-        sql(db, "INSERT INTO usuarios (nombre, username, password_hash, rol) VALUES ('A', 'a', 'x', 'ADMIN')");
+        sql(db, "INSERT INTO usuarios (nombre, username, password_hash, rol) VALUES ('A', 'a', 'x', 'ORGANIZADOR')");
         boolean restricciones = falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash) VALUES ('B', 'a', 'x')"))
                 && falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash, rol) VALUES ('B', 'b', 'x', 'JEFE')"))
+                && falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash, rol) VALUES ('B', 'b', 'x', 'ADMIN')"))
+                && falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash) VALUES ('B', 'Bea', 'x')"))
+                && !falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash) VALUES ('C', 'c', 'x')"))
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'c' AND rol = 'AFICIONADO'") == 1 // rol por defecto
                 && falla(PersistenciaException.class, () -> sql(db, "INSERT INTO comentarios (noticia_id, autor, texto) VALUES (99, 'a', 'b')"));
         return completas && restricciones;
     }
@@ -236,15 +240,8 @@ public final class PruebaPostgres {
     private static boolean probarSeed(ConexionDB db) throws Exception {
         script(db, "database/seed.sql");
         CampeonatoService s = servicio(db);
-        // Las claves de demostracion quedan como hash, en el formato que valida AutenticacionService.
-        alphasport.service.ClavesPbkdf2 claves = new alphasport.service.ClavesPbkdf2();
-        String hashAdmin = db.ejecutar(con -> {
-            try (var st = con.createStatement(); var rs = st.executeQuery("SELECT password_hash FROM usuarios WHERE username = 'admin'")) {
-                return rs.next() ? rs.getString(1) : null;
-            }
-        });
-        boolean usuarios = claves.coincide("123", hashAdmin) && !claves.coincide("321", hashAdmin) && !hashAdmin.contains("123")
-                && contar(db, "SELECT COUNT(*) FROM usuarios") == 2;
+        // Sin cuentas de demostracion: cada persona se registra desde la app.
+        boolean usuarios = contar(db, "SELECT COUNT(*) FROM usuarios") == 0;
         boolean leido = s.getCampeonato().getEquipos().size() == 6 && s.getCampeonato().getEquipos().stream().allMatch(e -> e.getJugadores().size() == 16)
                 && contar(db, "SELECT COUNT(*) FROM jugadores WHERE es_capitan") == 6;
         s.avanzar(); // el torneo de prueba se puede iniciar y seguir usando
@@ -736,7 +733,11 @@ public final class PruebaPostgres {
             script(db, m.toString());
         }
         db.verificar();
-        boolean igual = foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 2; // el campeonato y su copia
+        // 005: las cuentas siguen ahi con el rol nuevo, y en minusculas.
+        boolean cuentas = contar(db, "SELECT COUNT(*) FROM usuarios") == 2
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'admin' AND rol = 'ORGANIZADOR'") == 1
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'ana' AND email = 'ana@correo.com' AND rol = 'AFICIONADO' AND password_hash = 'y'") == 1;
+        boolean igual = cuentas && foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 2; // el campeonato y su copia
         // Una persona por jugador, compartida por el campeonato en curso y su copia del historial.
         int jugadores = contar(db, "SELECT COUNT(*) FROM jugadores j JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ACTUAL'");
         boolean personas = jugadores > 0 && contar(db, "SELECT COUNT(*) FROM personas") == jugadores
@@ -751,7 +752,8 @@ public final class PruebaPostgres {
         for (Path m : archivos) {
             script(db, m.toString()); // repetirlas no cambia nada
         }
-        igual &= foto(servicio(db)).equals(antes) && contar(db, "SELECT MAX(version) FROM esquema_version") == ConexionDB.VERSION_ESQUEMA
+        igual &= foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM usuarios") == 2
+                && contar(db, "SELECT MAX(version) FROM esquema_version") == ConexionDB.VERSION_ESQUEMA
                 && archivos.size() == ConexionDB.VERSION_ESQUEMA;
         if (!(anterior && avisa && igual && personas)) {
             System.out.println("  anterior=" + anterior + " avisa=" + avisa + " igual=" + igual + " personas=" + personas);
@@ -767,6 +769,14 @@ public final class PruebaPostgres {
 
     /** Deja la base como la creaba la primera version de schema.sql. */
     private static void volverAVersionCero(ConexionDB db) throws Exception {
+        // usuarios como antes de la 005: roles ADMIN y VISITANTE, y usuario o correo con mayusculas.
+        sql(db, "ALTER TABLE usuarios DROP CONSTRAINT usuarios_minusculas");
+        sql(db, "ALTER TABLE usuarios DROP CONSTRAINT usuarios_rol_check");
+        sql(db, "ALTER TABLE usuarios ALTER COLUMN rol TYPE VARCHAR(10)");
+        sql(db, "ALTER TABLE usuarios ALTER COLUMN rol SET DEFAULT 'VISITANTE'");
+        sql(db, "ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check CHECK (rol IN ('ADMIN', 'VISITANTE'))");
+        sql(db, "INSERT INTO usuarios (nombre, username, email, password_hash, rol) VALUES ('Administrador', 'admin', 'admin@alphasport.local', 'x', 'ADMIN'),"
+                + " ('Ana', 'Ana', 'Ana@Correo.COM', 'y', 'VISITANTE')");
         sql(db, "DROP TABLE movimientos_division");
         sql(db, "ALTER TABLE jugadores DROP CONSTRAINT jugadores_documento_unico");
         sql(db, "ALTER TABLE jugadores DROP COLUMN persona_id");
