@@ -60,6 +60,8 @@ public final class PruebaPostgres {
         probar("Partido completo: XI, goles, tarjetas, cambios y votos", PruebaPostgres::probarPartido);
         probar("Consultas SQL iguales a los cálculos del programa", PruebaPostgres::probarConsultas);
         probar("Plantilla: dorsales intercambiados y jugadores retirados", PruebaPostgres::probarPlantilla);
+        probar("Identidad: los ids no cambian al guardar ni al archivar", PruebaPostgres::probarIdentidad);
+        probar("W.O.: sin notas ni votación, y vuelve a la normalidad al borrarlo", PruebaPostgres::probarWalkover);
         probar("Dos programas a la vez: sincronización y conflictos", PruebaPostgres::probarDosProgramas);
         probar("Historial: copias que no cambian con el campeonato actual", PruebaPostgres::probarHistorial);
         probar("Noticias y comentarios", PruebaPostgres::probarNoticias);
@@ -410,6 +412,104 @@ public final class PruebaPostgres {
                 && contar(db, "SELECT COUNT(*) FROM jugadores WHERE NOT activo") == 1;
         boolean ids = otro.getCampeonato().buscarEquipo(e.getId()).getJugadores().stream().anyMatch(j -> j.getNombre().equals("Nuevo Refuerzo") && j.getId() >= antes);
         return intercambio && gol && ids && seLeeIgual(db, s);
+    }
+
+    /** Numero -> id de las filas del campeonato en curso, como texto para comparar. */
+    private static String idsActuales(ConexionDB db, String tabla) throws PersistenciaException {
+        return db.ejecutar(con -> {
+            try (var st = con.createStatement(); var rs = st.executeQuery("SELECT x.numero, x.id FROM " + tabla
+                    + " x JOIN torneos t ON t.id = x.torneo_id WHERE t.situacion = 'ACTUAL' ORDER BY x.numero")) {
+                StringBuilder texto = new StringBuilder();
+                while (rs.next()) {
+                    texto.append(rs.getInt(1)).append('=').append(rs.getInt(2)).append(' ');
+                }
+                return texto.toString();
+            }
+        });
+    }
+
+    /** Plantillas sin ids: nombre, documento y dorsal de cada jugador, por equipo. */
+    private static String plantillas(Campeonato c) {
+        StringBuilder texto = new StringBuilder();
+        for (Equipo e : c.getEquipos()) {
+            texto.append(e.getNombreEquipo()).append(':');
+            e.getJugadores().forEach(j -> texto.append(j.getNombre()).append('/').append(j.getDocumento()).append('/').append(j.getDorsal()).append(' '));
+        }
+        return texto.toString();
+    }
+
+    private static boolean probarIdentidad(ConexionDB db) throws Exception {
+        CampeonatoService s = liga(db, 4);
+        Partido p = s.getCampeonato().getPartidos().get(0);
+        String jugadores = idsActuales(db, "jugadores"), partidos = idsActuales(db, "partidos"), equipos = idsActuales(db, "equipos");
+        jugarCompleto(s, p);
+        int portero = p.getTitularesVisitante().get(0);
+        s.votarJugador(p.getId(), portero, 8, "dispositivo-A1");
+        // El editor de equipos reconstruye cada jugador a partir de lo que envia la pantalla.
+        alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(s, new alphasport.service.AutenticacionService());
+        api.ejecutar("login", Map.of("usuario", "admin", "clave", "123"));
+        Equipo e = s.getCampeonato().getEquipos().get(0);
+        List<Object> enviados = new ArrayList<>();
+        e.getJugadores().forEach(j -> enviados.add(Map.of("id", j.getId(), "nombre", j.getNombre() + " Jr.", "documento", j.getDocumento(),
+                "dorsal", j.getDorsal(), "posicion", j.getPosicion(), "foto", j.getFoto())));
+        api.ejecutar("equipo", Map.of("id", e.getId(), "nombre", e.getNombreEquipo(), "estadio", "", "jugadores", enviados));
+        s.archivarActual();
+        boolean estables = idsActuales(db, "jugadores").equals(jugadores) && idsActuales(db, "partidos").equals(partidos)
+                && idsActuales(db, "equipos").equals(equipos) && servicio(db).getCampeonato().getEquipos().get(0).getJugadores().get(0).getNombre().endsWith(" Jr.");
+        // Lo que apunta al jugador sigue apuntando al mismo.
+        boolean votos = contar(db, "SELECT COUNT(*) FROM votos_publico v JOIN jugadores j ON j.id = v.jugador_id JOIN torneos t ON t.id = j.torneo_id"
+                + " WHERE t.situacion = 'ACTUAL' AND j.numero = " + portero) == 1;
+        // La siguiente temporada y «mismos equipos» conservan las plantillas.
+        String antes = plantillas(s.getCampeonato());
+        s.siguienteTemporada("Temporada 2");
+        boolean temporada = plantillas(servicio(db).getCampeonato()).equals(antes);
+        s.crear("Otro torneo", TipoFormato.LIGA, new ConfiguracionTorneo(), true);
+        boolean mismos = plantillas(servicio(db).getCampeonato()).equals(antes);
+        if (!(estables && votos && temporada && mismos)) {
+            System.out.println("  estables=" + estables + " votos=" + votos + " temporada=" + temporada + " mismos=" + mismos);
+        }
+        return estables && votos && temporada && mismos;
+    }
+
+    private static void walkover(CampeonatoService s, Partido p, int ganador) throws PersistenciaException {
+        s.darWalkover(p.getId(), copia(p), ganador, true);
+    }
+
+    private static boolean probarWalkover(ConexionDB db) throws Exception {
+        CampeonatoService s = liga(db, 4);
+        Partido p = s.getCampeonato().getPartidos().get(0);
+        List<Integer> xi = new ArrayList<>(s.getCampeonato().buscarEquipo(p.getIdLocal()).getJugadores().subList(0, 11).stream().map(Jugador::getId).toList());
+        Partido previa = copia(p);
+        previa.setTitulares(new ArrayList<>(xi), new ArrayList<>(s.getCampeonato().buscarEquipo(p.getIdVisitante()).getJugadores()
+                .subList(0, 11).stream().map(Jugador::getId).toList()));
+        s.guardarPartido(p.getId(), previa, false);
+        walkover(s, p, p.getIdVisitante());
+        CampeonatoService otro = servicio(db);
+        CalificacionesPartido notas = otro.calificaciones(p.getId(), null);
+        boolean sinNotas = otro.buscarPartido(p.getId()).getGolesVisitante() == 3 && !notas.disponible() && notas.motivoSinCalificaciones().contains("W.O.")
+                && contar(db, "SELECT COUNT(*) FROM calificaciones_partido") == 0;
+        boolean sinVotos = falla(ReglaNegocioException.class, () -> s.votarJugador(p.getId(), xi.get(0), 8, "dispositivo-A1"))
+                && s.votacionesAbiertas().isEmpty() && new ConsultasDAO(db).votacionesActivas().isEmpty();
+        // Se borra el W.O. y el partido se juega: ahora si tiene notas y votacion.
+        Partido borrado = copia(p);
+        borrado.reiniciarResultado();
+        s.guardarPartido(p.getId(), borrado, false);
+        Partido jugado = copia(p);
+        jugado.setObservaciones("");
+        jugado.setEstado(EstadoPartido.JUGADO);
+        jugado.setGolesLocal(1);
+        s.guardarPartido(p.getId(), jugado, false);
+        boolean normal = s.calificaciones(p.getId(), null).disponible() && s.votacionesAbiertas().equals(List.of(p))
+                && new ConsultasDAO(db).votacionesActivas().size() == 1;
+        // Retirar un equipo da por W.O. sus partidos pendientes.
+        Partido pendiente = s.getCampeonato().getPartidos().stream().filter(x -> !x.isJugado()).findFirst().orElseThrow();
+        s.quitarEquipo(pendiente.getIdLocal());
+        boolean retiro = pendiente.isJugado() && pendiente.getGolesVisitante() == 3
+                && servicio(db).calificaciones(pendiente.getId(), null).motivoSinCalificaciones().contains("W.O.");
+        if (!(sinNotas && sinVotos && normal && retiro)) {
+            System.out.println("  sinNotas=" + sinNotas + " sinVotos=" + sinVotos + " normal=" + normal + " retiro=" + retiro);
+        }
+        return sinNotas && sinVotos && normal && retiro && seLeeIgual(db, s);
     }
 
     private static boolean probarDosProgramas(ConexionDB db) throws Exception {
