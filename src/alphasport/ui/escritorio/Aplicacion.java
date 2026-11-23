@@ -1271,7 +1271,7 @@ public class Aplicacion extends Application {
         boolean todoListo = true;
         for (String[] lado : lados) {
             int plantilla = (int) l(equipoPorId(n(p, lado[0])), "jugadores").stream().filter(j -> n(j, "id") > 0).count();
-            int necesarios = Math.min(Dialogos.TITULARES, plantilla);
+            int necesarios = Math.min(alphasport.service.ReglasPartido.TITULARES, plantilla);
             int elegidos = Datos.lista(p, lado[1]).size();
             boolean listo = necesarios > 0 && elegidos == necesarios;
             todoListo &= listo && !s(p, lado[2]).isEmpty();
@@ -1412,7 +1412,7 @@ public class Aplicacion extends Application {
             {"visitante", "visitanteNombre", "titularesVisitante", "formacionVisitante"}};
         for (String[] lado : lados) {
             long plantilla = l(equipoPorId(n(p, lado[0])), "jugadores").stream().filter(j -> n(j, "id") > 0).count();
-            int necesarios = (int) Math.min(Dialogos.TITULARES, plantilla);
+            int necesarios = (int) Math.min(alphasport.service.ReglasPartido.TITULARES, plantilla);
             if (necesarios > 0 && Datos.lista(p, lado[2]).size() != necesarios) {
                 falta.add("el XI titular de " + s(p, lado[1]));
             }

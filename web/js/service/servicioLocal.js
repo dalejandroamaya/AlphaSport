@@ -758,6 +758,7 @@ function crearServicioLocal() {
         configuracion: configuracionPorDefecto(),
         formaciones: FORMACIONES.slice(),
         formacionPorDefecto: FORMACION_POR_DEFECTO,
+        reglasPartido: { titulares: TITULARES, minutoMaximo: MINUTO_MAXIMO },
         votacion: { opciones: [12, 24, 48], minimo: ReglasVotacion.HORAS_MINIMO, maximo: ReglasVotacion.HORAS_MAXIMO, porDefecto: ReglasVotacion.HORAS_POR_DEFECTO }
       };
     },

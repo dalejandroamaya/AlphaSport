@@ -58,6 +58,8 @@ public class Presentador {
                 "semillaMaximoEquipos", alphasport.service.DatosPrueba.MAXIMO_EQUIPOS, "configuracion", configuracion(new ConfiguracionTorneo()),
                 "formaciones", Arrays.stream(Formacion.values()).map(Formacion::getTexto).collect(Collectors.toList()),
                 "formacionPorDefecto", Formacion.POR_DEFECTO.getTexto(),
+                // Limites del partido para las pantallas: la regla esta en ReglasPartido.
+                "reglasPartido", mapa("titulares", alphasport.service.ReglasPartido.TITULARES, "minutoMaximo", alphasport.service.ReglasPartido.MINUTO_MAXIMO),
                 // [REQ-07] Duracion de la votacion del publico: opciones rapidas y limites del campo de horas.
                 "votacion", mapa("opciones", List.of(12, 24, 48), "minimo", ReglasVotacion.HORAS_MINIMO,
                         "maximo", ReglasVotacion.HORAS_MAXIMO, "porDefecto", ReglasVotacion.HORAS_POR_DEFECTO));

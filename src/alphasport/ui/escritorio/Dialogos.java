@@ -1,5 +1,6 @@
 package alphasport.ui.escritorio;
 
+import alphasport.service.ReglasPartido;
 import static alphasport.ui.escritorio.Aplicacion.boton;
 import static alphasport.ui.escritorio.Aplicacion.etiqueta;
 import static alphasport.ui.escritorio.Datos.b;
@@ -970,7 +971,7 @@ class Dialogos {
             }
             Integer minutoTarjeta = leerMinuto(tjMinuto, true);
             if (minutoTarjeta == null) {
-                mostrarError(err, "El minuto de la tarjeta debe estar entre 1 y 130 (o vacío si no se sabe).");
+                mostrarError(err, "El minuto de la tarjeta debe estar entre 1 y " + ReglasPartido.MINUTO_MAXIMO + " (o vacío si no se sabe).");
                 tjMinuto.requestFocus();
                 return;
             }
@@ -985,10 +986,6 @@ class Dialogos {
                 return;
             }
             List<Map<String, Object>> delJugador = tarjetas.stream().filter(t -> n(t, "jugador") == idJugador).toList();
-            if (roja && delJugador.stream().anyMatch(t -> s(t, "tipo").equals("ROJA"))) {
-                mostrarError(err, s(jugador, "nombre") + " ya fue expulsado en este partido.");
-                return;
-            }
             if (!roja && delJugador.stream().anyMatch(t -> s(t, "tipo").equals("AMARILLA"))
                     && confirmar("Doble amarilla", s(jugador, "nombre") + " ya tiene una amarilla en este partido. "
                             + "¿Registrar la segunda como ROJA (expulsión, 1 fecha)?", "Sí, roja")) {
@@ -1025,7 +1022,7 @@ class Dialogos {
         Runnable[] llenarCambio = new Runnable[1];
 
         // 11 titulares, o toda la plantilla si tiene menos de 11.
-        java.util.function.IntUnaryOperator necesarios = idEq -> Math.min(TITULARES, plantillaDe.apply(idEq).size());
+        java.util.function.IntUnaryOperator necesarios = idEq -> Math.min(ReglasPartido.TITULARES, plantillaDe.apply(idEq).size());
         java.util.function.IntPredicate xiListo = idEq -> titulares.get(idEq).size() == necesarios.applyAsInt(idEq) && !titulares.get(idEq).isEmpty();
         // El XI se construye UNA sola vez. Al marcar un jugador solo se actualizan los controles que ya
         // existen (antes se borraba y se volvía a crear toda la lista: la casilla con el foco desaparecía,
@@ -1204,29 +1201,14 @@ class Dialogos {
             }
             Integer min = leerMinuto(glMinuto, true);
             if (min == null) {
-                mostrarError(err, "El minuto del gol debe estar entre 1 y 130 (o vacío si no se sabe).");
+                mostrarError(err, "El minuto del gol debe estar entre 1 y " + ReglasPartido.MINUTO_MAXIMO + " (o vacío si no se sabe).");
                 glMinuto.requestFocus();
-                return;
-            }
-            // No puede haber más goles registrados que los del marcador escrito arriba.
-            TextField marcadorEquipo = iEq == 0 ? gl : gv;
-            int enMarcador = marcadorEquipo.getText().isBlank() ? 0 : Integer.parseInt(marcadorEquipo.getText());
-            long registrados = goles.stream().filter(g -> n(g, "equipo") == idsEquipos[iEq]).count();
-            if (registrados >= enMarcador) {
-                mostrarError(err, glEquipo.getValue() + " tiene " + enMarcador + (enMarcador == 1 ? " gol" : " goles")
-                        + " en el marcador y ya " + (registrados == 1 ? "hay 1 registrado" : "hay " + registrados + " registrados")
-                        + ". Suba primero el marcador.");
-                marcadorEquipo.requestFocus();
                 return;
             }
             mostrarError(err, null);
             Map<String, Object> autor = autores.get(iAutor);
             int iAsist = glAsistente.getSelectionModel().getSelectedIndex();
             Map<String, Object> asist = iAsist > 0 ? asistentes.get(iAsist - 1) : null;
-            if (asist != null && n(asist, "id") == n(autor, "id")) {
-                mostrarError(err, s(autor, "nombre") + " no puede darse la asistencia a sí mismo.");
-                return;
-            }
             goles.add(mapa("equipo", idsEquipos[iEq], "minuto", min, "enContra", glEnContra.isSelected(),
                     "autor", n(autor, "id"), "autorNombre", s(autor, "nombre"), "autorDorsal", n(autor, "dorsal"),
                     "asistente", asist == null ? 0 : n(asist, "id"), "asistenteNombre", asist == null ? "" : s(asist, "nombre"),
@@ -1323,14 +1305,8 @@ class Dialogos {
         agregarCambio.setOnAction(e -> {
             Integer min = leerMinuto(cbMinuto, false);
             if (min == null) {
-                mostrarError(err, "Escriba el minuto del cambio (entre 1 y 130).");
+                mostrarError(err, "Escriba el minuto del cambio (entre 1 y " + ReglasPartido.MINUTO_MAXIMO + ").");
                 cbMinuto.requestFocus();
-                return;
-            }
-            int idEqCambio = idsEquipos[cbEquipo.getSelectionModel().getSelectedIndex()];
-            if (!xiListo.test(idEqCambio)) {
-                mostrarError(err, "Antes de registrar cambios escoja el XI inicial de " + cbEquipo.getValue() + " ("
-                        + titulares.get(idEqCambio).size() + "/" + necesarios.applyAsInt(idEqCambio) + ").");
                 return;
             }
             int iSale = cbSale.getSelectionModel().getSelectedIndex(), iEntra = cbEntra.getSelectionModel().getSelectedIndex();
@@ -1504,17 +1480,6 @@ class Dialogos {
                 (faltaLocal ? gl : gv).requestFocus();
                 return;
             }
-            if (accion.equals("guardar")) {
-                // Un XI empezado tiene que quedar completo (o vacío) antes de guardar, en la previa o con el resultado.
-                for (int k = 0; k < 2; k++) {
-                    int idEq = idsEquipos[k], elegidos = titulares.get(idEq).size(), faltan = necesarios.applyAsInt(idEq);
-                    if (elegidos > 0 && elegidos != faltan) {
-                        mostrarError(err, "El XI inicial de " + s(p, k == 0 ? "localNombre" : "visitanteNombre") + " tiene " + elegidos
-                                + " de " + faltan + " jugadores. Complételo o pulse «Limpiar».");
-                        return;
-                    }
-                }
-            }
             if (accion.equals("guardar") && votacion.horas() == null) {
                 mostrarError(err, votacion.error());
                 return;
@@ -1561,9 +1526,6 @@ class Dialogos {
         }
     }
 
-    /** Jugadores que inician el partido. */
-    static final int TITULARES = 11;
-
     private static String textoJugador(Map<String, Object> j) {
         return "#" + n(j, "dorsal") + " " + s(j, "nombre") + (s(j, "posicion").isEmpty() ? "" : " · " + s(j, "posicion"));
     }
@@ -1579,13 +1541,13 @@ class Dialogos {
         return t;
     }
 
-    /** Minuto escrito (1 a 130). Si se permite vacío devuelve 0; si no es válido, null. */
+    /** Minuto escrito (1 al maximo de ReglasPartido). Si se permite vacío devuelve 0; si no es válido, null. */
     private static Integer leerMinuto(TextField t, boolean vacioPermitido) {
         if (t.getText().isBlank()) {
             return vacioPermitido ? 0 : null;
         }
         int m = Integer.parseInt(t.getText());
-        return m >= 1 && m <= 130 ? m : null;
+        return m >= 1 && m <= ReglasPartido.MINUTO_MAXIMO ? m : null;
     }
 
     /* ---------------------------------------------------------------- datos de prueba */
