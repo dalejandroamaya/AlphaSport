@@ -73,9 +73,7 @@ public class CampeonatoService {
 
     /** Si no se puede leer se lanza el error: nunca se empieza un campeonato nuevo encima de uno que no se pudo cargar. */
     public void cargarGuardado() throws PersistenciaException {
-        if (repositorio.existe()) {
-            usar(repositorio.cargar());
-        }
+        repositorio.cargar().ifPresent(this::usar);
     }
 
     /**
@@ -85,7 +83,7 @@ public class CampeonatoService {
     public void sincronizar() {
         try {
             if (repositorio.desactualizado()) {
-                usar(repositorio.cargar());
+                usar(repositorio.cargar().orElse(null));
             }
         } catch (PersistenciaException e) {
             throw new ReglaNegocioException("CONEXION", e.getMessage());
@@ -724,7 +722,7 @@ public class CampeonatoService {
 
     private void volverALoGuardado(Exception error) {
         try {
-            usar(repositorio.existe() ? repositorio.cargar() : null);
+            usar(repositorio.cargar().orElse(null));
         } catch (PersistenciaException sinConexion) {
             error.addSuppressed(sinConexion); // sin conexion: se sincroniza en la siguiente accion
         }

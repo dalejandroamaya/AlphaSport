@@ -60,11 +60,7 @@ public class NoticiasService {
     }
 
     public Noticia buscar(int id) {
-        Noticia n = leer(() -> repositorio.buscar(id));
-        if (n == null) {
-            throw new ReglaNegocioException("La noticia no existe (quizá ya fue eliminada).");
-        }
-        return n;
+        return leer(() -> repositorio.buscar(id)).orElseThrow(() -> new ReglaNegocioException("La noticia no existe (quizá ya fue eliminada)."));
     }
 
     private interface Lectura<T> {

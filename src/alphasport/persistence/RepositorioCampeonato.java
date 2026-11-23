@@ -2,6 +2,7 @@ package alphasport.persistence;
 
 import alphasport.model.Campeonato;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Acceso al campeonato en curso. El programa usa PostgreSQL
@@ -21,9 +22,13 @@ public interface RepositorioCampeonato {
         guardar(nuevo); // con archivos el historial guarda su propia copia
     }
 
-    /** El campeonato guardado, o null si no hay ninguno. */
-    Campeonato cargar() throws PersistenciaException;
+    /**
+     * El campeonato guardado, o vacio si no hay ninguno. Todas las versiones (base de datos, archivo y memoria)
+     * responden igual: no tener campeonato no es un error.
+     */
+    Optional<Campeonato> cargar() throws PersistenciaException;
 
+    /** Lo mismo que {@code cargar().isPresent()}, sin leer todo el campeonato. */
     boolean existe() throws PersistenciaException;
 
     void eliminar() throws PersistenciaException;

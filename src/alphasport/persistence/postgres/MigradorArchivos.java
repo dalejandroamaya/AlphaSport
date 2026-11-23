@@ -45,7 +45,7 @@ public final class MigradorArchivos {
         if (base.existe()) {
             return "Campeonato: la base de datos ya tiene uno en curso; no se cambió.";
         }
-        Campeonato c = archivo.cargar();
+        Campeonato c = archivo.cargar().orElseThrow();
         base.guardar(c);
         return "Campeonato: «" + c.getNombreCampeonato() + "» (" + c.getEquipos().size() + " equipos, " + c.getPartidos().size() + " partidos).";
     }

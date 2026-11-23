@@ -13,6 +13,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 
 /**
@@ -52,15 +53,15 @@ public class PostgresRepositorioNoticias implements RepositorioNoticias {
     }
 
     @Override
-    public Noticia buscar(int id) throws PersistenciaException {
-        return conexion.ejecutar(con -> {
+    public Optional<Noticia> buscar(int id) throws PersistenciaException {
+        return Optional.ofNullable(conexion.ejecutar(con -> {
             Noticia n = Sql.uno(con, COLUMNAS + "WHERE id = ?", PostgresRepositorioNoticias::leer, id);
             if (n != null) {
                 n.getComentarios().addAll(Sql.listar(con, "SELECT noticia_id, id, autor, texto, fecha FROM comentarios WHERE noticia_id = ? ORDER BY id",
                         PostgresRepositorioNoticias::leerComentario, id));
             }
             return n;
-        });
+        }));
     }
 
     @Override

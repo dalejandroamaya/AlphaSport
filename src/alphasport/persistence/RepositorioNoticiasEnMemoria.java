@@ -5,6 +5,7 @@ import alphasport.model.Noticia;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Noticias y fotos solo en memoria (se pierden al cerrar). La usan las pruebas automaticas.
@@ -35,8 +36,8 @@ public class RepositorioNoticiasEnMemoria implements RepositorioNoticias {
     }
 
     @Override
-    public Noticia buscar(int id) {
-        return noticias.stream().filter(n -> n.getId() == id).findFirst().orElse(null);
+    public Optional<Noticia> buscar(int id) {
+        return noticias.stream().filter(n -> n.getId() == id).findFirst();
     }
 
     @Override
@@ -63,13 +64,14 @@ public class RepositorioNoticiasEnMemoria implements RepositorioNoticias {
     public void insertarComentario(int idNoticia, Comentario comentario) throws PersistenciaException {
         noticias.forEach(n -> n.getComentarios().forEach(c -> siguienteComentario = Math.max(siguienteComentario, c.getId() + 1)));
         comentario.setId(siguienteComentario++);
-        buscar(idNoticia).getComentarios().add(comentario);
+        // Igual que en la base de datos (llave foranea): comentar una noticia que no existe es un error.
+        buscar(idNoticia).orElseThrow(() -> new PersistenciaException("La noticia " + idNoticia + " no existe.", null)).getComentarios().add(comentario);
         alCambiar();
     }
 
     @Override
     public boolean eliminarComentario(int idNoticia, int idComentario) throws PersistenciaException {
-        boolean quitado = buscar(idNoticia).getComentarios().removeIf(c -> c.getId() == idComentario);
+        boolean quitado = buscar(idNoticia).map(n -> n.getComentarios().removeIf(c -> c.getId() == idComentario)).orElse(false);
         alCambiar();
         return quitado;
     }

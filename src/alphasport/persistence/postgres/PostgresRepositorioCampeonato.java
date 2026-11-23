@@ -7,6 +7,7 @@ import alphasport.persistence.RepositorioCampeonato;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Campeonato en curso en PostgreSQL. Cada guardado es una transaccion y sube la version del torneo: si otro
@@ -31,16 +32,16 @@ public class PostgresRepositorioCampeonato implements RepositorioCampeonato {
     }
 
     @Override
-    public Campeonato cargar() throws PersistenciaException {
+    public Optional<Campeonato> cargar() throws PersistenciaException {
         return conexion.ejecutar(con -> {
             conocido = campeonatos.torneos().actual(con);
             if (conocido == null) {
                 huellas = new CampeonatoDAO.Huellas();
-                return null;
+                return Optional.empty();
             }
             Campeonato c = campeonatos.leer(con, conocido.id());
             huellas = campeonatos.huellas(c);
-            return c;
+            return Optional.of(c);
         });
     }
 

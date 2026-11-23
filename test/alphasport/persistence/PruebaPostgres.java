@@ -69,6 +69,7 @@ public final class PruebaPostgres {
         probar("Historial: copias que no cambian con el campeonato actual", PruebaPostgres::probarHistorial);
         probar("Noticias y comentarios", PruebaPostgres::probarNoticias);
         probar("Migración de los archivos anteriores", PruebaPostgres::probarMigracion);
+        probar("Contratos: PostgreSQL, archivo y memoria responden igual", PruebaPostgres::probarContratos);
         probar("Migraciones del esquema (database/migraciones)", PruebaPostgres::probarMigraciones);
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
         System.exit(fallos == 0 ? 0 : 1);
@@ -828,6 +829,40 @@ public final class PruebaPostgres {
             System.out.println("  copia=" + copia + " reemplaza=" + reemplaza + " siguiente=" + siguiente + " respaldado=" + respaldado + " borrado=" + borrado);
         }
         return copia && reemplaza && siguiente && respaldado && borrado;
+    }
+
+    /* ---------------------------------------------------------------- contratos (LSP) */
+
+    /**
+     * Cualquier version de un repositorio se puede usar en lugar de otra: sin campeonato, cargar() da vacio (no
+     * null ni una excepcion); buscar una noticia que no existe da vacio, quitar uno de sus comentarios da false y
+     * comentarla es un error.
+     */
+    private static boolean probarContratos(ConexionDB db) throws Exception {
+        Path carpeta = Files.createTempDirectory("alphasport-contrato");
+        List<alphasport.persistence.RepositorioCampeonato> campeonatos = List.of(new PostgresRepositorioCampeonato(db),
+                new alphasport.persistence.ArchivoRepositorioCampeonato(carpeta));
+        boolean vacios = true;
+        for (var r : campeonatos) {
+            vacios &= r.cargar().isEmpty() && !r.existe();
+        }
+        CampeonatoService s = liga(db, 4);
+        var archivo = new alphasport.persistence.ArchivoRepositorioCampeonato(carpeta);
+        archivo.guardar(s.getCampeonato());
+        for (var r : List.of(new PostgresRepositorioCampeonato(db), archivo)) {
+            vacios &= r.existe() && r.cargar().orElseThrow().getEquipos().size() == 4;
+        }
+        List<alphasport.persistence.RepositorioNoticias> noticias = List.of(new PostgresRepositorioNoticias(db),
+                new alphasport.persistence.RepositorioNoticiasEnMemoria(), new alphasport.persistence.ArchivoRepositorioNoticias(carpeta));
+        boolean iguales = true;
+        for (var r : noticias) {
+            iguales &= r.buscar(999).isEmpty() && !r.eliminarComentario(999, 1)
+                    && falla(PersistenciaException.class, () -> r.insertarComentario(999, new alphasport.model.Comentario(0, "Ana", "Hola", "2026-11-22 10:00")));
+        }
+        if (!(vacios && iguales)) {
+            System.out.println("  vacios=" + vacios + " iguales=" + iguales);
+        }
+        return vacios && iguales;
     }
 
     /* ---------------------------------------------------------------- noticias y migracion */
