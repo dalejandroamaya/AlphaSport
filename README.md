@@ -8,9 +8,11 @@ El código está organizado en cuatro capas: **ui → service → persistence �
 
 | Versión | Cómo se abre | Guarda en |
 |---|---|---|
-| **Escritorio (JavaFX)** | Ventana propia de Java, sin navegador | `datos/` |
-| **Web con Java** | Java abre la interfaz en el navegador (`127.0.0.1:8080`) | `datos/` |
+| **Escritorio (JavaFX)** | Ventana propia de Java, sin navegador | PostgreSQL |
+| **Web con Java** | Java abre la interfaz en el navegador (`127.0.0.1:8080`) | PostgreSQL |
 | **Web sola** | Abrir `web/index.html` | el navegador |
+
+El escritorio y la web con Java necesitan la base de datos: siga los pasos de [README_DB.md](README_DB.md).
 
 Las tres tienen las mismas funciones, el mismo diseño («Estadio bajo reflectores»: vidrio sobre fotos de estadio, focos animados y dorado para los logros, en modo oscuro y claro) y los logos de AlphaSport. El sistema visual está documentado en [DESIGN.md](DESIGN.md).
 
@@ -57,19 +59,22 @@ La versión web sola se abre con doble clic en `web/index.html`, o con **Live Se
 ```
 src/alphasport/
   model/          entidades del dominio
-  persistence/    repositorios (interfaces + archivos .dat)
+  persistence/    repositorios (interfaces y formato anterior en archivos)
+    postgres/     conexión JDBC, DAO y repositorios en PostgreSQL
   service/        casos de uso y reglas del torneo
     formatos/     un formato de campeonato por clase
   ui/             servidor web local, API, presentador y arranque
     escritorio/   ventana JavaFX y su hoja de estilos
-test/alphasport/service/SimulacionFormatos.java
-lib/              JavaFX 21 (base, graphics, controls)
+test/alphasport/    SimulacionFormatos (reglas) y PruebaPostgres (base de datos)
+database/         schema.sql y seed.sql
+lib/              JavaFX 21 (base, graphics, controls) y driver JDBC de PostgreSQL
 web/
   index.html, css/estilos.css, img/ (logos)
   js/model, js/persistence, js/service, js/ui
   pruebas/        prueba automática del motor web
 docs/             arquitectura, formatos y reglas
-datos/            se crea al usar el programa (no se sube a Git)
+datos/imagenes/   fotos y escudos (no se sube a Git)
+db.properties     su conexión a PostgreSQL (no se sube a Git; copie db.properties.example)
 ```
 
 Autores: Diego Alejandro Amaya Verdecia y Ednilson Contreras.
