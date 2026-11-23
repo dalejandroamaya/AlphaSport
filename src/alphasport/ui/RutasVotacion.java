@@ -5,7 +5,7 @@ import static alphasport.ui.Peticion.mapa;
 
 import alphasport.model.Permiso;
 import alphasport.service.CalificacionesPartido;
-import alphasport.service.CampeonatoService;
+import alphasport.service.VotacionService;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,11 +13,11 @@ import java.util.Map;
 /** [REQ-07] Rutas de la votacion del publico: partidos abiertos, votar y cerrar la votacion. */
 final class RutasVotacion implements ModuloRutas {
 
-    private final CampeonatoService servicio;
+    private final VotacionService votacion;
     private final Presentador presentador;
 
-    RutasVotacion(CampeonatoService servicio, Presentador presentador) {
-        this.servicio = servicio;
+    RutasVotacion(VotacionService votacion, Presentador presentador) {
+        this.votacion = votacion;
         this.presentador = presentador;
     }
 
@@ -27,7 +27,7 @@ final class RutasVotacion implements ModuloRutas {
         consultas.conPrefijo(Permiso.VER, "votaciones/", p -> Presentador.mapa("ok", true, "votaciones", presentador.votaciones(p.resto())));
         acciones.con(Permiso.VOTAR_JUGADORES, "calificacion/votar", this::votar)
                 .con(Permiso.GESTIONAR_CAMPEONATO, "votacion/cerrar", p -> {
-                    servicio.cerrarVotacion(p.entero("partido"));
+                    votacion.cerrarVotacion(p.entero("partido"));
                     return p.listo("Votación cerrada: las notas finales quedaron definitivas.");
                 });
     }
@@ -42,7 +42,7 @@ final class RutasVotacion implements ModuloRutas {
         for (Object o : p.tiene("votos") ? p.lista("votos") : List.<Object>of(p.cuerpo())) {
             notas.put(entero(mapa(o).get("jugador")), entero(mapa(o).get("valor")));
         }
-        CalificacionesPartido calificaciones = servicio.votarJugadores(p.entero("partido"), notas, p.texto("dispositivo"));
+        CalificacionesPartido calificaciones = votacion.votarJugadores(p.entero("partido"), notas, p.texto("dispositivo"));
         Map<String, Object> r = p.listo(notas.size() == 1 ? "¡Gracias! Su calificación quedó registrada."
                 : "¡Gracias! Sus " + notas.size() + " calificaciones quedaron registradas.");
         r.put("calificaciones", Presentador.calificaciones(calificaciones));

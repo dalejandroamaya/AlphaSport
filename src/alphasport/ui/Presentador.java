@@ -199,7 +199,7 @@ public class Presentador {
         m.put("suspendidos", suspendidos);
         // [REQ-07] Votacion del publico: horas programadas, si se puede votar ahora, cuando cierra (ms; 0 = sin hora
         // de cierre), si el administrador la cerro antes de tiempo y cuantos votos lleva.
-        m.put("votacion", mapa("horas", p.getHorasVotacion(), "abierta", servicio.votacionAbierta(p),
+        m.put("votacion", mapa("horas", p.getHorasVotacion(), "abierta", servicio.votacion().votacionAbierta(p),
                 "cierraEn", ReglasVotacion.cierraEn(p), "cerradaAntes", ReglasVotacion.cerradaAntes(p), "votos", p.getVotos().size()));
         return m;
     }
@@ -459,9 +459,9 @@ public class Presentador {
      */
     public List<Object> votaciones(String dispositivo) {
         List<Object> lista = new ArrayList<>();
-        for (Partido p : servicio.votacionesAbiertas()) {
+        for (Partido p : servicio.votacion().votacionesAbiertas()) {
             lista.add(mapa("partido", partido(servicio.getCampeonato(), p, servicio.sanciones()),
-                    "calificaciones", calificaciones(servicio.calificaciones(p.getId(), dispositivo))));
+                    "calificaciones", calificaciones(servicio.votacion().calificaciones(p.getId(), dispositivo))));
         }
         return lista;
     }

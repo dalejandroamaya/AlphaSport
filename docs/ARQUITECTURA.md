@@ -34,8 +34,8 @@ AlphaSport está organizado en cuatro capas: **ui → service → persistence �
 
 | Capa | Paquete | Responsabilidad | No hace |
 |---|---|---|---|
-| **ui** | `ui`, `ui.escritorio` | Mostrar la información y recibir las acciones del usuario. Hay dos interfaces: la ventana de escritorio en JavaFX y la interfaz web que sirve `ServidorWeb`. Ambas usan el mismo `ApiControlador` (traduce cada acción en una llamada al servicio) y el mismo `Presentador` (prepara tablas, llaves, sanciones e historial para la pantalla). | No aplica reglas del torneo ni guarda archivos. |
-| **service** | `service`, `service.formatos` | Casos de uso (`CampeonatoService`: crear, cambiar formato, cancelar, avanzar, editar partidos, equipos, historial, respaldos) y reglas del torneo (`MotorCampeonato`, `TablaPosiciones`, `GeneradorFixture`, `Sanciones`, `ResumenCampeonato`, `Palmares`). Cada formato es una subclase de `FormatoCampeonato`. | No sabe cómo se dibuja la pantalla ni dónde se guardan los datos. |
+| **ui** | `ui`, `ui.escritorio` | Mostrar la información y recibir las acciones del usuario. Hay dos interfaces: la ventana de escritorio en JavaFX y la interfaz web que sirve `ServidorWeb`. Ambas usan el mismo `ApiControlador`, que busca la ruta en los módulos `Rutas*` (sesión, campeonato, equipos, partidos, votación y noticias), exige su `Permiso` y llama al servicio; `FabricaAplicacion` arma todo y el mismo `Presentador` (prepara tablas, llaves, sanciones e historial para la pantalla). | No aplica reglas del torneo ni guarda archivos. |
+| **service** | `service`, `service.formatos` | Casos de uso, por cohesión: `CampeonatoService` (crear, formato, avanzar, temporadas, divisiones), `EquiposService`, `PartidosService`, `VotacionService` e `HistorialService` (historial y respaldos). Comparten el campeonato en curso y sus transacciones en `ContextoCampeonato` y reglas del torneo (`MotorCampeonato`, `TablaPosiciones`, `GeneradorFixture`, `Sanciones`, `ResumenCampeonato`, `Palmares`). Cada formato es una subclase de `FormatoCampeonato`. | No sabe cómo se dibuja la pantalla ni dónde se guardan los datos. |
 | **persistence** | `persistence` | Interfaces `RepositorioCampeonato`, `RepositorioHistorial` y `RepositorioNoticias`. El programa usa su versión en PostgreSQL; la de archivos queda para las pruebas y para migrar datos anteriores. `PersistenciaException` aísla los errores de almacenamiento. | No conoce las reglas del torneo. |
 | **model** | `model` | Entidades del dominio y enumeraciones. | No calcula tablas ni decide quién avanza. |
 
@@ -116,7 +116,7 @@ classDiagram
 
 - `model.Rol` dice qué puede hacer cada rol (`puedeEditar()`); `model.Usuario` es quien inició sesión.
 - `service.AutenticacionService` valida las cuentas (hoy en memoria; en la Fase 3 se cambia por un repositorio).
-- **La regla real está en `ui.ApiControlador`**: guarda `usuarioActual` y, antes de ejecutar cualquier acción, llama a `exigirAdministrador()`. Solo `login`, `login/visitante` y `logout` son públicas (lista blanca). Con sesión, el visitante solo puede proponer noticias, comentar y calificar jugadores (`RUTAS_VISITANTE`). `ServidorWeb` protege aparte el respaldo y el cierre del programa.
+- **La regla real está en el servidor**: cada ruta de los módulos `Rutas*` declara el `Permiso` que exige y `ApiControlador` lo revisa antes de ejecutarla; cada `Rol` es un conjunto de permisos. Solo `login`, `login/visitante` y `logout` son públicas. Cada navegador tiene su sesión (`SesionService`, cookie `HttpOnly` y `SameSite`); el respaldo y la exportación también pasan por el controlador.
 - Las interfaces solo **ocultan**: escritorio con `Aplicacion.puedeEditar()`, `soloAdmin(...)` y `puedeVer(vista)`; web con el atributo `data-solo-admin` y `puedeVer()` en `app.js`.
 
 ## Detalle de partido

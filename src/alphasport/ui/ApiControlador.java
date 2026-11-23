@@ -46,7 +46,7 @@ public class ApiControlador {
         this.consultas = new Rutas<>();
         this.acciones = new Rutas<>();
         for (ModuloRutas modulo : List.of(new RutasSesion(sesion), new RutasCampeonato(servicio, presentador),
-                new RutasEquipos(servicio), new RutasPartidos(servicio, presentador), new RutasVotacion(servicio, presentador),
+                new RutasEquipos(servicio.equipos()), new RutasPartidos(servicio, presentador), new RutasVotacion(servicio.votacion(), presentador),
                 new RutasNoticias(noticias))) {
             modulo.registrar(consultas, acciones);
         }
@@ -178,14 +178,14 @@ public class ApiControlador {
     public Descarga respaldo() throws Exception {
         exigir(Permiso.VER);
         servicio.sincronizar();
-        return new Descarga(servicio.respaldo(), "application/octet-stream", nombreArchivo() + ".dat");
+        return new Descarga(servicio.historial().respaldo(), "application/octet-stream", nombreArchivo() + ".dat");
     }
 
     /** Historial del campeonato como texto (.txt). */
     public Descarga historialEnTexto() {
         exigir(Permiso.VER);
         servicio.sincronizar();
-        return new Descarga(servicio.textoHistorial().getBytes(java.nio.charset.StandardCharsets.UTF_8), "text/plain; charset=utf-8",
+        return new Descarga(servicio.historial().textoHistorial().getBytes(java.nio.charset.StandardCharsets.UTF_8), "text/plain; charset=utf-8",
                 nombreArchivo() + ".txt");
     }
 
@@ -193,7 +193,7 @@ public class ApiControlador {
     public Map<String, Object> abrirRespaldo(byte[] datos) throws Exception {
         exigir(Permiso.GESTIONAR_CAMPEONATO);
         servicio.sincronizar();
-        servicio.abrirRespaldo(datos);
+        servicio.historial().abrirRespaldo(datos);
         return respuesta("Se abrió «" + servicio.getCampeonato().getNombreCampeonato() + "».");
     }
 

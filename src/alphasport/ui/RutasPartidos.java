@@ -44,7 +44,7 @@ final class RutasPartidos implements ModuloRutas {
             String[] partes = p.resto().split("/");
             int id = entero(partes[0]);
             String dispositivo = partes.length > 1 ? partes[1] : null;
-            return presentador.detallePartido(servicio.detallePartido(id), servicio.calificaciones(id, dispositivo));
+            return presentador.detallePartido(servicio.partidos().detallePartido(id), servicio.votacion().calificaciones(id, dispositivo));
         });
         acciones.con(Permiso.GESTIONAR_CAMPEONATO, "partido", p -> {
             guardarPartido(p.cuerpo());
@@ -90,17 +90,17 @@ final class RutasPartidos implements ModuloRutas {
         datos.setObservaciones(texto(d, "obs").trim());
         boolean confirmado = Boolean.TRUE.equals(cuerpo.get("confirmado"));
         switch (texto(cuerpo, "accion")) {
-            case "woLocal" -> servicio.darWalkover(id, datos, original.getIdLocal(), confirmado);
-            case "woVisitante" -> servicio.darWalkover(id, datos, original.getIdVisitante(), confirmado);
+            case "woLocal" -> servicio.partidos().darWalkover(id, datos, original.getIdLocal(), confirmado);
+            case "woVisitante" -> servicio.partidos().darWalkover(id, datos, original.getIdVisitante(), confirmado);
             case "borrar" -> {
                 datos.reiniciarResultado();
-                servicio.guardarPartido(id, datos, confirmado);
+                servicio.partidos().guardarPartido(id, datos, confirmado);
             }
             default -> {
                 if (d.containsKey("horasVotacion")) { // [REQ-07] cuanto dura la votacion (la carga rapida no lo envia)
-                    servicio.programarVotacion(datos, entero(d.get("horasVotacion")));
+                    servicio.votacion().programarVotacion(datos, entero(d.get("horasVotacion")));
                 }
-                servicio.guardarPartido(id, datos, confirmado);
+                servicio.partidos().guardarPartido(id, datos, confirmado);
             }
         }
     }

@@ -9,7 +9,7 @@ import static alphasport.ui.Peticion.texto;
 import alphasport.model.DirectorTecnico;
 import alphasport.model.Jugador;
 import alphasport.model.Permiso;
-import alphasport.service.CampeonatoService;
+import alphasport.service.EquiposService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,10 +17,10 @@ import java.util.Map;
 /** Rutas de equipos y plantillas: crear, editar, quitar, fotos, escudos, divisiones y datos de prueba. */
 final class RutasEquipos implements ModuloRutas {
 
-    private final CampeonatoService servicio;
+    private final EquiposService equipos;
 
-    RutasEquipos(CampeonatoService servicio) {
-        this.servicio = servicio;
+    RutasEquipos(EquiposService equipos) {
+        this.equipos = equipos;
     }
 
     @Override
@@ -30,15 +30,15 @@ final class RutasEquipos implements ModuloRutas {
             guardarEquipo(p.cuerpo());
             return p.listo(null);
         }).con(gestionar, "equipo/rapido", p -> {
-            servicio.agregarEquipo(p.texto("nombre"));
+            equipos.agregarEquipo(p.texto("nombre"));
             return p.listo(null);
         }).con(gestionar, "equipo/division", p -> {
-            servicio.cambiarDivision(p.entero("id"), p.entero("division"));
+            equipos.cambiarDivision(p.entero("id"), p.entero("division"));
             return p.listo(null);
-        }).con(gestionar, "equipo/quitar", p -> p.listo(servicio.quitarEquipo(p.entero("id"))))
-                .con(gestionar, "equipo/escudo", p -> p.listo(servicio.cambiarEscudo(p.entero("id"), p.texto("imagen"))))
-                .con(gestionar, "jugador/foto", p -> p.listo(servicio.cambiarFotoJugador(p.entero("equipo"), p.entero("jugador"), p.texto("imagen"))))
-                .con(gestionar, "semilla", p -> p.listo(servicio.cargarDatosPrueba(p.entero("semilla"), p.entero("cantidad"),
+        }).con(gestionar, "equipo/quitar", p -> p.listo(equipos.quitarEquipo(p.entero("id"))))
+                .con(gestionar, "equipo/escudo", p -> p.listo(equipos.cambiarEscudo(p.entero("id"), p.texto("imagen"))))
+                .con(gestionar, "jugador/foto", p -> p.listo(equipos.cambiarFotoJugador(p.entero("equipo"), p.entero("jugador"), p.texto("imagen"))))
+                .con(gestionar, "semilla", p -> p.listo(equipos.cargarDatosPrueba(p.entero("semilla"), p.entero("cantidad"),
                         !Boolean.FALSE.equals(p.cuerpo().get("completar")))));
     }
 
@@ -56,7 +56,7 @@ final class RutasEquipos implements ModuloRutas {
             jugadores.add(jugador);
         }
         Object id = cuerpo.get("id");
-        servicio.guardarEquipo(id == null ? null : entero(id), texto(cuerpo, "nombre"), texto(cuerpo, "estadio"),
+        equipos.guardarEquipo(id == null ? null : entero(id), texto(cuerpo, "nombre"), texto(cuerpo, "estadio"),
                 director, jugadores, cuerpo.containsKey("escudo") ? texto(cuerpo, "escudo") : null);
     }
 }

@@ -307,7 +307,7 @@ public class SimulacionFormatos {
             cfg.setSorteoAleatorio(false);
             servicio.crear("Notas", TipoFormato.LIGA, cfg, false);
             for (int i = 1; i <= 4; i++) {
-                servicio.agregarEquipo("N" + i);
+                servicio.equipos().agregarEquipo("N" + i);
             }
             Campeonato c = servicio.getCampeonato();
             for (alphasport.model.Equipo e : new ArrayList<>(c.getEquipos())) {
@@ -316,7 +316,7 @@ public class SimulacionFormatos {
                     plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, "C" + e.getId() + "-" + dorsal,
                             dorsal, dorsal == 1 ? "Portero" : "Mediocampista central"));
                 }
-                servicio.guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
+                servicio.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
             }
             servicio.avanzar();
             Partido p = c.getPartidos().get(0);
@@ -334,9 +334,9 @@ public class SimulacionFormatos {
                     new alphasport.model.Gol(p.getIdLocal(), 70, loc.get(8), false, null))));
             datos.setTarjetas(new ArrayList<>(List.of(new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(3), alphasport.model.Tarjeta.AMARILLA, 0),
                     new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(4), alphasport.model.Tarjeta.ROJA, 1))), p.getIdLocal());
-            servicio.guardarPartido(p.getId(), datos, false);
+            servicio.partidos().guardarPartido(p.getId(), datos, false);
             long cierre = reloj.ahora;
-            CalificacionesPartido n = servicio.calificaciones(p.getId(), null);
+            CalificacionesPartido n = servicio.votacion().calificaciones(p.getId(), null);
             java.util.function.BiFunction<List<CalificacionesPartido.Calificacion>, Integer, CalificacionesPartido.Calificacion> de =
                     (lista, dorsal) -> lista.stream().filter(x -> x.dorsal() == dorsal).findFirst().orElseThrow();
             boolean sistema = p.getFinalizadoEn() == cierre && n.votacion() == CalificacionesPartido.Votacion.ABIERTA
@@ -357,81 +357,81 @@ public class SimulacionFormatos {
 
             // Votos: el #1 local recibe 10 y 9 desde dos dispositivos -> (7.5 + 9.5) / 2 = 8.5 y pasa a ser el MVP.
             int portero = loc.get(0).getId();
-            servicio.votarJugador(p.getId(), portero, 10, "dispositivo-A1");
+            servicio.votacion().votarJugador(p.getId(), portero, 10, "dispositivo-A1");
             boolean repetido;
             try {
-                servicio.votarJugador(p.getId(), portero, 3, "dispositivo-A1");
+                servicio.votacion().votarJugador(p.getId(), portero, 3, "dispositivo-A1");
                 repetido = false;
             } catch (ReglaNegocioException e) {
                 repetido = true; // mismo dispositivo, mismo jugador, mismo partido
             }
-            CalificacionesPartido conVotos = servicio.votarJugador(p.getId(), portero, 9, "dispositivo-B2");
+            CalificacionesPartido conVotos = servicio.votacion().votarJugador(p.getId(), portero, 9, "dispositivo-B2");
             CalificacionesPartido.Calificacion arquero = de.apply(conVotos.local(), 1);
             boolean hibrida = repetido && arquero.votos() == 2 && arquero.promedioPublico() == 9.5 && arquero.notaFinal() == 8.5
                     && conVotos.idMvp() == portero && de.apply(conVotos.local(), 9).notaFinal() == 8.0 // sin votos = sistema
-                    && de.apply(servicio.calificaciones(p.getId(), "dispositivo-A1").local(), 1).miVoto() == 10;
+                    && de.apply(servicio.votacion().calificaciones(p.getId(), "dispositivo-A1").local(), 1).miVoto() == 10;
 
             // Valores fuera de rango y jugadores que no jugaron.
-            boolean rango = rechaza(() -> servicio.votarJugador(p.getId(), portero, 11, "dispositivo-C3"))
-                    && rechaza(() -> servicio.votarJugador(p.getId(), portero, 0, "dispositivo-C3"))
-                    && rechaza(() -> servicio.votarJugador(p.getId(), loc.get(13).getId(), 7, "dispositivo-C3")); // suplente sin jugar
+            boolean rango = rechaza(() -> servicio.votacion().votarJugador(p.getId(), portero, 11, "dispositivo-C3"))
+                    && rechaza(() -> servicio.votacion().votarJugador(p.getId(), portero, 0, "dispositivo-C3"))
+                    && rechaza(() -> servicio.votacion().votarJugador(p.getId(), loc.get(13).getId(), 7, "dispositivo-C3")); // suplente sin jugar
 
             // Varios votos a la vez: si uno no se acepta no se guarda ninguno.
-            boolean varios = rechaza(() -> servicio.votarJugadores(p.getId(), java.util.Map.of(loc.get(8).getId(), 7, loc.get(13).getId(), 7), "dispositivo-D4"))
-                    && rechaza(() -> servicio.votarJugadores(p.getId(), java.util.Map.of(), "dispositivo-D4"))
+            boolean varios = rechaza(() -> servicio.votacion().votarJugadores(p.getId(), java.util.Map.of(loc.get(8).getId(), 7, loc.get(13).getId(), 7), "dispositivo-D4"))
+                    && rechaza(() -> servicio.votacion().votarJugadores(p.getId(), java.util.Map.of(), "dispositivo-D4"))
                     && p.getVotos().size() == 2
-                    && servicio.votacionesAbiertas().equals(List.of(p)); // el unico partido terminado
+                    && servicio.votacion().votacionesAbiertas().equals(List.of(p)); // el unico partido terminado
 
             // Tiempo configurable: 48 horas mueve el cierre; cerrar a mano lo adelanta; otro tiempo lo reabre.
             final long hora = 60L * 60 * 1000;
             java.util.function.IntConsumer programar = horas -> {
                 Partido copia = new Partido();
                 copia.copiarDatosDe(p);
-                servicio.programarVotacion(copia, horas);
+                servicio.votacion().programarVotacion(copia, horas);
                 try {
-                    servicio.guardarPartido(p.getId(), copia, false);
+                    servicio.partidos().guardarPartido(p.getId(), copia, false);
                 } catch (Exception e) {
                     throw new IllegalStateException(e);
                 }
             };
-            boolean tiempo = servicio.calificaciones(p.getId(), null).cierraEn() == cierre + ReglasVotacion.HORAS_POR_DEFECTO * hora;
+            boolean tiempo = servicio.votacion().calificaciones(p.getId(), null).cierraEn() == cierre + ReglasVotacion.HORAS_POR_DEFECTO * hora;
             programar.accept(48);
-            tiempo &= p.getHorasVotacion() == 48 && servicio.calificaciones(p.getId(), null).cierraEn() == cierre + 48 * hora
+            tiempo &= p.getHorasVotacion() == 48 && servicio.votacion().calificaciones(p.getId(), null).cierraEn() == cierre + 48 * hora
                     && rechaza(() -> programar.accept(0)) && rechaza(() -> programar.accept(ReglasVotacion.HORAS_MAXIMO + 1));
             reloj.ahora = cierre + 30 * hora;
-            tiempo &= servicio.calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.ABIERTA
+            tiempo &= servicio.votacion().calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.ABIERTA
                     && rechaza(() -> programar.accept(12)) && p.getHorasVotacion() == 48; // 12 h ya habrian pasado
-            servicio.cerrarVotacion(p.getId());
-            tiempo &= servicio.calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.CERRADA
-                    && servicio.calificaciones(p.getId(), null).cierraEn() == cierre + 30 * hora
-                    && servicio.votacionesAbiertas().isEmpty()
-                    && rechaza(() -> servicio.cerrarVotacion(p.getId()))
-                    && rechaza(() -> servicio.votarJugador(p.getId(), loc.get(8).getId(), 8, "dispositivo-C3"));
+            servicio.votacion().cerrarVotacion(p.getId());
+            tiempo &= servicio.votacion().calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.CERRADA
+                    && servicio.votacion().calificaciones(p.getId(), null).cierraEn() == cierre + 30 * hora
+                    && servicio.votacion().votacionesAbiertas().isEmpty()
+                    && rechaza(() -> servicio.votacion().cerrarVotacion(p.getId()))
+                    && rechaza(() -> servicio.votacion().votarJugador(p.getId(), loc.get(8).getId(), 8, "dispositivo-C3"));
             programar.accept(48); // el mismo tiempo no la reabre
-            tiempo &= servicio.votacionesAbiertas().isEmpty();
+            tiempo &= servicio.votacion().votacionesAbiertas().isEmpty();
             programar.accept(36);
-            tiempo &= servicio.votacionesAbiertas().equals(List.of(p)) && p.getVotos().size() == 2 && p.getFinalizadoEn() == cierre;
+            tiempo &= servicio.votacion().votacionesAbiertas().equals(List.of(p)) && p.getVotos().size() == 2 && p.getFinalizadoEn() == cierre;
 
             // Vencido el tiempo la votacion se cierra sola y la nota queda como estaba.
             reloj.ahora = cierre + 36 * hora;
-            tiempo &= servicio.votacionesAbiertas().isEmpty();
-            CalificacionesPartido cerrada = servicio.calificaciones(p.getId(), null);
-            boolean ventana = rechaza(() -> servicio.votarJugador(p.getId(), loc.get(8).getId(), 8, "dispositivo-C3"))
+            tiempo &= servicio.votacion().votacionesAbiertas().isEmpty();
+            CalificacionesPartido cerrada = servicio.votacion().calificaciones(p.getId(), null);
+            boolean ventana = rechaza(() -> servicio.votacion().votarJugador(p.getId(), loc.get(8).getId(), 8, "dispositivo-C3"))
                     && cerrada.votacion() == CalificacionesPartido.Votacion.CERRADA && de.apply(cerrada.local(), 1).notaFinal() == 8.5;
 
             // Corregir el resultado conserva la hora de cierre y los votos; borrarlo los descarta.
             Partido correccion = new Partido();
             correccion.copiarDatosDe(p);
             correccion.setGolesLocal(3);
-            servicio.guardarPartido(p.getId(), correccion, false);
+            servicio.partidos().guardarPartido(p.getId(), correccion, false);
             boolean conserva = p.getFinalizadoEn() == cierre && p.getVotos().size() == 2;
             Partido borrado = new Partido();
             borrado.copiarDatosDe(p);
             borrado.reiniciarResultado();
-            servicio.guardarPartido(p.getId(), borrado, false);
+            servicio.partidos().guardarPartido(p.getId(), borrado, false);
             boolean descarta = p.getFinalizadoEn() == 0 && p.getVotos().isEmpty() && p.getVotacionCerradaEn() == 0
                     && p.getHorasVotacion() == 36 // la duracion se decide antes de jugar: no se borra
-                    && servicio.calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.SIN_RESULTADO;
+                    && servicio.votacion().calificaciones(p.getId(), null).votacion() == CalificacionesPartido.Votacion.SIN_RESULTADO;
 
             correcto = reglas && sistema && hibrida && rango && varios && tiempo && ventana && conserva && descarta;
             if (!correcto) {
@@ -462,7 +462,7 @@ public class SimulacionFormatos {
             ConfiguracionTorneo cfg = new ConfiguracionTorneo();
             cfg.setSorteoAleatorio(false);
             servicio.crear("Reglas", TipoFormato.LIGA, cfg, false);
-            servicio.cargarDatosPrueba(7, 4, true);
+            servicio.equipos().cargarDatosPrueba(7, 4, true);
             servicio.avanzar();
             Campeonato c = servicio.getCampeonato();
             Partido p = c.getPartidos().get(0);
@@ -501,35 +501,35 @@ public class SimulacionFormatos {
                 return d;
             };
             String a = alphasport.model.Tarjeta.AMARILLA, r = alphasport.model.Tarjeta.ROJA;
-            boolean dobleAmarilla = rechaza(() -> servicio.guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a}), false))
-                    && rechaza(() -> servicio.guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a, a, r}), false))
-                    && rechaza(() -> servicio.guardarPartido(p.getId(), conTarjetas.apply(new String[]{r, r}), false));
-            servicio.guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, r}), false); // asi la registran las pantallas
+            boolean dobleAmarilla = rechaza(() -> servicio.partidos().guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a}), false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a, a, r}), false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), conTarjetas.apply(new String[]{r, r}), false));
+            servicio.partidos().guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, r}), false); // asi la registran las pantallas
             dobleAmarilla &= servicio.buscarPartido(p.getId()).getTarjetas().size() == 2;
-            servicio.guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a, r}), false);
+            servicio.partidos().guardarPartido(p.getId(), conTarjetas.apply(new String[]{a, a, r}), false);
             dobleAmarilla &= servicio.buscarPartido(p.getId()).getTarjetas().size() == 3;
             Partido limpio = base.get();
             limpio.reiniciarResultado();
-            servicio.guardarPartido(p.getId(), limpio, false);
-            boolean rechazos = rechaza(() -> servicio.guardarPartido(p.getId(), corto, false))
-                    && rechaza(() -> servicio.guardarPartido(p.getId(), titularEntra, false))
-                    && rechaza(() -> servicio.guardarPartido(p.getId(), golAjeno, false))
-                    && rechaza(() -> servicio.guardarPartido(p.getId(), demasiados, false))
-                    && rechaza(() -> servicio.guardarPartido(p.getId(), minuto, false))
+            servicio.partidos().guardarPartido(p.getId(), limpio, false);
+            boolean rechazos = rechaza(() -> servicio.partidos().guardarPartido(p.getId(), corto, false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), titularEntra, false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), golAjeno, false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), demasiados, false))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), minuto, false))
                     && !servicio.buscarPartido(p.getId()).isJugado();
             // Un partido correcto se guarda, y sigue pudiendo editarse aunque su goleador deje el equipo.
             Partido bueno = base.get();
             bueno.setGoles(new ArrayList<>(List.of(new alphasport.model.Gol(p.getIdLocal(), 10, loc.get(9), false, loc.get(8)))));
             bueno.setCambios(new ArrayList<>(List.of(new alphasport.model.Cambio(p.getIdLocal(), 60, loc.get(9), loc.get(14)))));
-            servicio.guardarPartido(p.getId(), bueno, false);
+            servicio.partidos().guardarPartido(p.getId(), bueno, false);
             alphasport.model.Equipo local = c.buscarEquipo(p.getIdLocal());
             List<alphasport.model.Jugador> sinGoleador = new ArrayList<>(local.getJugadores());
             sinGoleador.remove(9);
-            servicio.guardarEquipo(local.getId(), local.getNombreEquipo(), local.getEstadio(), local.getDirectorTecnico(), sinGoleador);
+            servicio.equipos().guardarEquipo(local.getId(), local.getNombreEquipo(), local.getEstadio(), local.getDirectorTecnico(), sinGoleador);
             Partido sede = new Partido();
             sede.copiarDatosDe(servicio.buscarPartido(p.getId()));
             sede.setSede("Otra sede");
-            servicio.guardarPartido(p.getId(), sede, false);
+            servicio.partidos().guardarPartido(p.getId(), sede, false);
             boolean guarda = servicio.buscarPartido(p.getId()).getGoles().size() == 1 && servicio.buscarPartido(p.getId()).getSede().equals("Otra sede");
             correcto = dobleAmarilla && rechazos && guarda;
             if (!correcto) {
@@ -779,7 +779,7 @@ public class SimulacionFormatos {
             cfg.setSorteoAleatorio(false);
             servicio.crear("Previa", TipoFormato.LIGA, cfg, false);
             for (int i = 1; i <= 4; i++) {
-                servicio.agregarEquipo("P" + i);
+                servicio.equipos().agregarEquipo("P" + i);
             }
             Campeonato c = servicio.getCampeonato();
             for (alphasport.model.Equipo e : new ArrayList<>(c.getEquipos())) {
@@ -787,7 +787,7 @@ public class SimulacionFormatos {
                 for (int d = 1; d <= 14; d++) {
                     plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + d, "D" + e.getId() + "-" + d, d, "Mediocampista"));
                 }
-                servicio.guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
+                servicio.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
             }
             servicio.avanzar();
             alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService(),
@@ -806,7 +806,7 @@ public class SimulacionFormatos {
             boolean previaGuardada = !p.isJugado() && p.getTitularesLocal().equals(xiLocal) && p.getTitularesVisitante().equals(xiVisitante)
                     && p.getFormacionLocal().equals("4-4-2") && p.getSede().equals("Estadio Norte");
             // La alineación lleva los 11 de la previa y, como suplentes, los 3 que sobran de la plantilla (por dorsal).
-            DetallePartido.Alineacion alineacion = servicio.detallePartido(p.getId()).getAlineacionLocal();
+            DetallePartido.Alineacion alineacion = servicio.partidos().detallePartido(p.getId()).getAlineacionLocal();
             previaGuardada &= alineacion.confirmada() && alineacion.lineas().stream().mapToInt(List::size).sum() == 11
                     && alineacion.suplentes().stream().map(alphasport.model.Jugador::getDorsal).toList().equals(List.of(12, 13, 14));
             // 2) Resultado: el cambio usa el XI de la previa (sale un titular, entra un suplente).
@@ -1175,7 +1175,7 @@ public class SimulacionFormatos {
             servicio.crear("Liga por divisiones", TipoFormato.LIGA, cfg, false);
             servicio.agregarDivision();                       // la liga se expande: Liga C
             for (int i = 1; i <= 12; i++) {
-                servicio.agregarEquipo("D" + i);              // se reparten: 4 por division
+                servicio.equipos().agregarEquipo("D" + i);              // se reparten: 4 por division
             }
             Campeonato c = servicio.getCampeonato();
             boolean reparto = c.equiposDeDivision(0).size() == 4 && c.equiposDeDivision(1).size() == 4
@@ -1226,17 +1226,17 @@ public class SimulacionFormatos {
             cfg.setDivisiones(3);
             servicio.crear("W.O. y campeones", TipoFormato.LIGA, cfg, false);
             for (int i = 1; i <= 9; i++) {
-                servicio.agregarEquipo("W" + i);
+                servicio.equipos().agregarEquipo("W" + i);
             }
             servicio.avanzar();
             Campeonato c = servicio.getCampeonato();
             Partido p1 = c.getPartidos().get(0), p2 = c.getPartidos().get(1);
             Partido copia1 = new Partido();
             copia1.copiarDatosDe(p1);                               // igual que el editor
-            servicio.darWalkover(p1.getId(), copia1, p1.getIdLocal(), false);
+            servicio.partidos().darWalkover(p1.getId(), copia1, p1.getIdLocal(), false);
             Partido copia2 = new Partido();
             copia2.copiarDatosDe(p2);
-            servicio.darWalkover(p2.getId(), copia2, p2.getIdVisitante(), false);
+            servicio.partidos().darWalkover(p2.getId(), copia2, p2.getIdVisitante(), false);
             boolean ganaLocal = p1.getGolesLocal() == 3 && p1.getGolesVisitante() == 0 && p1.getGanador() == p1.getIdLocal();
             boolean ganaVisitante = p2.getGolesVisitante() == 3 && p2.getGolesLocal() == 0 && p2.getGanador() == p2.getIdVisitante();
             boolean puntos = servicio.getMotor().tablaDeGrupo(0, p1.getGrupo().charAt(0) - 'A').stream()

@@ -28,7 +28,7 @@ final class RutasCampeonato implements ModuloRutas {
     public void registrar(Rutas<Rutas.Consulta> consultas, Rutas<Rutas.Accion> acciones) {
         consultas.publica("catalogo", p -> presentador.catalogo())
                 .con(Permiso.VER, "estado", p -> presentador.estado())
-                .con(Permiso.VER, "historial", p -> presentador.historial(servicio.historial()));
+                .con(Permiso.VER, "historial", p -> presentador.historial(servicio.historial().listar()));
         Permiso gestionar = Permiso.GESTIONAR_CAMPEONATO;
         acciones.con(gestionar, "nuevo", p -> {
             servicio.crear(p.texto("nombre"), TipoFormato.valueOf(p.texto("formato")), configuracion(p.objeto("config")), p.si("mismosEquipos"));
@@ -47,10 +47,10 @@ final class RutasCampeonato implements ModuloRutas {
                 .con(gestionar, "division/agregar", p -> p.listo(servicio.agregarDivision()))
                 .con(gestionar, "division/quitar", p -> p.listo(servicio.quitarDivision()))
                 .con(gestionar, "archivar", p -> {
-                    servicio.archivarActual();
+                    servicio.historial().archivarActual();
                     return p.listo(null);
                 }).con(gestionar, "historial/eliminar", p -> {
-                    servicio.eliminarDelHistorial(p.texto("codigo"));
+                    servicio.historial().eliminarDelHistorial(p.texto("codigo"));
                     return p.listo(null);
                 });
     }
