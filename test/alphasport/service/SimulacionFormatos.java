@@ -64,6 +64,7 @@ public class SimulacionFormatos {
         probarPermisos();
         probarServidorWeb();
         probarClaves();
+        probarRegistro();
         probarOrdenPorLinea();
         probarDocumentoUnico();
         probarCalificaciones();
@@ -732,7 +733,7 @@ public class SimulacionFormatos {
                     new alphasport.model.CuentaUsuario("ana", "Ana", alphasport.model.Rol.ORGANIZADOR, rapido.hash("clave-de-ana")))), rapido);
             boolean repositorio = propia.iniciarSesion("  ANA ", "clave-de-ana").puedeEditar()
                     && rechaza(() -> propia.iniciarSesion("ana", "otra")) && rechaza(() -> propia.iniciarSesion("admin", "123"));
-            // Las cuentas de demostracion siguen entrando con sus claves de siempre.
+            // Las cuentas de prueba (solo en memoria, para las pruebas) entran con sus claves.
             AutenticacionService demo = new AutenticacionService();
             boolean demostracion = demo.iniciarSesion("admin", "123").puedeEditar() && !demo.iniciarSesion("visitante", "321").puedeEditar()
                     && rechaza(() -> demo.iniciarSesion("admin", "321")) && rechaza(() -> demo.iniciarSesion("nadie", "123"));
@@ -747,6 +748,106 @@ public class SimulacionFormatos {
         System.out.println("Claves con hash y cuentas por repositorio: " + (correcto ? "correcto" : "MAL"));
         if (!correcto) {
             fallos++;
+        }
+    }
+
+    /**
+     * Registro de cuentas Organizador y Aficionado: validaciones, usuario o correo repetidos, rol que no se puede
+     * forzar, inicio de sesion y permisos, por el servicio y por la ruta «registro» de ApiControlador.
+     */
+    private static void probarRegistro() {
+        boolean correcto;
+        try {
+            ClavesPbkdf2 rapido = new ClavesPbkdf2(1000);
+            alphasport.persistence.RepositorioUsuariosEnMemoria cuentas = new alphasport.persistence.RepositorioUsuariosEnMemoria();
+            AutenticacionService auth = new AutenticacionService(cuentas, rapido);
+            java.util.function.BiFunction<String, String[], AutenticacionService.SolicitudRegistro> solicitud = (tipo, d) ->
+                    new AutenticacionService.SolicitudRegistro(d[0], d[1], d[2], d[3], d[4], tipo);
+            String[] ana = {"  Ana.Torres ", "  Ana   Torres ", " Ana@Correo.COM ", "clave1234", "clave1234"};
+            // Registro valido: usuario y correo en minusculas, nombre sin espacios de mas, la clave solo como hash.
+            alphasport.model.Usuario u = auth.registrar(solicitud.apply("ORGANIZADOR", ana));
+            alphasport.model.CuentaUsuario guardada = cuentas.buscar("ANA.TORRES").orElseThrow();
+            boolean valido = u.getNombre().equals("ana.torres") && u.getRol() == alphasport.model.Rol.ORGANIZADOR && u.puedeEditar()
+                    && guardada.correo().equals("ana@correo.com") && guardada.nombre().equals("Ana Torres")
+                    && !guardada.claveHash().contains("clave1234") && rapido.coincide("clave1234", guardada.claveHash())
+                    && !guardada.toString().contains(guardada.claveHash()) && !solicitud.apply("AFICIONADO", ana).toString().contains("clave1234");
+            // Usuario o correo repetidos, sin importar mayusculas ni espacios.
+            boolean repetidos = mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO",
+                    new String[]{"ANA.TORRES", "Otra", "otra@correo.com", "clave1234", "clave1234"}))).contains("usuario ya está en uso")
+                    && mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO",
+                    new String[]{"otra", "Otra", " ANA@correo.com", "clave1234", "clave1234"}))).contains("correo ya está registrado")
+                    && cuentas.existeUsuario("Ana.Torres") && cuentas.existeCorreo("ANA@CORREO.COM") && !cuentas.existeCorreo("");
+            // Contraseña debil o mal confirmada, y datos que no sirven.
+            java.util.function.Function<String[], String> error = d -> mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO", d)));
+            boolean debil = error.apply(new String[]{"luis", "Luis", "luis@x.co", "abc123", "abc123"}).contains("entre 8 y 128")
+                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "solamenteletras", "solamenteletras"}).contains("letras y números")
+                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "1234567890", "1234567890"}).contains("letras y números")
+                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "clave1234", "clave12345"}).contains("no coinciden")
+                    && error.apply(new String[]{"lu", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("entre 3 y 30")
+                    && error.apply(new String[]{"josé", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("sin tilde")
+                    && error.apply(new String[]{".luis", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("empezar con una letra")
+                    && error.apply(new String[]{"luis", "L", "luis@x.co", "clave1234", "clave1234"}).contains("Escriba su nombre")
+                    && error.apply(new String[]{"luis", "Luis", "luis@x", "clave1234", "clave1234"}).contains("correo válido")
+                    && error.apply(new String[]{"luis", "Luis", "", "clave1234", "clave1234"}).contains("Escriba su correo")
+                    && !cuentas.existeUsuario("luis");
+            // El rol solo puede ser ORGANIZADOR o AFICIONADO: nunca otro valor enviado por el cliente.
+            String[] luis = {"luis", "Luis", "luis@x.co", "futbol2026", "futbol2026"};
+            boolean rolInvalido = true;
+            for (String tipo : new String[]{"ADMINISTRADOR", "ADMIN", "VISITANTE", "organizador", "", null, "ORGANIZADOR "}) {
+                rolInvalido &= mensaje(() -> auth.registrar(solicitud.apply(tipo, luis))).contains("tipo de cuenta");
+            }
+            rolInvalido &= !cuentas.existeUsuario("luis");
+            // Inicio de sesion: correcto, y el mismo mensaje con clave mala o usuario inexistente.
+            String malaClave = mensaje(() -> auth.iniciarSesion("ana.torres", "otra1234"));
+            boolean login = auth.iniciarSesion(" ANA.torres ", "clave1234").getRol() == alphasport.model.Rol.ORGANIZADOR
+                    && malaClave.equals("Usuario o contraseña incorrectos.") && malaClave.equals(mensaje(() -> auth.iniciarSesion("nadie", "otra1234")))
+                    && mensaje(() -> auth.iniciarSesion("ana.torres", null)).equals(malaClave);
+            // Por la ruta «registro»: abre la sesion, la respuesta no trae claves ni hash, y un Aficionado no gestiona torneos.
+            CampeonatoService servicio = new CampeonatoService(new alphasport.persistence.ArchivoRepositorioCampeonato(
+                    java.nio.file.Files.createTempDirectory("alphasport-registro")), new alphasport.persistence.ArchivoRepositorioHistorial(
+                    java.nio.file.Files.createTempDirectory("alphasport-registro")));
+            alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, auth);
+            java.util.Map<String, Object> r = api.ejecutar("registro", java.util.Map.of("tipo", "AFICIONADO", "nombre", "Luis Pérez",
+                    "usuario", "Luis", "correo", "luis@x.co", "clave", "futbol2026", "confirmacion", "futbol2026"));
+            String json = alphasport.ui.Json.escribir(r);
+            boolean ruta = r.get("sesion").toString().contains("rol=AFICIONADO") && !json.contains("futbol2026") && !json.contains("pbkdf2")
+                    && api.getUsuarioActual().getNombre().equals("luis")
+                    && "PERMISO".equals(codigoDe(() -> api.ejecutar("nuevo", java.util.Map.of("nombre", "Copa", "formato", "LIGA"))))
+                    && !servicio.hayCampeonato();
+            api.ejecutar("logout", java.util.Map.of());
+            boolean forzado = mensaje(() -> api.ejecutar("registro", java.util.Map.of("tipo", "ADMINISTRADOR", "nombre", "Hack",
+                    "usuario", "hack", "correo", "h@x.co", "clave", "clave1234", "confirmacion", "clave1234"))).contains("tipo de cuenta")
+                    && api.getUsuarioActual() == null && !cuentas.existeUsuario("hack");
+            api.ejecutar("login", java.util.Map.of("usuario", "ana.torres", "clave", "clave1234"));
+            // El Organizador sí pasa el permiso de gestionar (la ruta lo deja seguir) y puede crear el torneo.
+            boolean organizador = !"PERMISO".equals(codigoDe(() -> api.ejecutar("nuevo", java.util.Map.of("nombre", "Copa", "formato", "LIGA"))))
+                    && api.getUsuarioActual().puede(alphasport.model.Permiso.GESTIONAR_CAMPEONATO);
+            servicio.crear("Copa de Ana", TipoFormato.LIGA, new ConfiguracionTorneo(), false);
+            organizador &= servicio.hayCampeonato();
+            correcto = valido && repetidos && debil && rolInvalido && login && ruta && forzado && organizador;
+            if (!correcto) {
+                System.out.println("  valido=" + valido + " repetidos=" + repetidos + " debil=" + debil + " rolInvalido=" + rolInvalido
+                        + " login=" + login + " ruta=" + ruta + " forzado=" + forzado + " organizador=" + organizador);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Registro de cuentas Organizador y Aficionado: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /** Codigo de la ReglaNegocioException que lanza la accion (null si no lanza ninguna). */
+    private static String codigoDe(Accion accion) {
+        try {
+            accion.correr();
+            return null;
+        } catch (ReglaNegocioException e) {
+            return e.getCodigo();
+        } catch (Exception e) {
+            return "otra excepcion: " + e;
         }
     }
 

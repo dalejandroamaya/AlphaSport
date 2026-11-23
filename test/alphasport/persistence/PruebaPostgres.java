@@ -73,6 +73,7 @@ public final class PruebaPostgres {
         probar("Documento único también en la base de datos", PruebaPostgres::probarDocumentoUnico);
         probar("Ascensos y descensos al pasar de temporada", PruebaPostgres::probarAscensos);
         probar("Migraciones del esquema (database/migraciones)", PruebaPostgres::probarMigraciones);
+        probar("Cuentas: registro e inicio de sesión en la tabla usuarios", PruebaPostgres::probarCuentas);
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
         System.exit(fallos == 0 ? 0 : 1);
     }
@@ -759,6 +760,57 @@ public final class PruebaPostgres {
             System.out.println("  anterior=" + anterior + " avisa=" + avisa + " igual=" + igual + " personas=" + personas);
         }
         return anterior && avisa && igual && personas;
+    }
+
+    /**
+     * PostgresRepositorioUsuarios: registro (SELECT y luego INSERT), usuario o correo repetidos sin importar
+     * mayusculas, la clave solo como hash, inicio de sesion, y lo mismo que la version en memoria.
+     */
+    private static boolean probarCuentas(ConexionDB db) throws Exception {
+        alphasport.service.ClavesPbkdf2 rapido = new alphasport.service.ClavesPbkdf2(1000);
+        alphasport.persistence.postgres.PostgresRepositorioUsuarios repo = new alphasport.persistence.postgres.PostgresRepositorioUsuarios(db);
+        alphasport.service.AutenticacionService auth = new alphasport.service.AutenticacionService(repo, rapido);
+        alphasport.model.Usuario ana = auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro(
+                " Ana.Torres ", "Ana Torres", "Ana@Correo.COM", "clave1234", "clave1234", "ORGANIZADOR"));
+        auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro("luis", "Luis", "luis@x.co", "futbol2026", "futbol2026", "AFICIONADO"));
+        // La fila: usuario y correo en minusculas, rol nuevo y la clave solo como hash.
+        boolean fila = ana.getNombre().equals("ana.torres") && contar(db, "SELECT COUNT(*) FROM usuarios") == 2
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'ana.torres' AND email = 'ana@correo.com' AND rol = 'ORGANIZADOR'"
+                        + " AND nombre = 'Ana Torres' AND password_hash LIKE 'pbkdf2_sha256$%' AND password_hash NOT LIKE '%clave1234%'") == 1
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'luis' AND rol = 'AFICIONADO'") == 1;
+        // Lectura y consultas sin importar mayusculas ni espacios.
+        alphasport.model.CuentaUsuario leida = repo.buscar("  ANA.TORRES ").orElseThrow();
+        boolean lectura = leida.rol() == alphasport.model.Rol.ORGANIZADOR && leida.correo().equals("ana@correo.com")
+                && repo.buscar("nadie").isEmpty() && repo.existeUsuario("Ana.Torres") && !repo.existeUsuario("otra")
+                && repo.existeCorreo(" ANA@correo.com") && !repo.existeCorreo("otra@x.co");
+        // Repetidos: el repositorio lo dice y no inserta; si se salta la consulta, la llave UNIQUE frena el INSERT.
+        boolean repetidos = repo.crear(new alphasport.model.CuentaUsuario("ANA.torres", "Otra", "otra@x.co", alphasport.model.Rol.AFICIONADO, "h"))
+                == RepositorioUsuarios.Alta.USUARIO_EN_USO
+                && repo.crear(new alphasport.model.CuentaUsuario("otra", "Otra", "ana@CORREO.com", alphasport.model.Rol.AFICIONADO, "h"))
+                == RepositorioUsuarios.Alta.CORREO_EN_USO
+                && contar(db, "SELECT COUNT(*) FROM usuarios") == 2;
+        boolean unico = falla(PersistenciaException.class, () -> sql(db,
+                "INSERT INTO usuarios (nombre, username, email, password_hash, rol) VALUES ('X', 'luis', 'z@x.co', 'h', 'AFICIONADO')"));
+        // Inicio de sesion contra la tabla.
+        boolean login = auth.iniciarSesion("ANA.TORRES", "clave1234").puedeEditar() && !auth.iniciarSesion("luis", "futbol2026").puedeEditar()
+                && falla(alphasport.service.ReglaNegocioException.class, () -> auth.iniciarSesion("luis", "otra1234"))
+                && falla(alphasport.service.ReglaNegocioException.class, () -> auth.iniciarSesion("nadie", "otra1234"));
+        // Un rol desconocido en la tabla no deja entrar (no se adivina un rol).
+        sql(db, "ALTER TABLE usuarios DROP CONSTRAINT usuarios_rol_check");
+        sql(db, "UPDATE usuarios SET rol = 'JEFE' WHERE username = 'luis'");
+        boolean rolRaro = falla(PersistenciaException.class, () -> repo.buscar("luis"));
+        // La version en memoria responde igual a las mismas preguntas.
+        RepositorioUsuariosEnMemoria memoria = new RepositorioUsuariosEnMemoria(List.of(leida));
+        boolean contratos = memoria.existeUsuario("ANA.TORRES") == repo.existeUsuario("ANA.TORRES")
+                && memoria.existeCorreo("ANA@correo.com") == repo.existeCorreo("ANA@correo.com")
+                && memoria.buscar("nadie").isEmpty() == repo.buscar("nadie").isEmpty()
+                && memoria.crear(new alphasport.model.CuentaUsuario("ana.torres", "x", "q@x.co", alphasport.model.Rol.AFICIONADO, "h"))
+                == RepositorioUsuarios.Alta.USUARIO_EN_USO;
+        if (!(fila && lectura && repetidos && unico && login && rolRaro && contratos)) {
+            System.out.println("  fila=" + fila + " lectura=" + lectura + " repetidos=" + repetidos + " unico=" + unico + " login=" + login
+                    + " rolRaro=" + rolRaro + " contratos=" + contratos);
+        }
+        return fila && lectura && repetidos && unico && login && rolRaro && contratos;
     }
 
     private static List<Path> migraciones() throws Exception {

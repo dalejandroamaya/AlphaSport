@@ -58,7 +58,7 @@ const Cuentas = (() => {
   const deBase64 = texto => Uint8Array.from(atob(texto), c => c.charCodeAt(0));
 
   function exigirCripto() {
-    if (!window.crypto || !crypto.subtle) {
+    if (typeof crypto === 'undefined' || !crypto.subtle) {
       throw new Error('Este navegador no permite guardar contraseñas de forma segura en esta dirección. '
         + 'Abra web/index.html directamente o use el programa Java.');
     }
