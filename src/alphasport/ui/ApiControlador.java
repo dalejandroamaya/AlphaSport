@@ -17,9 +17,9 @@ import alphasport.service.CalificacionesPartido;
 import alphasport.service.CampeonatoService;
 import alphasport.service.NoticiasService;
 import alphasport.service.ReglaNegocioException;
+import alphasport.service.ReglasPartido;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -288,19 +288,17 @@ public class ApiControlador {
             datos.setPenalesLocal(jugado ? entero(d.get("pl")) : Partido.SIN_PENALES);
             datos.setPenalesVisitante(jugado ? entero(d.get("pv")) : Partido.SIN_PENALES);
             datos.setTarjetas(tarjetas(lista(d, "tarjetas")), original.getIdLocal());
-            leerTitulares(d, original, datos); // antes de los cambios: se validan contra este XI
+            leerTitulares(d, datos);
             if (d.containsKey("cambios")) {
-                datos.setCambios(cambios(lista(d, "cambios"), original, datos));
+                datos.setCambios(cambios(lista(d, "cambios")));
             }
             if (d.containsKey("goles")) { // la carga rapida no envia los goles: se conservan
-                datos.setGoles(goles(lista(d, "goles"), original));
+                datos.setGoles(goles(lista(d, "goles")));
             }
-            // Nunca puede haber mas goles con autor que goles en el marcador (tambien al bajar el marcador).
-            validarCantidadGoles(original, datos);
         } else {
             datos.reiniciarResultado();
             datos.setEstado(estado);
-            leerTitulares(d, original, datos); // «Previa del partido»: el XI se elige antes de jugar
+            leerTitulares(d, datos); // «Previa del partido»: el XI se elige antes de jugar
         }
         // La formacion se elige antes del partido: se guarda en cualquier estado.
         if (d.containsKey("formacionLocal")) {
@@ -327,186 +325,67 @@ public class ApiControlador {
         }
     }
 
+    /* Lectura del JSON del partido: solo convierte. Las reglas (XI, minutos, cambios, goles y tarjetas) las
+       revisa ReglasPartido al guardar, igual para el escritorio y la web. */
+
     private ArrayList<Tarjeta> tarjetas(List<Object> lista) {
         ArrayList<Tarjeta> tarjetas = new ArrayList<>();
         for (Object o : lista) {
             Map<String, Object> t = mapa(o);
-            int idEquipo = entero(t.get("equipo"));
-            Jugador jugador = servicio.getCampeonato().buscarJugador(idEquipo, entero(t.get("jugador")));
-            if (jugador == null) {
-                throw new ReglaNegocioException("Una de las tarjetas es de un jugador que ya no existe.");
-            }
             boolean roja = "ROJA".equals(texto(t, "tipo"));
-            Tarjeta tarjeta = new Tarjeta(idEquipo, jugador, roja ? Tarjeta.ROJA : Tarjeta.AMARILLA,
-                    roja ? Math.max(1, entero(t.get("fechas"))) : 0);
-            int minuto = t.get("minuto") == null ? 0 : entero(t.get("minuto"));
-            if (minuto < 0 || minuto > MINUTO_MAXIMO) {
-                throw new ReglaNegocioException("El minuto de la tarjeta debe estar entre 1 y " + MINUTO_MAXIMO + ".");
-            }
-            tarjeta.setMinuto(minuto);
+            Tarjeta tarjeta = new Tarjeta(entero(t.get("equipo")), jugador(t.get("jugador"), "Una de las tarjetas"),
+                    roja ? Tarjeta.ROJA : Tarjeta.AMARILLA, roja ? Math.max(1, entero(t.get("fechas"))) : 0);
+            tarjeta.setMinuto(t.get("minuto") == null ? 0 : entero(t.get("minuto")));
             tarjetas.add(tarjeta);
         }
         return tarjetas;
     }
 
-    /** Minuto mas alto que se acepta (90 + prorroga + descuento). */
-    public static final int MINUTO_MAXIMO = 130;
-
-    /**
-     * Lee los cambios y revisa que tengan sentido en orden de minuto: un
-     * jugador que salio no puede volver a entrar y nadie entra dos veces.
-     */
-    /** Jugadores que inician el partido. */
-    public static final int TITULARES = 11;
-
-    /**
-     * Lee el XI inicial de un equipo: jugadores de su plantilla, sin repetir,
-     * y exactamente 11 (o toda la plantilla si tiene menos de 11).
-     */
     /** XI inicial de los dos equipos, si viene en la petición (la carga rápida no lo envía: se conserva). */
-    private void leerTitulares(Map<String, Object> d, Partido original, Partido datos) {
+    private void leerTitulares(Map<String, Object> d, Partido datos) {
         if (d.containsKey("titularesLocal")) {
-            datos.setTitulares(titulares(lista(d, "titularesLocal"), original.getIdLocal()),
-                    titulares(lista(d, "titularesVisitante"), original.getIdVisitante()));
+            datos.setTitulares(enteros(lista(d, "titularesLocal")), enteros(lista(d, "titularesVisitante")));
         }
     }
 
-    private ArrayList<Integer> titulares(List<Object> lista, int idEquipo) {
+    private static ArrayList<Integer> enteros(List<Object> lista) {
         ArrayList<Integer> ids = new ArrayList<>();
-        if (lista.isEmpty()) {
-            return ids;
-        }
-        alphasport.model.Equipo equipo = servicio.buscarEquipo(idEquipo);
-        for (Object o : lista) {
-            int id = entero(o);
-            if (servicio.getCampeonato().buscarJugador(idEquipo, id) == null) {
-                throw new ReglaNegocioException("Uno de los titulares de " + equipo.getNombreEquipo() + " no está en su plantilla.");
-            }
-            if (!ids.contains(id)) {
-                ids.add(id);
-            }
-        }
-        int necesarios = Math.min(TITULARES, equipo.getJugadores().size());
-        if (ids.size() != necesarios) {
-            throw new ReglaNegocioException("El XI inicial de " + equipo.getNombreEquipo() + " debe tener " + necesarios
-                    + " jugadores (tiene " + ids.size() + ").");
-        }
+        lista.forEach(o -> ids.add(entero(o)));
         return ids;
     }
 
-    private ArrayList<Cambio> cambios(List<Object> lista, Partido partido, Partido datos) {
+    private ArrayList<Cambio> cambios(List<Object> lista) {
         ArrayList<Cambio> cambios = new ArrayList<>();
         for (Object o : lista) {
             Map<String, Object> c = mapa(o);
-            int idEquipo = entero(c.get("equipo"));
-            if (!partido.involucra(idEquipo)) {
-                throw new ReglaNegocioException("Uno de los cambios es de un equipo que no juega este partido.");
-            }
-            int minuto = entero(c.get("minuto"));
-            if (minuto < 1 || minuto > MINUTO_MAXIMO) {
-                throw new ReglaNegocioException("El minuto del cambio debe estar entre 1 y " + MINUTO_MAXIMO + ".");
-            }
-            Jugador sale = servicio.getCampeonato().buscarJugador(idEquipo, entero(c.get("sale")));
-            Jugador entra = servicio.getCampeonato().buscarJugador(idEquipo, entero(c.get("entra")));
-            if (sale == null || entra == null) {
-                throw new ReglaNegocioException("Uno de los cambios es de un jugador que ya no existe.");
-            }
-            if (sale.getId() == entra.getId()) {
-                throw new ReglaNegocioException("En un cambio el jugador que sale y el que entra deben ser distintos.");
-            }
-            cambios.add(new Cambio(idEquipo, minuto, sale, entra));
+            cambios.add(new Cambio(entero(c.get("equipo")), entero(c.get("minuto")),
+                    jugador(c.get("sale"), "Uno de los cambios"), jugador(c.get("entra"), "Uno de los cambios")));
         }
         cambios.sort(Comparator.comparingInt(Cambio::getMinuto));
-        Set<Integer> salieron = new HashSet<>();
-        Set<Integer> entraron = new HashSet<>();
-        // Con el XI inicial definido: sale alguien que esta en la cancha y entra un suplente.
-        java.util.Map<Integer, Set<Integer>> enCancha = new java.util.HashMap<>();
-        // («datos» es una copia sin los ids de los equipos: el XI se busca por el partido original)
-        java.util.Map<Integer, List<Integer>> xi = java.util.Map.of(partido.getIdLocal(), datos.getTitularesLocal(),
-                partido.getIdVisitante(), datos.getTitularesVisitante());
-        xi.forEach((idEquipo, ids) -> {
-            if (!ids.isEmpty()) {
-                enCancha.put(idEquipo, new HashSet<>(ids));
-            }
-        });
-        for (Cambio c : cambios) {
-            if (!enCancha.containsKey(c.getIdEquipo()) && !lista.isEmpty()) {
-                throw new ReglaNegocioException("Antes de registrar cambios escoja el XI inicial de "
-                        + servicio.getCampeonato().nombreDe(c.getIdEquipo()) + ".");
-            }
-            Set<Integer> cancha = enCancha.get(c.getIdEquipo());
-            if (!cancha.contains(c.getIdSale()) && !salieron.contains(c.getIdSale())) {
-                throw new ReglaNegocioException("#" + c.getDorsalSale() + " " + c.getNombreSale() + " no está en la cancha en el minuto "
-                        + c.getMinuto() + ": solo puede salir un titular o alguien que ya entró.");
-            }
-            if (xi.get(c.getIdEquipo()).contains(c.getIdEntra())) {
-                throw new ReglaNegocioException("#" + c.getDorsalEntra() + " " + c.getNombreEntra() + " es titular: solo pueden entrar suplentes.");
-            }
-            if (salieron.contains(c.getIdSale())) {
-                throw new ReglaNegocioException("#" + c.getDorsalSale() + " " + c.getNombreSale() + " ya había salido antes del minuto " + c.getMinuto() + ".");
-            }
-            if (salieron.contains(c.getIdEntra()) || entraron.contains(c.getIdEntra())) {
-                throw new ReglaNegocioException("#" + c.getDorsalEntra() + " " + c.getNombreEntra()
-                        + (salieron.contains(c.getIdEntra()) ? " ya fue sustituido y no puede volver a entrar." : " ya había entrado en otro cambio."));
-            }
-            salieron.add(c.getIdSale());
-            entraron.add(c.getIdEntra());
-            cancha.remove(c.getIdSale());
-            cancha.add(c.getIdEntra());
-        }
         return cambios;
     }
 
-    /**
-     * Lee los goles por jugador: el autor es del equipo que suma el gol (o del rival si es
-     * en contra) y la asistencia, opcional, es de un companero distinto del autor.
-     */
-    private ArrayList<Gol> goles(List<Object> lista, Partido partido) {
+    private ArrayList<Gol> goles(List<Object> lista) {
         ArrayList<Gol> goles = new ArrayList<>();
         for (Object o : lista) {
             Map<String, Object> g = mapa(o);
-            int idEquipo = entero(g.get("equipo"));
-            if (!partido.involucra(idEquipo)) {
-                throw new ReglaNegocioException("Uno de los goles es de un equipo que no juega este partido.");
-            }
-            int minuto = g.get("minuto") == null ? 0 : entero(g.get("minuto"));
-            if (minuto < 0 || minuto > MINUTO_MAXIMO) {
-                throw new ReglaNegocioException("El minuto del gol debe estar entre 1 y " + MINUTO_MAXIMO + ".");
-            }
             boolean enContra = Boolean.TRUE.equals(g.get("enContra"));
-            int idEquipoAutor = enContra ? partido.getRival(idEquipo) : idEquipo;
-            Jugador autor = servicio.getCampeonato().buscarJugador(idEquipoAutor, entero(g.get("autor")));
-            if (autor == null) {
-                throw new ReglaNegocioException("Uno de los goles es de un jugador que no está en la plantilla"
-                        + (enContra ? " del rival." : " de su equipo."));
-            }
-            int idAsistente = g.get("asistente") == null ? 0 : entero(g.get("asistente"));
-            Jugador asistente = null;
-            if (idAsistente != Gol.SIN_ASISTENCIA && !enContra) {
-                asistente = servicio.getCampeonato().buscarJugador(idEquipo, idAsistente);
-                if (asistente == null) {
-                    throw new ReglaNegocioException("La asistencia del gol de " + autor.getNombre() + " es de un jugador que no está en su equipo.");
-                }
-                if (asistente.getId() == autor.getId()) {
-                    throw new ReglaNegocioException(autor.getNombre() + " no puede darse la asistencia a sí mismo.");
-                }
-            }
-            goles.add(new Gol(idEquipo, minuto, autor, enContra, asistente));
+            int idAsistente = g.get("asistente") == null || enContra ? Gol.SIN_ASISTENCIA : entero(g.get("asistente")); // un autogol no tiene
+            goles.add(new Gol(entero(g.get("equipo")), g.get("minuto") == null ? 0 : entero(g.get("minuto")),
+                    jugador(g.get("autor"), "Uno de los goles"), enContra,
+                    idAsistente == Gol.SIN_ASISTENCIA ? null : jugador(idAsistente, "La asistencia de un gol")));
         }
         goles.sort(Comparator.comparingInt(x -> x.getMinuto() == 0 ? Integer.MAX_VALUE : x.getMinuto()));
         return goles;
     }
 
-    private void validarCantidadGoles(Partido partido, Partido datos) {
-        for (int idEquipo : new int[]{partido.getIdLocal(), partido.getIdVisitante()}) {
-            long registrados = datos.getGoles().stream().filter(g -> g.getIdEquipo() == idEquipo).count();
-            int marcador = idEquipo == partido.getIdLocal() ? datos.getGolesLocal() : datos.getGolesVisitante();
-            if (registrados > marcador) {
-                throw new ReglaNegocioException("Hay " + registrados + (registrados == 1 ? " gol registrado" : " goles registrados")
-                        + " de " + servicio.getCampeonato().nombreDe(idEquipo) + ", pero el marcador dice " + marcador
-                        + ". Corrija el marcador o quite goles en el editor del partido.");
-            }
+    /** Jugador por id; si ya no esta en ninguna plantilla, el dato no se puede leer. */
+    private Jugador jugador(Object id, String que) {
+        Jugador j = ReglasPartido.buscarJugador(servicio.getCampeonato(), entero(id));
+        if (j == null) {
+            throw new ReglaNegocioException(que + " es de un jugador que ya no existe.");
         }
+        return j;
     }
 
     /** La fecha se guarda como DATE: aaaa-mm-dd o «Por definir». */

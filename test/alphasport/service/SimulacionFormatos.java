@@ -60,6 +60,7 @@ public class SimulacionFormatos {
         probarWalkoverYCampeones();
         probarNoticias();
         probarPreviaYResultado();
+        probarReglasPartido();
         probarCalificaciones();
         probarFotos();
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
@@ -441,6 +442,87 @@ public class SimulacionFormatos {
         if (!correcto) {
             fallos++;
         }
+    }
+
+    /**
+     * [A5] Las reglas del partido las aplica el servicio, no la pantalla ni el controlador: un partido
+     * guardado directo por CampeonatoService tambien se revisa.
+     */
+    private static void probarReglasPartido() {
+        boolean correcto;
+        try {
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-reglas")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-reglas")));
+            ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+            cfg.setSorteoAleatorio(false);
+            servicio.crear("Reglas", TipoFormato.LIGA, cfg, false);
+            servicio.cargarDatosPrueba(7, 4, true);
+            servicio.avanzar();
+            Campeonato c = servicio.getCampeonato();
+            Partido p = c.getPartidos().get(0);
+            List<alphasport.model.Jugador> loc = c.buscarEquipo(p.getIdLocal()).getJugadores();
+            List<alphasport.model.Jugador> vis = c.buscarEquipo(p.getIdVisitante()).getJugadores();
+            java.util.function.Supplier<Partido> base = () -> {
+                Partido d = new Partido();
+                d.copiarDatosDe(p);
+                d.setEstado(EstadoPartido.JUGADO);
+                d.setGolesLocal(1);
+                d.setGolesVisitante(0);
+                d.setTitulares(ids(loc.subList(0, 11)), ids(vis.subList(0, 11)));
+                return d;
+            };
+            Partido corto = base.get();
+            corto.setTitulares(ids(loc.subList(0, 10)), ids(vis.subList(0, 11)));
+            Partido titularEntra = base.get();
+            titularEntra.setCambios(new ArrayList<>(List.of(new alphasport.model.Cambio(p.getIdLocal(), 60, loc.get(0), loc.get(1)))));
+            Partido golAjeno = base.get();
+            golAjeno.setGoles(new ArrayList<>(List.of(new alphasport.model.Gol(p.getIdLocal(), 10, vis.get(3), false, null))));
+            Partido demasiados = base.get();
+            demasiados.setGoles(new ArrayList<>(List.of(new alphasport.model.Gol(p.getIdLocal(), 10, loc.get(9), false, null),
+                    new alphasport.model.Gol(p.getIdLocal(), 20, loc.get(9), false, null))));
+            Partido minuto = base.get();
+            alphasport.model.Tarjeta tarde = new alphasport.model.Tarjeta(p.getIdLocal(), loc.get(2), alphasport.model.Tarjeta.AMARILLA, 0);
+            tarde.setMinuto(ReglasPartido.MINUTO_MAXIMO + 1);
+            minuto.setTarjetas(new ArrayList<>(List.of(tarde)), p.getIdLocal());
+            boolean rechazos = rechaza(() -> servicio.guardarPartido(p.getId(), corto, false))
+                    && rechaza(() -> servicio.guardarPartido(p.getId(), titularEntra, false))
+                    && rechaza(() -> servicio.guardarPartido(p.getId(), golAjeno, false))
+                    && rechaza(() -> servicio.guardarPartido(p.getId(), demasiados, false))
+                    && rechaza(() -> servicio.guardarPartido(p.getId(), minuto, false))
+                    && !servicio.buscarPartido(p.getId()).isJugado();
+            // Un partido correcto se guarda, y sigue pudiendo editarse aunque su goleador deje el equipo.
+            Partido bueno = base.get();
+            bueno.setGoles(new ArrayList<>(List.of(new alphasport.model.Gol(p.getIdLocal(), 10, loc.get(9), false, loc.get(8)))));
+            bueno.setCambios(new ArrayList<>(List.of(new alphasport.model.Cambio(p.getIdLocal(), 60, loc.get(9), loc.get(14)))));
+            servicio.guardarPartido(p.getId(), bueno, false);
+            alphasport.model.Equipo local = c.buscarEquipo(p.getIdLocal());
+            List<alphasport.model.Jugador> sinGoleador = new ArrayList<>(local.getJugadores());
+            sinGoleador.remove(9);
+            servicio.guardarEquipo(local.getId(), local.getNombreEquipo(), local.getEstadio(), local.getDirectorTecnico(), sinGoleador);
+            Partido sede = new Partido();
+            sede.copiarDatosDe(servicio.buscarPartido(p.getId()));
+            sede.setSede("Otra sede");
+            servicio.guardarPartido(p.getId(), sede, false);
+            boolean guarda = servicio.buscarPartido(p.getId()).getGoles().size() == 1 && servicio.buscarPartido(p.getId()).getSede().equals("Otra sede");
+            correcto = rechazos && guarda;
+            if (!correcto) {
+                System.out.println("  rechazos=" + rechazos + " guarda=" + guarda);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Reglas del partido en el servicio: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    private static ArrayList<Integer> ids(List<alphasport.model.Jugador> jugadores) {
+        ArrayList<Integer> ids = new ArrayList<>();
+        jugadores.forEach(j -> ids.add(j.getId()));
+        return ids;
     }
 
     private interface Accion {

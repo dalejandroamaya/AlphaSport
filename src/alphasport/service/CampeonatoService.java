@@ -468,6 +468,7 @@ public class CampeonatoService {
         Partido partido = buscarPartido(idPartido);
         // Si al editar un W.O. se registra lo que paso en la cancha, deja de ser W.O.
         datos.setWalkover(datos.isWalkover() && datos.tieneResultadoDeWalkover());
+        ReglasPartido.validar(campeonato, partido, datos);
         if (datos.isJugado()) {
             boolean necesitaPenales = motor.requierePenales(partido, datos.getGolesLocal(), datos.getGolesVisitante());
             if (necesitaPenales && (!datos.tienePenales() || datos.getPenalesLocal() == datos.getPenalesVisitante())) {
