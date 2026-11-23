@@ -610,10 +610,10 @@ public class SimulacionFormatos {
             boolean comoAdmin = codigo.apply(() -> api.ejecutar("calificacion/votar", java.util.Map.of("partido", 1, "jugador", 1, "valor", 7,
                     "dispositivo", "x"))).equals("PERMISO") && api.getNoticias().pendientes().size() == 1
                     && ((java.util.Map<?, ?>) api.consultar("noticias").get("noticias")).toString().contains("Propuesta de prueba");
-            // [M2] Cada modulo registra sus rutas con su permiso: solo entrar y salir son publicas.
+            // [M2] Cada modulo registra sus rutas con su permiso: solo registrarse, entrar y salir son publicas.
             java.util.Map<String, alphasport.model.Permiso> acciones = api.permisosDeAcciones();
             boolean rutas = acciones.size() >= 29 && acciones.entrySet().stream().filter(e -> e.getValue() == null).map(java.util.Map.Entry::getKey)
-                    .sorted().toList().equals(List.of("login", "login/visitante", "logout"))
+                    .sorted().toList().equals(List.of("login", "login/visitante", "logout", "registro"))
                     && acciones.get("calificacion/votar") == alphasport.model.Permiso.VOTAR_JUGADORES
                     && acciones.get("comentario/eliminar") == alphasport.model.Permiso.MODERAR_NOTICIAS
                     && acciones.get("partido") == alphasport.model.Permiso.GESTIONAR_CAMPEONATO

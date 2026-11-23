@@ -1,8 +1,9 @@
 package alphasport.ui;
 
+import alphasport.service.AutenticacionService;
 import alphasport.service.SesionService;
 
-/** Rutas publicas de la sesion: entrar, entrar como visitante, salir y consultar quien esta. */
+/** Rutas publicas de la sesion: registrarse, entrar, entrar como visitante, salir y consultar quien esta. */
 final class RutasSesion implements ModuloRutas {
 
     private final SesionService sesion;
@@ -17,6 +18,11 @@ final class RutasSesion implements ModuloRutas {
         acciones.publica("login", p -> {
             p.api().entrar(sesion.iniciar(p.texto("usuario"), p.texto("clave")));
             return p.listo(null);
+        }).publica("registro", p -> {
+            // El tipo de cuenta llega tal cual: el servicio solo acepta ORGANIZADOR o AFICIONADO.
+            p.api().entrar(sesion.registrar(new AutenticacionService.SolicitudRegistro(p.texto("usuario"), p.texto("nombre"),
+                    p.texto("correo"), p.texto("clave"), p.texto("confirmacion"), p.texto("tipo"))));
+            return p.listo("Cuenta creada. ¡Le damos la bienvenida a AlphaSport!");
         }).publica("login/visitante", p -> {
             p.api().entrar(sesion.entrarComoVisitante());
             return p.listo(null);
