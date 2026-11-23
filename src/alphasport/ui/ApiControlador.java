@@ -96,6 +96,7 @@ public class ApiControlador {
     public Map<String, Object> consultar(String ruta) {
         if (!ruta.equals("catalogo") && !ruta.equals("sesion")) {
             exigirSesion(); // consultar es solo lectura: basta con haber iniciado sesion
+            servicio.sincronizar();
         }
         if (ruta.startsWith("partido/")) {
             // Detalle del partido: partido/{id} o partido/{id}/{dispositivo}. El dispositivo (anonimo) solo
@@ -124,6 +125,7 @@ public class ApiControlador {
         } else if (!RUTAS_PUBLICAS.contains(ruta)) {
             exigirAdministrador(); // toda accion que modifica datos pasa por aqui
         }
+        servicio.sincronizar(); // otro programa pudo cambiar la base de datos
         if (ruta.startsWith("noticia/") || ruta.startsWith("comentario/")) {
             Map<String, Object> r = respuesta(ejecutarNoticia(ruta, cuerpo));
             r.put("noticias", noticiasJson());
