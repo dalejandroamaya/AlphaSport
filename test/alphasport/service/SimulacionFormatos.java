@@ -64,6 +64,7 @@ public class SimulacionFormatos {
         probarPermisos();
         probarServidorWeb();
         probarClaves();
+        probarOrdenPorLinea();
         probarCalificaciones();
         probarFotos();
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
@@ -743,6 +744,53 @@ public class SimulacionFormatos {
             correcto = false;
         }
         System.out.println("Claves con hash y cuentas por repositorio: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * Las plantillas se muestran por linea (Porteria, Defensa, Mediocampo, Ataque) y dentro de cada una por dorsal,
+     * sin tocar el catalogo de posiciones.
+     */
+    private static void probarOrdenPorLinea() {
+        boolean correcto;
+        try {
+            boolean catalogo = alphasport.model.Jugador.POSICIONES.length == 19 && alphasport.model.Jugador.GRUPOS_POSICIONES.length == 4
+                    && alphasport.model.Jugador.GRUPOS_POSICIONES[1][0].equals("Defensa")
+                    && List.of(alphasport.model.Jugador.POSICIONES).containsAll(List.of("Líbero", "Carrilero izquierdo", "Mediapunta", "Volante derecho"))
+                    && alphasport.model.Jugador.lineaDe(" portero ") == 0 && alphasport.model.Jugador.lineaDe("Mediapunta") == 3
+                    && alphasport.model.Jugador.lineaDe("Utilero") == alphasport.model.Jugador.SIN_LINEA;
+            CampeonatoService servicio = new CampeonatoService(
+                    new alphasport.persistence.ArchivoRepositorioCampeonato(java.nio.file.Files.createTempDirectory("alphasport-orden")),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(java.nio.file.Files.createTempDirectory("alphasport-orden")));
+            servicio.crear("Orden", TipoFormato.LIGA, new ConfiguracionTorneo(), false);
+            servicio.equipos().agregarEquipo("Orden FC");
+            alphasport.model.Equipo e = servicio.getCampeonato().getEquipos().get(0);
+            String[][] datos = {{"Nueve", "9", "Delantero centro"}, {"Uno", "1", "Portero"}, {"Ocho", "8", "Mediocampista central"},
+                {"Cuatro", "4", "Defensa central"}, {"Doce", "12", "Portero"}, {"Dos", "2", "Lateral derecho"}, {"Once", "11", "Extremo izquierdo"}};
+            List<alphasport.model.Jugador> plantilla = new ArrayList<>();
+            for (String[] d : datos) {
+                plantilla.add(new alphasport.model.Jugador(d[0], "DOC-" + d[1], Integer.parseInt(d[1]), d[2]));
+            }
+            servicio.equipos().guardarEquipo(e.getId(), "Orden FC", "", null, plantilla);
+            alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService());
+            api.ejecutar("login", java.util.Map.of("usuario", "admin", "clave", "123"));
+            @SuppressWarnings("unchecked")
+            List<java.util.Map<String, Object>> enPantalla = (List<java.util.Map<String, Object>>) ((List<java.util.Map<String, Object>>) api.consultar("estado")
+                    .get("equipos")).get(0).get("jugadores");
+            List<String> nombres = enPantalla.stream().map(j -> (String) j.get("nombre")).toList();
+            boolean orden = nombres.equals(List.of("Uno", "Doce", "Dos", "Cuatro", "Ocho", "Nueve", "Once"))
+                    && enPantalla.get(0).get("linea").equals(0) && enPantalla.get(6).get("linea").equals(3);
+            correcto = catalogo && orden;
+            if (!correcto) {
+                System.out.println("  catalogo=" + catalogo + " orden=" + nombres);
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Plantillas ordenadas por línea (Portería a Ataque): " + (correcto ? "correcto" : "MAL"));
         if (!correcto) {
             fallos++;
         }

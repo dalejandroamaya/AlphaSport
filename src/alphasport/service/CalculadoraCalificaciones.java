@@ -117,8 +117,9 @@ public final class CalculadoraCalificaciones {
                     d.titular(), d.goles(), d.asistencias(), d.amarillas(), d.rojas(), d.portero() ? d.golesRecibidos() : 0, nota,
                     List.copyOf(desglose), votos.size(), PuntuacionNotaPartido.redondear(promedio), notaFinal, false, miVoto));
         }
-        // Titulares primero y luego los que entraron; dentro de cada grupo, por dorsal.
-        lista.sort(Comparator.comparing((Calificacion x) -> !x.titular()).thenComparingInt(Calificacion::dorsal));
+        // Titulares primero y luego los que entraron; dentro de cada grupo, por linea (Porteria a Ataque) y dorsal.
+        lista.sort(Comparator.comparing((Calificacion x) -> !x.titular()).thenComparingInt(x -> Jugador.lineaDe(x.posicion()))
+                .thenComparingInt(Calificacion::dorsal));
         return lista;
     }
 

@@ -607,7 +607,7 @@ function limpiarFormJugador() {
 }
 
 function renderJugadores() {
-  jugadoresTemp.sort((a, b) => a.dorsal - b.dorsal);
+  jugadoresTemp.sort(porLinea); // Portería, Defensa, Mediocampo, Ataque
   $('tablaJugadores').innerHTML = jugadoresTemp.length
     ? jugadoresTemp.map((j, i) => `<tr><td><button type="button" class="foto-boton-fila" data-foto-fila="${i}" title="${j.foto ? 'Cambiar o quitar la foto' : 'Subir la foto'} de ${esc(j.nombre)}">${fotoCedulaHtml(j.foto, j.nombre, 'mini')}</button></td>
         <td class="num"><span class="dorsal">${j.dorsal}</span></td><td>${esc(j.nombre)}</td><td>${esc(j.documento)}</td>
@@ -1153,7 +1153,7 @@ function movimientos(idEquipo) {
 
 const plantillaDe = idEquipo => {
   const e = equipoPorId(idEquipo);
-  return e ? e.jugadores.filter(j => j.id).sort((a, b) => a.dorsal - b.dorsal) : [];
+  return e ? e.jugadores.filter(j => j.id).sort(porLinea) : [];
 };
 /** Cuántos titulares necesita un equipo: 11, o toda la plantilla si tiene menos. */
 const necesariosXI = idEquipo => Math.min(reglasPartido().titulares, plantillaDe(idEquipo).length);

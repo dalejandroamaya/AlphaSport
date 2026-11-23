@@ -711,7 +711,7 @@ class Dialogos {
             dorsal.getValueFactory().setValue(d);
         };
         dibujar[0] = () -> {
-            jugadores.sort(Comparator.comparingInt(j -> n(j, "dorsal")));
+            jugadores.sort(Datos.POR_LINEA); // Porteria, Defensa, Mediocampo, Ataque
             lista.getChildren().clear();
             if (jugadores.isEmpty()) {
                 lista.getChildren().add(etiqueta("Sin jugadores todavía.", "sutil"));
@@ -908,7 +908,7 @@ class Dialogos {
         Datos.lista(p, "titularesLocal").forEach(o -> titulares.get(idsEquipos[0]).add(((Number) o).intValue()));
         Datos.lista(p, "titularesVisitante").forEach(o -> titulares.get(idsEquipos[1]).add(((Number) o).intValue()));
         java.util.function.Function<Integer, List<Map<String, Object>>> plantillaDe = idEq -> l(app.equipoPorId(idEq), "jugadores").stream()
-                .filter(j -> n(j, "id") > 0).sorted(Comparator.comparingInt(j -> n(j, "dorsal"))).toList();
+                .filter(j -> n(j, "id") > 0).sorted(Datos.POR_LINEA).toList();
         // Para goles y tarjetas: primero los titulares de la previa (marcados), después los suplentes.
         java.util.function.Function<Integer, List<Map<String, Object>>> convocadosDe = idEq -> plantillaDe.apply(idEq).stream()
                 .sorted(Comparator.comparingInt(j -> titulares.get(idEq).contains(n(j, "id")) ? 0 : 1)).toList();

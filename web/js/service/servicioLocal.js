@@ -192,8 +192,8 @@ function crearServicioLocal() {
         id: e.id, nombre: e.nombre, estadio: e.estadio || '', retirado: !!e.retirado, division: divisionDe(c, e),
         escudo: e.escudo || '',
         dt: e.dt ? Object.assign({}, e.dt) : null,
-        jugadores: e.jugadores.map(j => ({
-          id: j.id || 0, nombre: j.nombre, documento: j.documento || '', dorsal: j.dorsal, posicion: j.posicion, foto: j.foto || '',
+        jugadores: e.jugadores.slice().sort(porLinea).map(j => ({ // Portería, Defensa, Mediocampo, Ataque (como en Java)
+          id: j.id || 0, nombre: j.nombre, documento: j.documento || '', dorsal: j.dorsal, posicion: j.posicion, linea: lineaDe(j.posicion), foto: j.foto || '',
           amarillas: j.id ? m.contarTarjetas(j.id, 'AMARILLA') : 0, rojas: j.id ? m.contarTarjetas(j.id, 'ROJA') : 0,
           pendientes: j.id ? m.fechasPendientesDe(j.id) : 0
         }))

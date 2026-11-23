@@ -136,9 +136,9 @@ public class Presentador {
     private Map<String, Object> equipo(Equipo e, Sanciones sanciones) {
         DirectorTecnico dt = e.getDirectorTecnico();
         List<Object> jugadores = new ArrayList<>();
-        for (Jugador j : e.getJugadores()) {
+        for (Jugador j : e.getJugadores().stream().sorted(Jugador.POR_LINEA).toList()) { // Porteria, Defensa, Mediocampo, Ataque
             jugadores.add(mapa("id", j.getId(), "nombre", j.getNombre(), "documento", j.getDocumento(),
-                    "dorsal", j.getDorsal(), "posicion", j.getPosicion(), "foto", j.getFoto(),
+                    "dorsal", j.getDorsal(), "posicion", j.getPosicion(), "linea", j.getLinea(), "foto", j.getFoto(),
                     "amarillas", j.getId() == 0 ? 0 : sanciones.contar(j.getId(), false),
                     "rojas", j.getId() == 0 ? 0 : sanciones.contar(j.getId(), true),
                     "pendientes", j.getId() == 0 ? 0 : sanciones.fechasPendientesDe(j.getId())));

@@ -15,6 +15,17 @@ const GRUPOS_POSICIONES = [
   { grupo: 'Ataque', posiciones: ['Mediapunta', 'Extremo derecho', 'Extremo izquierdo', 'Segundo delantero', 'Delantero centro'] }
 ];
 
+/** Línea de una posición (como Jugador.lineaDe en Java): 0 Portería, 1 Defensa, 2 Mediocampo, 3 Ataque; 4 si no está en el catálogo. */
+const lineaDe = posicion => {
+  const buscada = String(posicion || '').trim().toLowerCase();
+  const i = GRUPOS_POSICIONES.findIndex(g => g.posiciones.some(p => p.toLowerCase() === buscada));
+  return i < 0 ? GRUPOS_POSICIONES.length : i;
+};
+
+/** Orden natural de una plantilla (como Jugador.POR_LINEA): por línea, luego dorsal y nombre. */
+const porLinea = (a, b) => lineaDe(a.posicion) - lineaDe(b.posicion) || (a.dorsal | 0) - (b.dorsal | 0)
+  || String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' });
+
 const DatosPrueba = (() => {
   const MAXIMO_EQUIPOS = 32;
 
