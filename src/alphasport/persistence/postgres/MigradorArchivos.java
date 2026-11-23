@@ -64,7 +64,7 @@ public final class MigradorArchivos {
     }
 
     private static String noticias(ConexionDB conexion, Path carpeta) throws PersistenciaException {
-        PostgresRepositorioNoticias base = new PostgresRepositorioNoticias(conexion, carpeta.resolve("imagenes"));
+        PostgresRepositorioNoticias base = new PostgresRepositorioNoticias(conexion);
         if (!base.publicadas().isEmpty() || !base.pendientes().isEmpty()) {
             return "Noticias: la base de datos ya tiene noticias; no se cambió.";
         }

@@ -5,7 +5,7 @@ import alphasport.model.Noticia;
 import java.util.List;
 
 /**
- * Noticias, comentarios y sus fotos. El programa usa PostgreSQL
+ * Noticias y sus comentarios (las fotos van en un {@link RepositorioImagenes}). El programa usa PostgreSQL
  * ({@link alphasport.persistence.postgres.PostgresRepositorioNoticias}); las versiones en memoria y en archivo
  * quedan para las pruebas y para pasar los datos anteriores a la base de datos.
  */
@@ -37,12 +37,4 @@ public interface RepositorioNoticias {
 
     /** true si la foto es de una noticia publicada (o de cualquiera, con {@code incluirPendientes}). */
     boolean imagenVisible(String nombre, boolean incluirPendientes) throws PersistenciaException;
-
-    /** Guarda los bytes de una foto y devuelve su nombre (lo que se anota en Noticia.imagenRuta). */
-    String guardarImagen(byte[] datos, String extension) throws PersistenciaException;
-
-    /** Bytes de una foto guardada, o null si no existe. */
-    byte[] leerImagen(String nombre) throws PersistenciaException;
-
-    void eliminarImagen(String nombre) throws PersistenciaException;
 }

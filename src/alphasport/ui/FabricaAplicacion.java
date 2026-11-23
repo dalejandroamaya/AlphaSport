@@ -1,6 +1,7 @@
 package alphasport.ui;
 
 import alphasport.persistence.ArchivoRepositorioFotos;
+import alphasport.persistence.ImagenesEnDisco;
 import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.RepositorioUsuariosEnMemoria;
 import alphasport.persistence.postgres.ConexionDB;
@@ -61,7 +62,7 @@ public final class FabricaAplicacion implements AutoCloseable {
 
     public NoticiasService noticias() throws PersistenciaException {
         if (noticias == null) {
-            noticias = new NoticiasService(new PostgresRepositorioNoticias(conexion(), CARPETA_DATOS.resolve("imagenes")));
+            noticias = new NoticiasService(new PostgresRepositorioNoticias(conexion()), new ImagenesEnDisco(CARPETA_DATOS.resolve("imagenes")));
         }
         return noticias;
     }

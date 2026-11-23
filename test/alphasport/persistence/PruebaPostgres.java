@@ -834,10 +834,10 @@ public final class PruebaPostgres {
 
     private static boolean probarNoticias(ConexionDB db) throws Exception {
         Path imagenes = Files.createTempDirectory("alphasport-imagenes");
-        NoticiasService n = new NoticiasService(new PostgresRepositorioNoticias(db, imagenes));
+        NoticiasService n = new NoticiasService(new PostgresRepositorioNoticias(db), new alphasport.persistence.ImagenesEnDisco(imagenes));
         Noticia propuesta = n.proponer("Propuesta de un hincha", "Texto de la propuesta del visitante.", "Ana", new NoticiasService.Imagen(new byte[]{1, 2, 3}, "png"));
         Noticia oficial = n.publicar(null, "Noticia oficial", "Texto oficial de la noticia.", null, false);
-        NoticiasService otra = new NoticiasService(new PostgresRepositorioNoticias(db, imagenes)); // otro programa
+        NoticiasService otra = new NoticiasService(new PostgresRepositorioNoticias(db), new alphasport.persistence.ImagenesEnDisco(imagenes)); // otro programa
         boolean filtro = otra.publicadas().size() == 1 && otra.pendientes().size() == 1 && otra.pendientes().get(0).getTitulo().equals(propuesta.getTitulo());
         boolean foto = otra.imagen(propuesta.getImagenRuta(), false) == null && otra.imagen(propuesta.getImagenRuta(), true).length == 3;
         otra.aprobar(propuesta.getId());
@@ -868,12 +868,12 @@ public final class PruebaPostgres {
         jugarCompleto(viejo, p);
         viejo.getCampeonato().buscarEquipo(p.getIdLocal()).getJugadores().remove(8); // el goleador ya no esta en la plantilla
         viejo.archivarActual();
-        NoticiasService noticias = new NoticiasService(new ArchivoRepositorioNoticias(carpeta));
+        NoticiasService noticias = new NoticiasService(new ArchivoRepositorioNoticias(carpeta), new alphasport.persistence.ImagenesEnDisco(carpeta.resolve("imagenes")));
         noticias.comentar(noticias.publicar(null, "Noticia vieja", "Texto de la noticia vieja.", null, false).getId(), "Ana", "Hola");
         MigradorArchivos.migrar(db, carpeta);
         CampeonatoService nuevo = servicio(db);
         boolean igual = foto(nuevo).equals(foto(viejo)) && nuevo.historial().size() == 1;
-        NoticiasService migradas = new NoticiasService(new PostgresRepositorioNoticias(db, carpeta.resolve("imagenes")));
+        NoticiasService migradas = new NoticiasService(new PostgresRepositorioNoticias(db), new alphasport.persistence.ImagenesEnDisco(carpeta.resolve("imagenes")));
         igual &= migradas.publicadas().size() == 1 && migradas.publicadas().get(0).getComentarios().size() == 1;
         MigradorArchivos.migrar(db, carpeta); // repetirla no duplica nada
         boolean unaVez = contar(db, "SELECT COUNT(*) FROM torneos") == 2 && contar(db, "SELECT COUNT(*) FROM noticias") == 1;

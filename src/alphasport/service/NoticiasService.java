@@ -4,6 +4,7 @@ import alphasport.model.Comentario;
 import alphasport.model.Noticia;
 import alphasport.model.Rol;
 import alphasport.persistence.PersistenciaException;
+import alphasport.persistence.RepositorioImagenes;
 import alphasport.persistence.RepositorioNoticias;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -34,9 +35,16 @@ public class NoticiasService {
     }
 
     private final RepositorioNoticias repositorio;
+    private final RepositorioImagenes imagenes;
 
-    public NoticiasService(RepositorioNoticias repositorio) {
+    public NoticiasService(RepositorioNoticias repositorio, RepositorioImagenes imagenes) {
         this.repositorio = repositorio;
+        this.imagenes = imagenes;
+    }
+
+    /** Con las fotos en memoria (pruebas). */
+    public NoticiasService(RepositorioNoticias repositorio) {
+        this(repositorio, new alphasport.persistence.RepositorioImagenesEnMemoria());
     }
 
     /* ---------------------------------------------------------------- consultas */
@@ -76,7 +84,7 @@ public class NoticiasService {
      * {@code incluirPendientes} (administrador): nadie puede pedir archivos sueltos.
      */
     public byte[] imagen(String nombre, boolean incluirPendientes) throws PersistenciaException {
-        return repositorio.imagenVisible(nombre, incluirPendientes) ? repositorio.leerImagen(nombre) : null;
+        return repositorio.imagenVisible(nombre, incluirPendientes) ? imagenes.leer(nombre) : null;
     }
 
     /* ---------------------------------------------------------------- visitante */
@@ -86,7 +94,7 @@ public class NoticiasService {
         String nombre = limpiarNombre(autor, "Visitante");
         Noticia n = new Noticia(0, validarTitulo(titulo), validarCuerpo(cuerpo), nombre, Rol.VISITANTE, ahora());
         if (imagen != null) {
-            n.setImagenRuta(repositorio.guardarImagen(imagen.datos(), imagen.extension()));
+            n.setImagenRuta(imagenes.guardar(imagen.datos(), imagen.extension()));
         }
         repositorio.insertar(n);
         return n;
@@ -130,9 +138,9 @@ public class NoticiasService {
         }
         if (imagen != null || quitarImagen) {
             if (n.tieneImagen()) {
-                repositorio.eliminarImagen(n.getImagenRuta());
+                imagenes.eliminar(n.getImagenRuta());
             }
-            n.setImagenRuta(imagen == null ? "" : repositorio.guardarImagen(imagen.datos(), imagen.extension()));
+            n.setImagenRuta(imagen == null ? "" : imagenes.guardar(imagen.datos(), imagen.extension()));
         }
         if (id == null) {
             repositorio.insertar(n);
@@ -155,7 +163,7 @@ public class NoticiasService {
         Noticia n = buscar(id);
         repositorio.eliminar(id);
         if (n.tieneImagen()) {
-            repositorio.eliminarImagen(n.getImagenRuta());
+            imagenes.eliminar(n.getImagenRuta());
         }
     }
 

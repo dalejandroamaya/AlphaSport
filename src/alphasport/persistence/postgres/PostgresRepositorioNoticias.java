@@ -3,10 +3,8 @@ package alphasport.persistence.postgres;
 import alphasport.model.Comentario;
 import alphasport.model.Noticia;
 import alphasport.model.Rol;
-import alphasport.persistence.ImagenesEnDisco;
 import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.RepositorioNoticias;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -18,7 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Noticias y comentarios en PostgreSQL. Las fotos siguen en la carpeta de imagenes; la tabla guarda su nombre.
+ * Noticias y comentarios en PostgreSQL. La tabla guarda el nombre de cada foto; los archivos los guarda un
+ * {@link alphasport.persistence.RepositorioImagenes}.
  */
 public class PostgresRepositorioNoticias implements RepositorioNoticias {
 
@@ -26,11 +25,9 @@ public class PostgresRepositorioNoticias implements RepositorioNoticias {
     private static final String COLUMNAS = "SELECT id, titulo, cuerpo, autor, rol_autor, fecha, imagen_ruta, aprobado FROM noticias ";
 
     private final ConexionDB conexion;
-    private final ImagenesEnDisco imagenes;
 
-    public PostgresRepositorioNoticias(ConexionDB conexion, Path carpetaImagenes) {
+    public PostgresRepositorioNoticias(ConexionDB conexion) {
         this.conexion = conexion;
-        this.imagenes = new ImagenesEnDisco(carpetaImagenes);
     }
 
     @Override
@@ -106,23 +103,6 @@ public class PostgresRepositorioNoticias implements RepositorioNoticias {
     public boolean imagenVisible(String nombre, boolean incluirPendientes) throws PersistenciaException {
         return conexion.ejecutar(con -> Sql.uno(con, "SELECT EXISTS (SELECT 1 FROM noticias WHERE imagen_ruta = ? AND (aprobado OR ?))",
                 rs -> rs.getBoolean(1), nombre, incluirPendientes));
-    }
-
-    /* ---------------------------------------------------------------- fotos */
-
-    @Override
-    public String guardarImagen(byte[] datos, String extension) throws PersistenciaException {
-        return imagenes.guardar(datos, extension);
-    }
-
-    @Override
-    public byte[] leerImagen(String nombre) throws PersistenciaException {
-        return imagenes.leer(nombre);
-    }
-
-    @Override
-    public void eliminarImagen(String nombre) throws PersistenciaException {
-        imagenes.eliminar(nombre);
     }
 
     /* ---------------------------------------------------------------- filas */
