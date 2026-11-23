@@ -306,9 +306,8 @@ public class ApiControlador {
         if (d.containsKey("formacionLocal")) {
             datos.setFormaciones(formacion(texto(d, "formacionLocal")), formacion(texto(d, "formacionVisitante")));
         }
-        String fecha = texto(d, "fecha");
-        datos.setFecha(fecha.isBlank() ? "Por definir" : fecha);
-        datos.setHora(texto(d, "hora"));
+        datos.setFecha(fecha(texto(d, "fecha")));
+        datos.setHora(hora(texto(d, "hora")));
         datos.setSede(texto(d, "sede").trim());
         datos.setObservaciones(texto(d, "obs").trim());
         boolean confirmado = Boolean.TRUE.equals(cuerpo.get("confirmado"));
@@ -508,6 +507,30 @@ public class ApiControlador {
                         + ". Corrija el marcador o quite goles en el editor del partido.");
             }
         }
+    }
+
+    /** La fecha se guarda como DATE: aaaa-mm-dd o «Por definir». */
+    private static String fecha(String texto) {
+        if (texto.isBlank() || texto.equals("Por definir")) {
+            return "Por definir";
+        }
+        try {
+            return java.time.LocalDate.parse(texto.trim()).toString();
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new ReglaNegocioException("La fecha «" + texto + "» no existe. Use el formato año-mes-día.");
+        }
+    }
+
+    /** La hora se guarda como TIME: hh:mm en 24 horas o vacia. */
+    private static String hora(String texto) {
+        String t = texto.trim();
+        if (t.isEmpty()) {
+            return "";
+        }
+        if (!t.matches("([01]?\\d|2[0-3]):[0-5]\\d")) {
+            throw new ReglaNegocioException("Escriba la hora en formato de 24 horas, por ejemplo 15:30.");
+        }
+        return t.length() == 4 ? "0" + t : t;
     }
 
     /** Valida el texto de una formacion ("" = sin definir). */
