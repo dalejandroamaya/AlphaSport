@@ -1,9 +1,11 @@
 'use strict';
 
-/* Persistencia de la version web: campeonato en curso e historial en el almacenamiento del navegador. */
+/* Persistencia de la version web: campeonatos en curso, historial, noticias y cuentas en el almacenamiento del navegador. */
 
 const Almacen = (() => {
-  const CLAVE_ACTUAL = 'alphasport.actual';
+  const CLAVE_ACTUAL = 'alphasport.actual'; // un solo campeonato: versión anterior (se migra a CLAVE_CAMPEONATOS)
+  const CLAVE_CAMPEONATOS = 'alphasport.campeonatos';
+  const CLAVE_ELEGIDOS = 'alphasport.elegidos';
   const CLAVE_HISTORIAL = 'alphasport.historial';
   const CLAVE_SESION = 'alphasport.usuario';
   const CLAVE_NOTICIAS = 'alphasport.noticias';
@@ -28,11 +30,48 @@ const Almacen = (() => {
     }
   };
 
+  /**
+   * Varios campeonatos en curso: {codigo: campeonato}. La primera vez se pasa aquí el campeonato que guardaba la
+   * versión anterior (un solo campeonato, sin dueño) y sus noticias quedan en él, como la migración 006 en Java.
+   */
+  const leerCampeonatos = () => {
+    let todos = leer(CLAVE_CAMPEONATOS, null);
+    if (todos && typeof todos === 'object' && !Array.isArray(todos)) return todos;
+    todos = {};
+    const anterior = leer(CLAVE_ACTUAL, null);
+    if (anterior && anterior.formato) {
+      if (!anterior.codigo) anterior.codigo = Date.now().toString(36);
+      anterior.propietario = anterior.propietario || '';
+      todos[anterior.codigo] = anterior;
+      const noticias = leer(CLAVE_NOTICIAS, []);
+      if (Array.isArray(noticias) && noticias.some(n => !n.campeonato)) {
+        try { escribir(CLAVE_NOTICIAS, noticias.map(n => (n.campeonato ? n : Object.assign(n, { campeonato: anterior.codigo })))); } catch (e) { /* quedan generales */ }
+      }
+    }
+    try {
+      escribir(CLAVE_CAMPEONATOS, todos);
+      localStorage.removeItem(CLAVE_ACTUAL);
+    } catch (e) { /* sin almacenamiento: se reintenta la próxima vez */ }
+    return todos;
+  };
+
   return {
-    campeonato: {
-      cargar: () => leer(CLAVE_ACTUAL, null),
-      guardar: c => escribir(CLAVE_ACTUAL, c),
-      eliminar: () => { try { localStorage.removeItem(CLAVE_ACTUAL); } catch (e) { /* sin almacenamiento */ } }
+    // Campeonatos en curso de este navegador; cada uno con su dueño (campeonato.propietario = usuario local; '' = sin dueño).
+    campeonatos: {
+      listar: () => Object.values(leerCampeonatos()),
+      cargar: codigo => leerCampeonatos()[codigo] || null,
+      /** Lanza error si el navegador no tiene espacio (no se guarda nada). */
+      guardar: c => { const todos = leerCampeonatos(); todos[c.codigo] = c; escribir(CLAVE_CAMPEONATOS, todos); },
+      eliminar: codigo => { const todos = leerCampeonatos(); delete todos[codigo]; escribir(CLAVE_CAMPEONATOS, todos); }
+    },
+    // Último campeonato que eligió cada usuario de este navegador (usuario -> código).
+    elegido: {
+      cargar: usuario => (leer(CLAVE_ELEGIDOS, {}) || {})[usuario] || null,
+      guardar: (usuario, codigo) => {
+        const todos = leer(CLAVE_ELEGIDOS, {}) || {};
+        if (codigo) todos[usuario] = codigo; else delete todos[usuario];
+        try { escribir(CLAVE_ELEGIDOS, todos); } catch (e) { /* sin almacenamiento: vale mientras la página esté abierta */ }
+      }
     },
     // Noticias con sus comentarios (la foto va dentro como «data URL»). Lanza error si el navegador no tiene espacio.
     noticias: {

@@ -42,6 +42,7 @@ function crearServicioRemoto() {
     sesion: () => pedir('sesion'),
     estado: () => pedir('estado'),
     historial: () => pedir('historial'),
+    campeonatos: () => pedir('campeonatos'),
     // [REQ-07] El id anónimo del navegador permite mostrar en las calificaciones lo que ya votó.
     detalle: id => pedir('partido/' + id + '/' + encodeURIComponent(Almacen.dispositivo())),
     votaciones: () => pedir('votaciones/' + encodeURIComponent(Almacen.dispositivo())),

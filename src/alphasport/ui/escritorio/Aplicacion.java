@@ -73,15 +73,16 @@ import javafx.util.Duration;
  */
 public class Aplicacion extends Application {
 
-    static final String[] VISTAS = {"equipos", "partidos", "votaciones", "posiciones", "llaves", "sanciones", "noticias", "reglas"};
+    static final String[] VISTAS = {"campeonatos", "equipos", "partidos", "votaciones", "posiciones", "llaves", "sanciones", "noticias", "reglas"};
     /** Vistas que el visitante no ve (no le aportan: son de gestión). */
-    static final java.util.Set<String> VISTAS_SOLO_ADMIN = java.util.Set.of("equipos", "reglas");
+    static final java.util.Set<String> VISTAS_SOLO_ADMIN = java.util.Set.of("campeonatos", "equipos", "reglas");
     /** Vistas que solo ve el visitante: el administrador no vota [REQ-07]. */
     static final java.util.Set<String> VISTAS_SOLO_VISITANTE = java.util.Set.of("votaciones");
     /** Vista con la que entra el visitante. */
     static final String VISTA_INICIAL_VISITANTE = "partidos";
-    static final String[] NOMBRES_VISTAS = {"Equipos", "Partidos", "Votaciones", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas"};
+    static final String[] NOMBRES_VISTAS = {"Mis campeonatos", "Equipos", "Partidos", "Votaciones", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas"};
     static final String[] ICONOS_VISTAS = {
+        "M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z",
         "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z",
         "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM3 10h18M8 3v4M16 3v4",
         "M12 3l2.7 5.8 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3.1 1.2-6.2L3 9.6l6.3-.8Z",
@@ -118,6 +119,13 @@ public class Aplicacion extends Application {
     private final Label estado = new Label();
     private final Label chipEstado = new Label();
     private final Button btnCampeon = new Button("Ver campeón");
+    /** Selector del campeonato que gestiona el Organizador, en la cabecera (solo si tiene dos o más). */
+    private final ComboBox<String> selector = new ComboBox<>();
+    private final HBox filaSelector = new HBox(8);
+    /** Código de cada opción del selector, en el mismo orden. */
+    private List<String> codigosSelector = List.of();
+    /** true mientras se llenan las opciones (cambiarlas no es elegir otro campeonato). */
+    private boolean llenandoSelector;
     private HBox cabeceraTorneo;
     private String vistaAnimada = "";
     private Region fotoFondo;
@@ -654,7 +662,17 @@ public class Aplicacion extends Application {
         estado.setGraphicTextGap(9);
         estado.setWrapText(true);
         // El estado va en un chip junto al formato: sin rótulos pequeños encima del título.
-        VBox info = new VBox(8, titulo, new HBox(8, chipEstado, chipFormato, chipEquipos), estado);
+        selector.getStyleClass().add("selector-campeonato");
+        selector.setOnAction(e -> {
+            int i = selector.getSelectionModel().getSelectedIndex();
+            if (!llenandoSelector && i >= 0 && i < codigosSelector.size()) {
+                elegirCampeonato(codigosSelector.get(i), vista); // otro campeonato, en la misma sección
+            }
+        });
+        filaSelector.getChildren().setAll(etiqueta("Campeonato", "sutil"), selector);
+        filaSelector.setAlignment(Pos.CENTER_LEFT);
+        mostrar(filaSelector, false);
+        VBox info = new VBox(8, titulo, filaSelector, new HBox(8, chipEstado, chipFormato, chipEquipos), estado);
         HBox.setHgrow(info, Priority.ALWAYS);
         btnAvanzar.getStyleClass().addAll("btn", "primario", "grande");
         btnAvanzar.setOnAction(e -> avanzar());
@@ -688,18 +706,39 @@ public class Aplicacion extends Application {
         raiz.getStyleClass().add("fondo-app");
         ponerRaiz(raiz);
         scene.getRoot().getStyleClass().add("plano"); // la aplicación va sobre fondo liso; la foto queda en la entrada
-        if (b(E, "hay")) {
-            render();
-        } else if (puedeEditar()) {
-            dialogos.nuevo(true, false);
-        } else {
-            titulo.setText("Sin campeonato activo");
-            // Sin campeonato no hay formato, equipos, estado ni campeón que mostrar en la cabecera.
-            mostrarDatosCabecera(false);
-            btnCampeon.setVisible(false);
-            btnCampeon.setManaged(false);
-            contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
+        render(); // sin campeonato elegido, render() muestra «Mis campeonatos» o el aviso
+    }
+
+    /** Muestra u oculta un nodo y lo saca del layout. */
+    private static void mostrar(Node nodo, boolean visible) {
+        nodo.setVisible(visible);
+        nodo.setManaged(visible);
+    }
+
+    /**
+     * Sin campeonato elegido. El Organizador va a «Mis campeonatos» (elegir uno o crear el primero); el Aficionado,
+     * que no crea campeonatos, solo ve el aviso.
+     */
+    private void sinCampeonato() {
+        boolean organizador = puedeEditar();
+        titulo.setText(organizador ? "Mis campeonatos" : "Sin campeonato activo");
+        stage.setTitle("AlphaSport · Gestor de campeonatos");
+        // Sin campeonato no hay formato, equipos, estado ni campeón que mostrar en la cabecera.
+        mostrarDatosCabecera(false);
+        mostrar(btnCampeon, false);
+        mostrar(btnAvanzar, false);
+        mostrar(filaSelector, false);
+        if (cabeceraTorneo != null) {
+            cabeceraTorneo.getStyleClass().remove("terminado");
         }
+        navegacionSegun(false);
+        mostrarVista(organizador && !vista.equals("noticias") ? "campeonatos" : vista);
+    }
+
+    /** Sin campeonato elegido solo se ven «Mis campeonatos», Partidos (el aviso) y Noticias, como en la web. */
+    private void navegacionSegun(boolean hayCampeonato) {
+        navegacion.forEach((clave, b) -> mostrar(b, puedeVer(clave)
+                && (hayCampeonato || clave.equals("campeonatos") || clave.equals("partidos") || clave.equals("noticias"))));
     }
 
     private MenuButton menuArchivo() {
@@ -707,12 +746,7 @@ public class Aplicacion extends Application {
         menu.setGraphic(icono(ICONO_MENU));
         menu.getStyleClass().addAll("btn", "fantasma", "menu-archivo");
         MenuItem nuevo = new MenuItem("Nuevo campeonato…");
-        nuevo.setOnAction(e -> {
-            if (dialogos.confirmar("Nuevo campeonato", "El campeonato actual se reemplazará por uno nuevo. Si ya tiene partidos jugados "
-                    + "se guardará en el historial (como «sin terminar» si no ha terminado). ¿Continuar?", "Continuar")) {
-                dialogos.nuevo(false, false);
-            }
-        });
+        nuevo.setOnAction(e -> dialogos.nuevo(false, false)); // uno más: el actual sigue en curso, en «Mis campeonatos»
         itemSiguiente.setOnAction(e -> siguienteTorneo());
         MenuItem cambiar = new MenuItem("Cambiar formato del campeonato…");
         cambiar.setOnAction(e -> {
@@ -723,9 +757,21 @@ public class Aplicacion extends Application {
                 dialogos.nuevo(false, true);
             }
         });
-        MenuItem cancelar = new MenuItem("Cancelar campeonato…");
+        MenuItem terminar = new MenuItem("Terminar campeonato…");
+        terminar.setOnAction(e -> {
+            Map<String, Object> c = m(E, "campeonato");
+            if (c != null) {
+                terminarCampeonato(s(c, "codigo"), s(c, "nombre"), b(c, "terminado"));
+            }
+        });
+        MenuItem cancelar = new MenuItem("Eliminar campeonato…");
         cancelar.getStyleClass().add("opcion-peligro");
-        cancelar.setOnAction(e -> cancelarCampeonato());
+        cancelar.setOnAction(e -> {
+            Map<String, Object> c = m(E, "campeonato");
+            if (c != null) {
+                eliminarCampeonato(s(c, "codigo"), s(c, "nombre"));
+            }
+        });
         MenuItem respaldo = new MenuItem("Descargar respaldo");
         respaldo.setOnAction(e -> guardarRespaldo());
         MenuItem abrir = new MenuItem("Abrir respaldo…");
@@ -745,26 +791,12 @@ public class Aplicacion extends Application {
             pestanaPartidos = "previa";
             mostrarLogin();
         });
-        soloAdmin(nuevo, itemSiguiente, cambiar, cancelar, abrir);
+        soloAdmin(nuevo, itemSiguiente, cambiar, terminar, cancelar, abrir);
         MenuItem salir = new MenuItem("Salir");
         salir.setOnAction(e -> stage.close());
-        menu.getItems().addAll(nuevo, itemSiguiente, cambiar, cancelar, new SeparatorMenuItem(), respaldo, abrir, exportar,
+        menu.getItems().addAll(nuevo, itemSiguiente, cambiar, terminar, cancelar, new SeparatorMenuItem(), respaldo, abrir, exportar,
                 historial, new SeparatorMenuItem(), sesion, salir);
         return menu;
-    }
-
-    private void cancelarCampeonato() {
-        if (!dialogos.confirmar("Cancelar campeonato", "Se descartará «" + s(m(E, "campeonato"), "nombre")
-                + "» por completo (equipos, partidos y resultados) y no quedará en el historial. Esta acción no se puede deshacer. "
-                + "¿Cancelar el campeonato?", "Sí, cancelarlo")) {
-            return;
-        }
-        Map<String, Object> r = ejecutar("cancelar", mapa());
-        if (!b(r, "ok")) {
-            dialogos.mensaje("Error", s(r, "error"));
-            return;
-        }
-        dialogos.nuevo(true, false);
     }
 
     /** Clausura de un torneo corto o nueva temporada de una liga (con ascensos y descensos si hay divisiones). */
@@ -896,10 +928,14 @@ public class Aplicacion extends Application {
 
     void render() {
         if (!b(E, "hay")) {
+            sinCampeonato(); // se terminó, se eliminó o hay que elegir uno
             return;
         }
         Map<String, Object> c = m(E, "campeonato");
         mostrarDatosCabecera(true);
+        mostrar(btnAvanzar, puedeEditar());
+        navegacionSegun(true);
+        actualizarSelector();
         titulo.setText(s(c, "nombre"));
         stage.setTitle(s(c, "nombre") + " · AlphaSport");
         chipFormato.setText(s(c, "formatoNombre"));
@@ -954,22 +990,23 @@ public class Aplicacion extends Application {
         if (!puedeVer(nombre)) {
             nombre = VISTA_INICIAL_VISITANTE;
         }
+        // Sin campeonato elegido las demás vistas tendrían datos viejos: el Organizador va a «Mis campeonatos».
+        // Las noticias no dependen de tener uno elegido: se ven las generales.
+        if (!b(E, "hay") && !nombre.equals("noticias") && puedeEditar()) {
+            nombre = "campeonatos";
+        }
         vista = nombre;
         ToggleButton b = navegacion.get(nombre);
         if (b != null) {
             b.setSelected(true);
         }
-        // Las noticias no dependen del campeonato: se ven aunque no haya uno en curso.
-        if (!b(E, "hay") && !nombre.equals("noticias")) {
-            // El visitante no puede crear campeonatos: en cualquier vista ve el mismo aviso (antes quedaba en blanco).
-            if (puedeEditar()) {
-                contenido.getChildren().clear();
-            } else {
-                contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
-            }
+        if (!b(E, "hay") && !nombre.equals("noticias") && !nombre.equals("campeonatos")) {
+            // El Aficionado no crea campeonatos: en cualquier vista ve el mismo aviso.
+            contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
             return;
         }
         Node nodo = switch (nombre) {
+            case "campeonatos" -> vistaCampeonatos();
             case "partidos" -> vistaPartidos();
             case "votaciones" -> vistaVotaciones();
             case "posiciones" -> vistaPosiciones();
@@ -1024,6 +1061,165 @@ public class Aplicacion extends Application {
         l.setMaxWidth(Double.MAX_VALUE);
         l.getStyleClass().add("vidrio");
         return l;
+    }
+
+    /* ---------------------------------------------------------------- mis campeonatos (Organizador) */
+
+    /** Los campeonatos del Organizador y los que no tienen organizador (consulta «campeonatos»). */
+    private Map<String, Object> consultarCampeonatos() {
+        try {
+            return api.consultar("campeonatos");
+        } catch (ReglaNegocioException e) {
+            return mapa("ok", false, "error", e.getMessage(), "campeonatos", List.of(), "sinOrganizador", List.of());
+        }
+    }
+
+    /** Una tarjeta por campeonato (el que gestiona ahora, resaltado) y los que puede tomar; sin ninguno, una invitación. */
+    private Node vistaCampeonatos() {
+        Map<String, Object> r = consultarCampeonatos();
+        List<Map<String, Object>> lista = l(r, "campeonatos"), sin = l(r, "sinOrganizador");
+        String actual = b(E, "hay") ? s(m(E, "campeonato"), "codigo") : "";
+        Button nuevo = boton("+ Nuevo campeonato", "primario");
+        nuevo.setOnAction(e -> dialogos.nuevo(false, false));
+        VBox caja = seccion("Mis campeonatos", "Cada campeonato tiene sus propios equipos, partidos y resultados. Elija cuál gestionar.", nuevo);
+        if (lista.isEmpty()) {
+            Button primero = boton("Crear mi primer campeonato", "primario");
+            primero.setOnAction(e -> dialogos.nuevo(false, false));
+            VBox invitacion = new VBox(14, etiqueta("Todavía no tiene campeonatos. Cree el primero: después registra sus equipos y lo inicia.", "sutil", "centro"), primero);
+            invitacion.setAlignment(Pos.CENTER);
+            invitacion.setPadding(new Insets(36, 20, 36, 20));
+            invitacion.getStyleClass().add("vidrio");
+            caja.getChildren().add(invitacion);
+        } else {
+            FlowPane tarjetas = new FlowPane(14, 14);
+            lista.forEach(x -> tarjetas.getChildren().add(tarjetaCampeonato(x, s(x, "codigo").equals(actual), false)));
+            caja.getChildren().add(tarjetas);
+        }
+        if (!sin.isEmpty()) {
+            FlowPane tarjetas = new FlowPane(14, 14);
+            sin.forEach(x -> tarjetas.getChildren().add(tarjetaCampeonato(x, false, true)));
+            caja.getChildren().addAll(etiqueta("Campeonatos sin organizador", "titulo-seccion"),
+                    etiqueta("Quedaron de antes de que hubiera varios campeonatos. El primero que lo tome pasa a gestionarlo.", "sutil"), tarjetas);
+        }
+        return caja;
+    }
+
+    private Node tarjetaCampeonato(Map<String, Object> x, boolean actual, boolean paraTomar) {
+        String codigo = s(x, "codigo"), nombre = s(x, "nombre");
+        Label titulo = etiqueta(nombre, "h3");
+        HBox.setHgrow(titulo, Priority.ALWAYS);
+        titulo.setMaxWidth(Double.MAX_VALUE);
+        HBox cabecera = new HBox(8, titulo);
+        if (actual) {
+            cabecera.getChildren().add(etiqueta("Gestionando", "chip", "chip-actual"));
+        }
+        FlowPane chips = new FlowPane(6, 6, etiqueta(s(x, "formatoNombre"), "chip"), etiqueta(s(x, "estado"), "chip"),
+                etiqueta(n(x, "equipos") + " equipos", "chip"));
+        int jugados = n(x, "partidosJugados"), total = n(x, "partidos");
+        javafx.scene.control.ProgressBar barra = new javafx.scene.control.ProgressBar(total == 0 ? 0 : (double) jugados / total);
+        barra.setMaxWidth(Double.MAX_VALUE);
+        barra.getStyleClass().add("progreso");
+        barra.setAccessibleText(jugados + " de " + total + " partidos jugados");
+        Label avance = etiqueta(total == 0 ? "Todavía sin fixture" : jugados + " de " + total + " partidos jugados", "sutil");
+        HBox botones = new HBox(8);
+        if (paraTomar) {
+            Button tomar = boton("Tomar y gestionar", "primario");
+            tomar.setOnAction(e -> tomarCampeonato(codigo));
+            botones.getChildren().add(tomar);
+        } else {
+            Button gestionar = boton(actual ? "Seguir gestionando" : "Gestionar", "primario");
+            gestionar.setOnAction(e -> elegirCampeonato(codigo, "equipos"));
+            Button terminar = boton("Terminar…", "fantasma");
+            terminar.setDisable(jugados == 0); // sin partidos jugados no hay nada que guardar en el historial
+            terminar.setOnAction(e -> terminarCampeonato(codigo, nombre, "Terminado".equals(s(x, "estado"))));
+            Button eliminar = boton("Eliminar…", "peligro");
+            eliminar.setOnAction(e -> eliminarCampeonato(codigo, nombre));
+            botones.getChildren().addAll(gestionar, terminar, eliminar);
+        }
+        VBox tarjeta = new VBox(10, cabecera, chips, etiqueta(s(x, "fase"), "sutil"), barra, avance, botones);
+        tarjeta.getStyleClass().addAll("vidrio", "tarjeta-campeonato");
+        if (actual) {
+            tarjeta.getStyleClass().add("actual");
+        }
+        tarjeta.setPrefWidth(330);
+        return tarjeta;
+    }
+
+    /** Pasa a gestionar ese campeonato y abre esa sección. */
+    private void elegirCampeonato(String codigo, String irA) {
+        Map<String, Object> r = ejecutar("campeonato/elegir", mapa("codigo", codigo));
+        if (!b(r, "ok")) {
+            dialogos.mensaje("Error", s(r, "error"));
+            return;
+        }
+        mostrarVista(irA);
+    }
+
+    private void tomarCampeonato(String codigo) {
+        Map<String, Object> r = ejecutar("campeonato/tomar", mapa("codigo", codigo));
+        if (!b(r, "ok")) {
+            dialogos.mensaje("Error", s(r, "error"));
+            return;
+        }
+        mostrarVista("equipos");
+        aviso(s(r, "mensaje"));
+    }
+
+    /** Termina un campeonato: pasa al historial y deja de estar en curso; los demás siguen igual. */
+    private void terminarCampeonato(String codigo, String nombre, boolean conCampeon) {
+        if (!dialogos.confirmar("Terminar campeonato", "«" + nombre + "» pasará al historial con sus resultados ("
+                + (conCampeon ? "con su campeón" : "como «sin terminar»") + ") y dejará de estar en curso. Sus otros campeonatos siguen igual. ¿Terminarlo?",
+                "Sí, terminarlo")) {
+            return;
+        }
+        Map<String, Object> r = ejecutar("campeonato/terminar", mapa("codigo", codigo));
+        if (!b(r, "ok")) {
+            dialogos.mensaje("Error", s(r, "error"));
+            return;
+        }
+        mostrarVista("campeonatos");
+        aviso(s(r, "mensaje"));
+    }
+
+    /** Elimina un campeonato sin guardarlo en el historial (se elige y se cancela, como desde el menú Archivo). */
+    private void eliminarCampeonato(String codigo, String nombre) {
+        if (!dialogos.confirmar("Eliminar campeonato", "Se descartará «" + nombre + "» por completo (equipos, partidos y resultados) "
+                + "y no quedará en el historial. Esta acción no se puede deshacer. ¿Eliminarlo?", "Sí, eliminarlo")) {
+            return;
+        }
+        if (!b(E, "hay") || !codigo.equals(s(m(E, "campeonato"), "codigo"))) {
+            Map<String, Object> elegido = ejecutar("campeonato/elegir", mapa("codigo", codigo));
+            if (!b(elegido, "ok")) {
+                dialogos.mensaje("Error", s(elegido, "error"));
+                return;
+            }
+        }
+        Map<String, Object> r = ejecutar("cancelar", mapa());
+        if (!b(r, "ok")) {
+            dialogos.mensaje("Error", s(r, "error"));
+            return;
+        }
+        mostrarVista("campeonatos");
+        aviso("Se eliminó «" + nombre + "».");
+    }
+
+    /** El selector de la cabecera: solo para el Organizador y solo si tiene más de un campeonato. */
+    private void actualizarSelector() {
+        if (!puedeEditar() || !b(E, "hay")) {
+            mostrar(filaSelector, false);
+            return;
+        }
+        List<Map<String, Object>> lista = l(consultarCampeonatos(), "campeonatos");
+        String actual = s(m(E, "campeonato"), "codigo");
+        llenandoSelector = true;
+        try {
+            codigosSelector = lista.stream().map(x -> s(x, "codigo")).toList();
+            selector.getItems().setAll(lista.stream().map(x -> s(x, "nombre")).toList());
+            selector.getSelectionModel().select(codigosSelector.indexOf(actual));
+        } finally {
+            llenandoSelector = false;
+        }
+        mostrar(filaSelector, lista.size() > 1);
     }
 
     private Node vistaEquipos() {
