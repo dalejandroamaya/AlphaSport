@@ -23,7 +23,11 @@ import java.util.Map;
 public class PostgresRepositorioNoticias implements RepositorioNoticias {
 
     private static final DateTimeFormatter FORMATO = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final String COLUMNAS = "SELECT id, titulo, cuerpo, autor, rol_autor, fecha, imagen_ruta, aprobado FROM noticias ";
+    /** Con el codigo del campeonato de cada noticia (LEFT JOIN: las generales no tienen). */
+    private static final String COLUMNAS = """
+            SELECT n.id, n.titulo, n.cuerpo, n.autor, n.rol_autor, n.fecha, n.imagen_ruta, n.aprobado, t.codigo AS campeonato
+              FROM noticias n LEFT JOIN torneos t ON t.id = n.torneo_id
+            """;
 
     private final ConexionDB conexion;
 
@@ -32,30 +36,44 @@ public class PostgresRepositorioNoticias implements RepositorioNoticias {
     }
 
     @Override
-    public List<Noticia> publicadas() throws PersistenciaException {
-        return conexion.ejecutar(con -> listar(con, true));
+    public List<Noticia> publicadas(String campeonato) throws PersistenciaException {
+        return conexion.ejecutar(con -> listar(con, true, campeonato));
     }
 
     @Override
-    public List<Noticia> pendientes() throws PersistenciaException {
-        return conexion.ejecutar(con -> listar(con, false));
+    public List<Noticia> pendientes(String campeonato) throws PersistenciaException {
+        return conexion.ejecutar(con -> listar(con, false, campeonato));
     }
 
-    /** Dos consultas: las noticias y, de una vez, los comentarios de todas. */
-    private static List<Noticia> listar(Connection con, boolean aprobadas) throws SQLException {
+    /**
+     * Dos consultas: las noticias y, de una vez, los comentarios de todas. Con un campeonato: las suyas (de su
+     * torneo en curso) y las generales.
+     */
+    private static List<Noticia> listar(Connection con, boolean aprobadas, String campeonato) throws SQLException {
         Map<Integer, Noticia> porId = new HashMap<>();
-        List<Noticia> lista = Sql.listar(con, COLUMNAS + "WHERE aprobado = ? ORDER BY fecha DESC, id DESC", PostgresRepositorioNoticias::leer, aprobadas);
+        List<Noticia> lista = campeonato == null
+                ? Sql.listar(con, COLUMNAS + " WHERE n.aprobado = ? ORDER BY n.fecha DESC, n.id DESC", PostgresRepositorioNoticias::leer, aprobadas)
+                : Sql.listar(con, COLUMNAS + """
+                         WHERE n.aprobado = ?
+                           AND (n.torneo_id IS NULL OR n.torneo_id = (SELECT id FROM torneos WHERE codigo = ? AND situacion = 'ACTUAL'))
+                         ORDER BY n.fecha DESC, n.id DESC""", PostgresRepositorioNoticias::leer, aprobadas, campeonato);
         lista.forEach(n -> porId.put(n.getId(), n));
         Sql.listar(con, """
                 SELECT c.noticia_id, c.id, c.autor, c.texto, c.fecha FROM comentarios c JOIN noticias n ON n.id = c.noticia_id
-                 WHERE n.aprobado = ? ORDER BY c.id""", rs -> porId.get(rs.getInt(1)).getComentarios().add(leerComentario(rs)), aprobadas);
+                 WHERE n.aprobado = ? ORDER BY c.id""", rs -> {
+            Noticia n = porId.get(rs.getInt(1)); // las de otros campeonatos no estan en la lista
+            if (n != null) {
+                n.getComentarios().add(leerComentario(rs));
+            }
+            return n;
+        }, aprobadas);
         return lista;
     }
 
     @Override
     public Optional<Noticia> buscar(int id) throws PersistenciaException {
         return Optional.ofNullable(conexion.ejecutar(con -> {
-            Noticia n = Sql.uno(con, COLUMNAS + "WHERE id = ?", PostgresRepositorioNoticias::leer, id);
+            Noticia n = Sql.uno(con, COLUMNAS + " WHERE n.id = ?", PostgresRepositorioNoticias::leer, id);
             if (n != null) {
                 n.getComentarios().addAll(Sql.listar(con, "SELECT noticia_id, id, autor, texto, fecha FROM comentarios WHERE noticia_id = ? ORDER BY id",
                         PostgresRepositorioNoticias::leerComentario, id));
@@ -67,9 +85,16 @@ public class PostgresRepositorioNoticias implements RepositorioNoticias {
     @Override
     public void insertar(Noticia n) throws PersistenciaException {
         conexion.ejecutar(con -> {
+            // Primero el id del torneo en curso de su campeonato (SELECT), y luego el INSERT.
+            Integer torneo = n.getCampeonato() == null ? null
+                    : Sql.uno(con, "SELECT id FROM torneos WHERE codigo = ? AND situacion = 'ACTUAL'", rs -> rs.getInt(1), n.getCampeonato());
+            if (n.getCampeonato() != null && torneo == null) {
+                throw new PersistenciaException("El campeonato de la noticia ya no está en curso.", null);
+            }
             n.setId(Sql.insertar(con, """
-                    INSERT INTO noticias (titulo, cuerpo, autor, rol_autor, fecha, imagen_ruta, aprobado) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id""",
-                    n.getTitulo(), n.getCuerpo(), n.getAutor(), n.getRolAutor() == Rol.ORGANIZADOR ? "ADMIN" : "VISITANTE", // nombres de la columna
+                    INSERT INTO noticias (torneo_id, titulo, cuerpo, autor, rol_autor, fecha, imagen_ruta, aprobado)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id""",
+                    torneo, n.getTitulo(), n.getCuerpo(), n.getAutor(), n.getRolAutor() == Rol.ORGANIZADOR ? "ADMIN" : "VISITANTE", // nombres de la columna
                     momento(n.getFecha()), Sql.nulo(n.getImagenRuta()), n.isAprobado()));
             return null;
         });
@@ -113,6 +138,7 @@ public class PostgresRepositorioNoticias implements RepositorioNoticias {
                 Rol.desdeGuardado(rs.getString("rol_autor")), texto(rs.getTimestamp("fecha")));
         n.setImagenRuta(Sql.texto(rs.getString("imagen_ruta")));
         n.setAprobado(rs.getBoolean("aprobado"));
+        n.setCampeonato(rs.getString("campeonato"));
         return n;
     }
 

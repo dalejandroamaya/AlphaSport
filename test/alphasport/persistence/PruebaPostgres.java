@@ -74,6 +74,7 @@ public final class PruebaPostgres {
         probar("Ascensos y descensos al pasar de temporada", PruebaPostgres::probarAscensos);
         probar("Migraciones del esquema (database/migraciones)", PruebaPostgres::probarMigraciones);
         probar("Cuentas: registro e inicio de sesión en la tabla usuarios", PruebaPostgres::probarCuentas);
+        probar("Varios campeonatos en curso: dueños, sin mezclar datos y terminar uno", PruebaPostgres::probarVariosCampeonatos);
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
         System.exit(fallos == 0 ? 0 : 1);
     }
@@ -427,7 +428,7 @@ public final class PruebaPostgres {
         }
         // Tabla de posiciones: las mismas cifras que calcula el programa.
         Map<Integer, ConsultasDAO.Posicion> enSql = new java.util.HashMap<>();
-        consultas.tablaPosiciones(0).forEach(x -> enSql.put(x.equipo(), x));
+        consultas.tablaPosiciones(c.getCodigo(), 0).forEach(x -> enSql.put(x.equipo(), x));
         boolean tabla = enSql.size() == 6 && s.getMotor().tablaDeFase(0).stream().allMatch(f -> {
             ConsultasDAO.Posicion x = enSql.get(f.getIdEquipo());
             return x.pts() == f.getPuntos() && x.pj() == f.getJugados() && x.pg() == f.getGanados() && x.pe() == f.getEmpatados()
@@ -436,23 +437,23 @@ public final class PruebaPostgres {
         // Ultima alineacion y notas.
         Partido p = c.getPartidos().get(0);
         jugarCompleto(s, p);
-        List<ConsultasDAO.Titular> ultima = consultas.ultimaAlineacion(p.getIdLocal());
+        List<ConsultasDAO.Titular> ultima = consultas.ultimaAlineacion(c.getCodigo(), p.getIdLocal());
         boolean alineacion = ultima.stream().map(ConsultasDAO.Titular::jugador).toList().equals(p.getTitularesLocal())
                 && ultima.get(0).formacion().equals("4-4-2") && ultima.get(0).partido() == p.getId()
-                && consultas.ultimaAlineacion(c.getPartidos().get(1).getIdLocal()).stream().noneMatch(t -> t.partido() != p.getId());
+                && consultas.ultimaAlineacion(c.getCodigo(), c.getPartidos().get(1).getIdLocal()).stream().noneMatch(t -> t.partido() != p.getId());
         int portero = c.buscarEquipo(p.getIdLocal()).getJugadores().get(0).getId();
         s.votacion().votarJugador(p.getId(), portero, 10, "dispositivo-A1");
         CalificacionesPartido notas = s.votacion().calificaciones(p.getId(), null);
         List<CalificacionesPartido.Calificacion> todas = new ArrayList<>(notas.local());
         todas.addAll(notas.visitante());
-        List<ConsultasDAO.Nota> guardadas = consultas.notas(p.getId());
+        List<ConsultasDAO.Nota> guardadas = consultas.notas(c.getCodigo(), p.getId());
         boolean hibrida = guardadas.size() == todas.size() && todas.stream().allMatch(n -> guardadas.stream().anyMatch(g -> g.jugador() == n.idJugador()
                 && g.sistema() == n.notaSistema() && g.notaFinal() == n.notaFinal() && g.votos() == n.votos() && g.mvp() == n.mvp()));
         // Votaciones activas: las mismas que ve el visitante.
-        List<Integer> activas = consultas.votacionesActivas().stream().map(ConsultasDAO.VotacionActiva::partido).toList();
+        List<Integer> activas = consultas.votacionesActivas(c.getCodigo()).stream().map(ConsultasDAO.VotacionActiva::partido).toList();
         boolean votaciones = activas.equals(s.votacion().votacionesAbiertas().stream().map(Partido::getId).toList()) && activas.equals(List.of(p.getId()));
         s.votacion().cerrarVotacion(p.getId());
-        votaciones &= consultas.votacionesActivas().isEmpty() && s.votacion().votacionesAbiertas().isEmpty();
+        votaciones &= consultas.votacionesActivas(c.getCodigo()).isEmpty() && s.votacion().votacionesAbiertas().isEmpty();
         if (!(tabla && alineacion && hibrida && votaciones)) {
             System.out.println("  tabla=" + tabla + " alineacion=" + alineacion + " hibrida=" + hibrida + " votaciones=" + votaciones + " " + activas);
         }
@@ -661,7 +662,7 @@ public final class PruebaPostgres {
         boolean sinNotas = otro.buscarPartido(p.getId()).getGolesVisitante() == 3 && !notas.disponible() && notas.motivoSinCalificaciones().contains("W.O.")
                 && contar(db, "SELECT COUNT(*) FROM calificaciones_partido") == 0;
         boolean sinVotos = falla(ReglaNegocioException.class, () -> s.votacion().votarJugador(p.getId(), xi.get(0), 8, "dispositivo-A1"))
-                && s.votacion().votacionesAbiertas().isEmpty() && new ConsultasDAO(db).votacionesActivas().isEmpty();
+                && s.votacion().votacionesAbiertas().isEmpty() && new ConsultasDAO(db).votacionesActivas(s.getCampeonato().getCodigo()).isEmpty();
         // Lo decide el campo, no el texto: cambiar la observacion de un W.O. no lo convierte en partido jugado...
         Partido reclamo = copia(p);
         reclamo.setObservaciones("Reclamo en estudio");
@@ -680,7 +681,7 @@ public final class PruebaPostgres {
         conTexto.setObservaciones("W.O. solicitado, pero el partido se jugó");
         s.partidos().guardarPartido(otroPartido.getId(), conTexto, false);
         porCampo &= s.votacion().calificaciones(otroPartido.getId(), null).disponible() && s.votacion().votacionesAbiertas().contains(otroPartido)
-                && new ConsultasDAO(db).votacionesActivas().size() == 2;
+                && new ConsultasDAO(db).votacionesActivas(s.getCampeonato().getCodigo()).size() == 2;
         s.votacion().cerrarVotacion(otroPartido.getId());
         // Se borra el W.O. y el partido se juega: ahora si tiene notas y votacion.
         Partido borrado = copia(p);
@@ -692,7 +693,7 @@ public final class PruebaPostgres {
         jugado.setGolesLocal(1);
         s.partidos().guardarPartido(p.getId(), jugado, false);
         boolean normal = s.votacion().calificaciones(p.getId(), null).disponible() && s.votacion().votacionesAbiertas().equals(List.of(p))
-                && new ConsultasDAO(db).votacionesActivas().size() == 1;
+                && new ConsultasDAO(db).votacionesActivas(s.getCampeonato().getCodigo()).size() == 1;
         // Retirar un equipo da por W.O. sus partidos pendientes.
         Partido pendiente = s.getCampeonato().getPartidos().stream().filter(x -> !x.isJugado()).findFirst().orElseThrow();
         s.equipos().quitarEquipo(pendiente.getIdLocal());
@@ -738,6 +739,11 @@ public final class PruebaPostgres {
         boolean cuentas = contar(db, "SELECT COUNT(*) FROM usuarios") == 2
                 && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'admin' AND rol = 'ORGANIZADOR'") == 1
                 && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'ana' AND email = 'ana@correo.com' AND rol = 'AFICIONADO' AND password_hash = 'y'") == 1;
+        // 006: varios en curso, cada torneo con el Organizador mas antiguo como dueno, y la noticia en el campeonato en curso.
+        cuentas &= contar(db, "SELECT COUNT(*) FROM torneos WHERE propietario_id = (SELECT id FROM usuarios WHERE username = 'admin')")
+                == contar(db, "SELECT COUNT(*) FROM torneos") && contar(db, "SELECT COUNT(*) FROM torneos") == 2
+                && contar(db, "SELECT COUNT(*) FROM noticias n JOIN torneos t ON t.id = n.torneo_id WHERE t.situacion = 'ACTUAL'") == 1
+                && contar(db, "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'torneos_un_actual'") == 0;
         boolean igual = cuentas && foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 2; // el campeonato y su copia
         // Una persona por jugador, compartida por el campeonato en curso y su copia del historial.
         int jugadores = contar(db, "SELECT COUNT(*) FROM jugadores j JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ACTUAL'");
@@ -775,6 +781,7 @@ public final class PruebaPostgres {
         auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro("luis", "Luis", "luis@x.co", "futbol2026", "futbol2026", "AFICIONADO"));
         // La fila: usuario y correo en minusculas, rol nuevo y la clave solo como hash.
         boolean fila = ana.getNombre().equals("ana.torres") && contar(db, "SELECT COUNT(*) FROM usuarios") == 2
+                && ana.getId() == contar(db, "SELECT id FROM usuarios WHERE username = 'ana.torres'") // la sesion lleva el id de la cuenta
                 && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'ana.torres' AND email = 'ana@correo.com' AND rol = 'ORGANIZADOR'"
                         + " AND nombre = 'Ana Torres' AND password_hash LIKE 'pbkdf2_sha256$%' AND password_hash NOT LIKE '%clave1234%'") == 1
                 && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'luis' AND rol = 'AFICIONADO'") == 1;
@@ -813,6 +820,117 @@ public final class PruebaPostgres {
         return fila && lectura && repetidos && unico && login && rolRaro && contratos;
     }
 
+    /**
+     * Varios campeonatos en curso en la base: cada torneo con su dueno, sus equipos, partidos, votos y noticias
+     * separados; otro programa ve lo mismo; un Organizador no toca lo de otro; terminar uno no cambia los demas;
+     * y un campeonato sin dueno se toma una sola vez.
+     */
+    private static boolean probarVariosCampeonatos(ConexionDB db) throws Exception {
+        alphasport.service.ClavesPbkdf2 rapido = new alphasport.service.ClavesPbkdf2(1000);
+        alphasport.service.AutenticacionService auth = new alphasport.service.AutenticacionService(
+                new alphasport.persistence.postgres.PostgresRepositorioUsuarios(db), rapido);
+        java.util.function.BiFunction<String, String, alphasport.model.Usuario> registrar = (usuario, tipo) -> {
+            try {
+                return auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro(usuario, usuario.toUpperCase(),
+                        usuario + "@x.co", "clave1234", "clave1234", tipo));
+            } catch (PersistenciaException e) {
+                throw new IllegalStateException(e);
+            }
+        };
+        alphasport.model.Usuario ana = registrar.apply("ana", "ORGANIZADOR"), beto = registrar.apply("beto", "ORGANIZADOR"),
+                luis = registrar.apply("luis", "AFICIONADO");
+        java.util.function.Supplier<alphasport.service.GestorCampeonatos> programa = () -> {
+            PostgresRepositorioHistorial historial = new PostgresRepositorioHistorial(db);
+            return new alphasport.service.GestorCampeonatos(new alphasport.persistence.postgres.PostgresRepositorioCampeonatos(db), historial,
+                    r -> new CampeonatoService(r, historial, db));
+        };
+        alphasport.service.GestorCampeonatos gestor = programa.get();
+        ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+        cfg.setSorteoAleatorio(false);
+        CampeonatoService ligaAna = gestor.crear(ana, "Liga Ana", TipoFormato.LIGA, cfg, null).servicio();
+        CampeonatoService copaAna = gestor.crear(ana, "Copa Ana", TipoFormato.ELIMINACION_DIRECTA, cfg, null).servicio();
+        CampeonatoService ligaBeto = gestor.crear(beto, "Liga Beto", TipoFormato.LIGA, cfg, null).servicio();
+        ligaAna.equipos().cargarDatosPrueba(11, 4, true);
+        copaAna.equipos().cargarDatosPrueba(22, 2, true);
+        ligaBeto.equipos().cargarDatosPrueba(33, 4, true);
+        String a = ligaAna.getCampeonato().getCodigo(), c = copaAna.getCampeonato().getCodigo(), b = ligaBeto.getCampeonato().getCodigo();
+        // Tres en curso, cada uno con su dueno en la fila.
+        java.util.function.ToIntFunction<String> duenoDe = codigo -> {
+            try {
+                return contar(db, "SELECT COALESCE(propietario_id, 0) FROM torneos WHERE situacion = 'ACTUAL' AND codigo = '" + codigo + "'");
+            } catch (PersistenciaException e) {
+                throw new IllegalStateException(e);
+            }
+        };
+        boolean filas = contar(db, "SELECT COUNT(*) FROM torneos WHERE situacion = 'ACTUAL'") == 3
+                && duenoDe.applyAsInt(a) == ana.getId() && duenoDe.applyAsInt(c) == ana.getId() && duenoDe.applyAsInt(b) == beto.getId();
+        // Otro programa (otro gestor) ve lo mismo, y cada Organizador solo lo suyo.
+        alphasport.service.GestorCampeonatos otro = programa.get();
+        java.util.function.Function<alphasport.model.Usuario, List<String>> nombres = u -> otro.activos(u).stream()
+                .map(alphasport.service.GestorCampeonatos.Resumen::nombre).toList();
+        boolean listado = nombres.apply(ana).equals(List.of("Liga Ana", "Copa Ana")) && nombres.apply(beto).equals(List.of("Liga Beto"))
+                && nombres.apply(luis).equals(List.of("Liga Ana", "Copa Ana", "Liga Beto"))
+                && otro.activos(luis).stream().filter(r -> r.codigo().equals(b)).findFirst().orElseThrow().organizador().equals("BETO")
+                && otro.paraLeer(a, luis).getCampeonato().getEquipos().size() == 4 && otro.paraLeer(c, luis).getCampeonato().getEquipos().size() == 2;
+        // Guardar uno no cambia la version (ni los datos) de los otros.
+        int versionBeto = contar(db, "SELECT version FROM torneos WHERE codigo = '" + b + "' AND situacion = 'ACTUAL'");
+        ligaAna.avanzar();
+        Partido jugado = ligaAna.getCampeonato().getPartidos().get(0);
+        jugarCompleto(ligaAna, jugado);
+        int titular = ligaAna.getCampeonato().buscarPartido(jugado.getId()).getTitularesLocal().get(0);
+        ligaAna.votacion().votarJugador(jugado.getId(), titular, 8, "dispositivo-P1");
+        boolean separados = contar(db, "SELECT version FROM torneos WHERE codigo = '" + b + "' AND situacion = 'ACTUAL'") == versionBeto
+                && contar(db, "SELECT COUNT(*) FROM partidos p JOIN torneos t ON t.id = p.torneo_id WHERE t.codigo = '" + b + "'") == 0
+                && contar(db, "SELECT COUNT(*) FROM votos_publico v JOIN partidos p ON p.id = v.partido_id JOIN torneos t ON t.id = p.torneo_id"
+                        + " WHERE t.codigo = '" + a + "'") > 0
+                && contar(db, "SELECT COUNT(*) FROM equipos e JOIN torneos t ON t.id = e.torneo_id WHERE t.codigo = '" + b + "'") == 4
+                && otro.paraLeer(a, luis).getCampeonato().getPartidos().stream().filter(Partido::isJugado).count() == 1
+                && otro.paraLeer(b, luis).getCampeonato().getPartidos().isEmpty();
+        // Permisos: Ana no gestiona ni ve lo de Beto; Luis lee todo y no cambia nada.
+        boolean permisos = codigoDe(() -> gestor.paraGestionar(b, ana)).equals("PERMISO") && codigoDe(() -> gestor.paraLeer(b, ana)).equals("PERMISO")
+                && codigoDe(() -> gestor.paraGestionar(a, luis)).equals("PERMISO") && codigoDe(() -> gestor.terminar(b, ana)).equals("PERMISO")
+                && gestor.paraLeer(b, luis) != null && codigoDe(() -> gestor.paraLeer("nada0000", luis)).equals("CAMPEONATO");
+        // Noticias por campeonato (noticias.torneo_id).
+        alphasport.service.NoticiasService noticias = new alphasport.service.NoticiasService(new PostgresRepositorioNoticias(db));
+        alphasport.model.Noticia propuesta = noticias.de(a).proponer("Para la liga de Ana", "Cuerpo de la noticia", "Luis", null);
+        boolean deAna = noticias.de(a).pendientes().size() == 1 && noticias.de(b).pendientes().isEmpty()
+                && contar(db, "SELECT COUNT(*) FROM noticias n JOIN torneos t ON t.id = n.torneo_id WHERE t.codigo = '" + a + "'") == 1
+                && codigoDe(() -> noticias.de(b).aprobar(propuesta.getId())).equals("REGLA");
+        // Terminar la liga de Ana: pasa al historial con sus ids; la copa de Ana y la liga de Beto siguen igual.
+        int idLigaAna = contar(db, "SELECT id FROM torneos WHERE codigo = '" + a + "' AND situacion = 'ACTUAL'");
+        gestor.terminar(a, ana);
+        boolean terminar = contar(db, "SELECT COUNT(*) FROM torneos WHERE situacion = 'ACTUAL'") == 2
+                && contar(db, "SELECT COUNT(*) FROM torneos WHERE id = " + idLigaAna + " AND situacion = 'ARCHIVADO'") == 1
+                && contar(db, "SELECT version FROM torneos WHERE codigo = '" + b + "' AND situacion = 'ACTUAL'") == versionBeto
+                && programa.get().historial(ana).stream().map(Campeonato::getNombreCampeonato).toList().equals(List.of("Liga Ana"))
+                && programa.get().historial(beto).isEmpty() && programa.get().activos(luis).size() == 2;
+        // Sin dueno (por ejemplo, el de seed.sql): se toma una sola vez.
+        sql(db, "UPDATE torneos SET propietario_id = NULL WHERE codigo = '" + c + "'");
+        alphasport.service.GestorCampeonatos tercero = programa.get();
+        boolean tomar = tercero.sinOrganizador(beto).size() == 1 && tercero.activos(ana).isEmpty()
+                && codigoDe(() -> tercero.paraGestionar(c, ana)).equals("PERMISO");
+        tercero.tomar(c, beto);
+        tomar &= codigoDe(() -> programa.get().tomar(c, ana)).equals("PERMISO") && duenoDe.applyAsInt(c) == beto.getId()
+                && programa.get().paraGestionar(c, beto) != null;
+        if (!(filas && listado && separados && permisos && deAna && terminar && tomar)) {
+            System.out.println("  filas=" + filas + " listado=" + listado + " separados=" + separados + " permisos=" + permisos + " deAna=" + deAna
+                    + " terminar=" + terminar + " tomar=" + tomar);
+        }
+        return filas && listado && separados && permisos && deAna && terminar && tomar;
+    }
+
+    /** Codigo de la ReglaNegocioException que lanza la accion (null si no lanza ninguna). */
+    private static String codigoDe(Accion accion) {
+        try {
+            accion.hacer();
+            return "NINGUNO";
+        } catch (alphasport.service.ReglaNegocioException e) {
+            return e.getCodigo();
+        } catch (Exception e) {
+            return "otra excepcion: " + e;
+        }
+    }
+
     private static List<Path> migraciones() throws Exception {
         try (var archivos = Files.list(Path.of("database/migraciones"))) {
             return archivos.filter(f -> f.toString().endsWith(".sql")).sorted().toList();
@@ -821,6 +939,11 @@ public final class PruebaPostgres {
 
     /** Deja la base como la creaba la primera version de schema.sql. */
     private static void volverAVersionCero(ConexionDB db) throws Exception {
+        // Como antes de la 006: un solo campeonato en curso, torneos sin dueno y noticias sin campeonato.
+        sql(db, "ALTER TABLE noticias DROP COLUMN torneo_id");
+        sql(db, "ALTER TABLE torneos DROP COLUMN propietario_id");
+        sql(db, "CREATE UNIQUE INDEX torneos_un_actual ON torneos (situacion) WHERE situacion = 'ACTUAL'");
+        sql(db, "INSERT INTO noticias (titulo, cuerpo, autor, rol_autor, aprobado) VALUES ('Noticia anterior', 'Cuerpo', 'Ana', 'ADMIN', TRUE)");
         // usuarios como antes de la 005: roles ADMIN y VISITANTE, y usuario o correo con mayusculas.
         sql(db, "ALTER TABLE usuarios DROP CONSTRAINT usuarios_minusculas");
         sql(db, "ALTER TABLE usuarios DROP CONSTRAINT usuarios_rol_check");

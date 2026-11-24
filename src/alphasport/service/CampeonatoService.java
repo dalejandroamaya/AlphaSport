@@ -134,6 +134,16 @@ public class CampeonatoService {
      */
     public String crear(String nombre, TipoFormato formato, ConfiguracionTorneo configuracion, boolean mismosEquipos)
             throws PersistenciaException {
+        return crear(nombre, formato, configuracion, mismosEquipos ? ctx.campeonato() : null);
+    }
+
+    /**
+     * Crea el campeonato de este servicio. Con {@code anterior} (puede ser el de otro servicio del mismo
+     * organizador) se copian sus equipos y, si es una liga terminada con las mismas divisiones, se aplican los
+     * ascensos y descensos. Devuelve el resumen de esos movimientos ("" si no hubo).
+     */
+    public String crear(String nombre, TipoFormato formato, ConfiguracionTorneo configuracion, Campeonato anterior)
+            throws PersistenciaException {
         if (nombre == null || nombre.isBlank()) {
             throw new ReglaNegocioException("Escriba el nombre del campeonato.");
         }
@@ -142,10 +152,10 @@ public class CampeonatoService {
         }
         Campeonato nuevo = new Campeonato(nombre.trim(), formato, configuracion);
         List<MovimientoDivision> movimientos = new ArrayList<>();
-        if (mismosEquipos && ctx.campeonato() != null) {
-            Campeonato anterior = ctx.campeonato();
+        if (anterior != null) {
             boolean mismaLiga = formato == TipoFormato.LIGA && configuracion.getDivisiones() == anterior.getConfiguracion().getDivisiones();
-            List<MovimientoDivision> calculados = mismaLiga && conAscensos(anterior) && anterior.isTerminado() ? movimientos() : List.of();
+            List<MovimientoDivision> calculados = mismaLiga && conAscensos(anterior) && anterior.isTerminado()
+                    ? movimientos(anterior, new MotorCampeonato(anterior)) : List.of();
             nuevo.importarEquipos(anterior.getEquipos());
             // importarEquipos da ids nuevos: el movimiento se pasa al equipo del mismo nombre.
             for (MovimientoDivision m : calculados) {
@@ -172,6 +182,19 @@ public class CampeonatoService {
         ctx.exigirCampeonato();
         ctx.repositorio().eliminar();
         ctx.usar(null);
+    }
+
+    /**
+     * Termina el campeonato: pasa al historial tal como esta y deja de estar en curso. Los demas campeonatos no
+     * se tocan. Exige que ya tenga partidos jugados.
+     */
+    public void terminar() throws PersistenciaException {
+        ctx.terminar();
+    }
+
+    /** Id del Organizador dueno de este campeonato (0 = sin dueno). */
+    public int propietario() {
+        return ctx.propietario();
     }
 
     /**
@@ -209,7 +232,7 @@ public class CampeonatoService {
             if (!ctx.campeonato().isTerminado()) {
                 throw new ReglaNegocioException("Termine la temporada (hasta tener campeón) para saber quién asciende y quién desciende.");
             }
-            movimientos = movimientos();
+            movimientos = movimientos(ctx.campeonato(), ctx.motor());
         }
         List<MovimientoDivision> aplicar = movimientos;
         return ctx.enUnaTransaccion(() -> {
@@ -230,22 +253,22 @@ public class CampeonatoService {
      * Ascensos y descensos de la liga terminada: los «ascensos» ultimos de cada division bajan y los primeros de la
      * division de abajo suben. Nunca se mueve a todos: cada division conserva al menos un equipo.
      */
-    private List<MovimientoDivision> movimientos() {
+    private static List<MovimientoDivision> movimientos(Campeonato c, MotorCampeonato motor) {
         int indiceFase = 0;
-        int divisiones = ctx.campeonato().getFases().get(indiceFase).getGrupos().size();
-        String temporada = ctx.campeonato().getNombreCampeonato();
+        int divisiones = c.getFases().get(indiceFase).getGrupos().size();
+        String temporada = c.getNombreCampeonato();
         List<MovimientoDivision> lista = new ArrayList<>();
         for (int d = 0; d + 1 < divisiones; d++) {
-            List<Integer> arriba = MotorCampeonato.ids(ctx.motor().tablaDeGrupo(indiceFase, d));
-            List<Integer> abajo = MotorCampeonato.ids(ctx.motor().tablaDeGrupo(indiceFase, d + 1));
-            int k = Math.min(ctx.campeonato().getConfiguracion().getAscensos(), Math.min(arriba.size(), abajo.size()) - 1);
+            List<Integer> arriba = MotorCampeonato.ids(motor.tablaDeGrupo(indiceFase, d));
+            List<Integer> abajo = MotorCampeonato.ids(motor.tablaDeGrupo(indiceFase, d + 1));
+            int k = Math.min(c.getConfiguracion().getAscensos(), Math.min(arriba.size(), abajo.size()) - 1);
             for (int i = 0; i < Math.max(0, k); i++) {
                 int sube = abajo.get(i);
-                lista.add(new MovimientoDivision(sube, ctx.campeonato().nombreDe(sube), d + 1, d, i + 1, temporada));
+                lista.add(new MovimientoDivision(sube, c.nombreDe(sube), d + 1, d, i + 1, temporada));
             }
             for (int i = arriba.size() - Math.max(0, k); i < arriba.size(); i++) {
                 int baja = arriba.get(i);
-                lista.add(new MovimientoDivision(baja, ctx.campeonato().nombreDe(baja), d, d + 1, i + 1, temporada));
+                lista.add(new MovimientoDivision(baja, c.nombreDe(baja), d, d + 1, i + 1, temporada));
             }
         }
         return lista;

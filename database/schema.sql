@@ -11,7 +11,7 @@ CREATE TABLE esquema_version (
     version      INTEGER PRIMARY KEY,
     aplicada_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO esquema_version (version) VALUES (5);
+INSERT INTO esquema_version (version) VALUES (6);
 
 -- ---------------------------------------------------------------- usuarios
 -- Cuentas creadas con «Registrarse»: usuario y correo en minusculas (unicos sin importar mayusculas).
@@ -27,12 +27,13 @@ CREATE TABLE usuarios (
 );
 
 -- ---------------------------------------------------------------- torneos
--- ACTUAL = campeonato en curso (solo uno); ARCHIVADO = copia completa guardada en el historial.
+-- ACTUAL = campeonato en curso (puede haber varios, cada uno con su dueno); ARCHIVADO = copia completa guardada en el historial.
 -- «version» sube con cada guardado: asi el escritorio y la web notan los cambios del otro.
 CREATE TABLE torneos (
     id                         SERIAL PRIMARY KEY,
     codigo                     VARCHAR(40)  NOT NULL,
     situacion                  VARCHAR(10)  NOT NULL DEFAULT 'ACTUAL' CHECK (situacion IN ('ACTUAL', 'ARCHIVADO')),
+    propietario_id             INTEGER      REFERENCES usuarios (id) ON DELETE SET NULL,  -- el Organizador que lo creo (NULL = sin dueno)
     nombre                     VARCHAR(200) NOT NULL,
     formato                    VARCHAR(30)  NOT NULL CHECK (formato IN ('LIGA', 'ELIMINACION_DIRECTA',
                                    'GRUPOS_Y_ELIMINATORIA', 'TORNEO_CORTO', 'SUIZO', 'DOBLE_ELIMINACION')),
@@ -67,8 +68,7 @@ CREATE TABLE torneos (
     actualizado_en             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (codigo, situacion)
 );
--- Solo puede haber un campeonato en curso.
-CREATE UNIQUE INDEX torneos_un_actual ON torneos (situacion) WHERE situacion = 'ACTUAL';
+CREATE INDEX torneos_propietario ON torneos (propietario_id);
 
 -- Criterios de desempate del torneo, en orden.
 CREATE TABLE torneo_criterios (
@@ -322,8 +322,10 @@ CREATE INDEX calificaciones_jugador ON calificaciones_partido (jugador_id);
 CREATE UNIQUE INDEX calificaciones_un_mvp ON calificaciones_partido (partido_id) WHERE es_mvp;
 
 -- ---------------------------------------------------------------- noticias
+-- Cada noticia es de un campeonato (torneo_id); las de antes de los varios campeonatos pueden no tenerlo.
 CREATE TABLE noticias (
     id           SERIAL PRIMARY KEY,
+    torneo_id    INTEGER      REFERENCES torneos (id) ON DELETE CASCADE,
     titulo       VARCHAR(120) NOT NULL,
     cuerpo       VARCHAR(4000) NOT NULL,
     autor        VARCHAR(80)  NOT NULL,
@@ -334,6 +336,7 @@ CREATE TABLE noticias (
     aprobado     BOOLEAN      NOT NULL DEFAULT FALSE
 );
 CREATE INDEX noticias_aprobado_fecha ON noticias (aprobado, fecha DESC, id DESC);
+CREATE INDEX noticias_torneo ON noticias (torneo_id);
 CREATE INDEX noticias_imagen ON noticias (imagen_ruta) WHERE imagen_ruta IS NOT NULL;
 
 CREATE TABLE comentarios (

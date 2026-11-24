@@ -65,6 +65,7 @@ public class SimulacionFormatos {
         probarServidorWeb();
         probarClaves();
         probarRegistro();
+        probarVariosCampeonatos();
         probarOrdenPorLinea();
         probarDocumentoUnico();
         probarCalificaciones();
@@ -768,6 +769,7 @@ public class SimulacionFormatos {
             alphasport.model.Usuario u = auth.registrar(solicitud.apply("ORGANIZADOR", ana));
             alphasport.model.CuentaUsuario guardada = cuentas.buscar("ANA.TORRES").orElseThrow();
             boolean valido = u.getNombre().equals("ana.torres") && u.getRol() == alphasport.model.Rol.ORGANIZADOR && u.puedeEditar()
+                    && u.getId() > 0 && u.getId() == cuentas.buscar("ana.torres").orElseThrow().id() // su id, para ser duena de sus campeonatos
                     && guardada.correo().equals("ana@correo.com") && guardada.nombre().equals("Ana Torres")
                     && !guardada.claveHash().contains("clave1234") && rapido.coincide("clave1234", guardada.claveHash())
                     && !guardada.toString().contains(guardada.claveHash()) && !solicitud.apply("AFICIONADO", ana).toString().contains("clave1234");
@@ -837,6 +839,171 @@ public class SimulacionFormatos {
         if (!correcto) {
             fallos++;
         }
+    }
+
+    /**
+     * Varios campeonatos en curso a la vez, por la API como el escritorio y la web: cada Organizador ve y gestiona
+     * solo los suyos, el Aficionado ve todos, y equipos, partidos, tabla, votos y noticias no se mezclan.
+     */
+    private static void probarVariosCampeonatos() {
+        boolean correcto;
+        try {
+            ClavesPbkdf2 rapido = new ClavesPbkdf2(1000);
+            alphasport.persistence.RepositorioUsuariosEnMemoria cuentas = new alphasport.persistence.RepositorioUsuariosEnMemoria(List.of(
+                    new alphasport.model.CuentaUsuario("ana", "Ana", alphasport.model.Rol.ORGANIZADOR, rapido.hash("clave-ana1")),
+                    new alphasport.model.CuentaUsuario("beto", "Beto", alphasport.model.Rol.ORGANIZADOR, rapido.hash("clave-beto1")),
+                    new alphasport.model.CuentaUsuario("luis", "Luis", alphasport.model.Rol.AFICIONADO, rapido.hash("clave-luis1")),
+                    new alphasport.model.CuentaUsuario("maria", "María", alphasport.model.Rol.AFICIONADO, rapido.hash("clave-maria1"))));
+            alphasport.persistence.RepositorioCampeonatosEnMemoria repos = new alphasport.persistence.RepositorioCampeonatosEnMemoria(
+                    id -> id == 1 ? "Ana" : id == 2 ? "Beto" : null);
+            alphasport.persistence.RepositorioHistorial historial = new alphasport.persistence.ArchivoRepositorioHistorial(
+                    java.nio.file.Files.createTempDirectory("alphasport-varios"));
+            GestorCampeonatos gestor = new GestorCampeonatos(repos, historial, r -> new CampeonatoService(r, historial));
+            alphasport.ui.ApiControlador base = new alphasport.ui.ApiControlador(gestor, new SesionService(new AutenticacionService(cuentas, rapido)),
+                    new NoticiasService(new alphasport.persistence.RepositorioNoticiasEnMemoria()),
+                    new FotosService(new alphasport.persistence.RepositorioFotosEnMemoria()));
+            java.util.function.BiFunction<String, String, alphasport.ui.ApiControlador> entrar = (usuario, clave) -> {
+                alphasport.ui.ApiControlador api = base.cliente(null);
+                try {
+                    api.ejecutar("login", java.util.Map.of("usuario", usuario, "clave", clave));
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+                return api;
+            };
+            alphasport.ui.ApiControlador ana = entrar.apply("ana", "clave-ana1"), beto = entrar.apply("beto", "clave-beto1"),
+                    luis = entrar.apply("luis", "clave-luis1");
+            // Sin campeonatos: no hay nada que elegir.
+            boolean vacio = Boolean.FALSE.equals(ana.consultar("estado").get("hay")) && Boolean.FALSE.equals(ana.consultar("estado").get("elegir"))
+                    && "CAMPEONATO".equals(codigoDe(() -> luis.ejecutar("calificacion/votar", java.util.Map.of("partido", 1, "jugador", 1, "valor", 7,
+                            "dispositivo", "dispositivo-L1"))));
+            // Ana crea dos y Beto uno, cada uno con sus equipos (las rutas de equipos van al campeonato recien creado).
+            String ligaAna = crearPorApi(ana, "Liga Ana", TipoFormato.LIGA, "Ana FC", "Ana United", "Ana City", "Ana Real");
+            String copaAna = crearPorApi(ana, "Copa Ana", TipoFormato.ELIMINACION_DIRECTA, "Copa Uno", "Copa Dos");
+            String ligaBeto = crearPorApi(beto, "Liga Beto", TipoFormato.LIGA, "Beto FC", "Beto United", "Beto City", "Beto Real");
+            java.util.function.Function<alphasport.ui.ApiControlador, List<String>> nombres = api -> ((List<?>) api.consultar("campeonatos")
+                    .get("campeonatos")).stream().map(x -> String.valueOf(((java.util.Map<?, ?>) x).get("nombre"))).toList();
+            String organizadorDe = ((List<?>) luis.consultar("campeonatos").get("campeonatos")).stream().map(x -> (java.util.Map<?, ?>) x)
+                    .filter(x -> x.get("nombre").equals("Liga Beto")).map(x -> String.valueOf(x.get("organizador"))).findFirst().orElse("");
+            boolean listado = nombres.apply(ana).equals(List.of("Liga Ana", "Copa Ana")) && nombres.apply(beto).equals(List.of("Liga Beto"))
+                    && nombres.apply(luis).equals(List.of("Liga Ana", "Copa Ana", "Liga Beto")) && organizadorDe.equals("Beto");
+            // Equipos de cada uno, sin mezclarse.
+            java.util.function.Function<String, List<String>> equipos = codigo -> gestor.paraLeer(codigo, luis.getUsuarioActual()).getCampeonato()
+                    .getEquipos().stream().map(alphasport.model.Equipo::getNombreEquipo).toList();
+            boolean separados = equipos.apply(ligaAna).equals(List.of("Ana FC", "Ana United", "Ana City", "Ana Real"))
+                    && equipos.apply(copaAna).equals(List.of("Copa Uno", "Copa Dos"))
+                    && equipos.apply(ligaBeto).equals(List.of("Beto FC", "Beto United", "Beto City", "Beto Real"));
+            // Permisos en el servicio: Ana no ve ni toca lo de Beto, ni siquiera pidiendolo por la cabecera; Luis no cambia nada.
+            alphasport.ui.ApiControlador anaEnBeto = base.cliente(ana.getToken(), ligaBeto);
+            boolean permisos = "PERMISO".equals(codigoDe(() -> ana.ejecutar("campeonato/elegir", java.util.Map.of("codigo", ligaBeto))))
+                    && "PERMISO".equals(codigoDe(() -> anaEnBeto.ejecutar("equipo/rapido", java.util.Map.of("nombre", "Intruso"))))
+                    && "PERMISO".equals(codigoDe(() -> anaEnBeto.consultar("partido/1")))
+                    && "PERMISO".equals(codigoDe(() -> base.cliente(luis.getToken(), ligaAna).ejecutar("equipo/rapido", java.util.Map.of("nombre", "X"))))
+                    && "PERMISO".equals(codigoDe(() -> ana.ejecutar("campeonato/terminar", java.util.Map.of("codigo", ligaBeto))))
+                    && equipos.apply(ligaBeto).size() == 4 && equipos.apply(ligaAna).size() == 4
+                    && !"PERMISO".equals(codigoDe(() -> anaEnBeto.consultar("estado"))); // ver el estado no falla: vuelve a lo suyo
+            // Elegir: Luis elige la de Beto y la ve; Beto, con uno solo, lo tiene sin elegir; Maria, con tres, tiene que elegir.
+            luis.ejecutar("campeonato/elegir", java.util.Map.of("codigo", ligaBeto));
+            alphasport.ui.ApiControlador betoOtraVez = entrar.apply("beto", "clave-beto1"), maria = entrar.apply("maria", "clave-maria1");
+            java.util.function.Function<java.util.Map<String, Object>, String> nombreDe = estado ->
+                    String.valueOf(((java.util.Map<?, ?>) estado.get("campeonato")).get("nombre"));
+            boolean elegir = nombreDe.apply(luis.consultar("estado")).equals("Liga Beto") && nombreDe.apply(betoOtraVez.consultar("estado")).equals("Liga Beto")
+                    && Boolean.FALSE.equals(maria.consultar("estado").get("hay")) && Boolean.TRUE.equals(maria.consultar("estado").get("elegir"))
+                    && nombreDe.apply(base.cliente(maria.getToken(), copaAna).consultar("estado")).equals("Copa Ana")
+                    && "CAMPEONATO".equals(codigoDe(() -> maria.consultar("partido/1")));
+            // Partidos, tabla y votos: se juega en la liga de Ana y la de Beto no cambia.
+            for (String codigo : List.of(ligaAna, ligaBeto)) {
+                CampeonatoService s = gestor.paraGestionar(codigo, (codigo.equals(ligaAna) ? ana : beto).getUsuarioActual());
+                for (alphasport.model.Equipo e : s.getCampeonato().getEquipos()) {
+                    List<alphasport.model.Jugador> plantilla = new ArrayList<>();
+                    for (int dorsal = 1; dorsal <= 12; dorsal++) {
+                        plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, codigo + "-" + e.getId() + "-" + dorsal, dorsal,
+                                dorsal == 1 ? "Portero" : "Mediocampista central"));
+                    }
+                    s.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
+                }
+                s.avanzar();
+            }
+            CampeonatoService sAna = gestor.paraLeer(ligaAna, luis.getUsuarioActual()), sBeto = gestor.paraLeer(ligaBeto, luis.getUsuarioActual());
+            Partido p = sAna.getCampeonato().getPartidos().get(0);
+            List<alphasport.model.Jugador> loc = sAna.getCampeonato().buscarEquipo(p.getIdLocal()).getJugadores();
+            List<alphasport.model.Jugador> vis = sAna.getCampeonato().buscarEquipo(p.getIdVisitante()).getJugadores();
+            Partido datos = new Partido();
+            datos.copiarDatosDe(p);
+            datos.setEstado(EstadoPartido.JUGADO);
+            datos.setGolesLocal(1);
+            datos.setTitulares(new ArrayList<>(loc.subList(0, 11).stream().map(alphasport.model.Jugador::getId).toList()),
+                    new ArrayList<>(vis.subList(0, 11).stream().map(alphasport.model.Jugador::getId).toList()));
+            datos.setGoles(new ArrayList<>(List.of(new alphasport.model.Gol(p.getIdLocal(), 20, loc.get(8), false, null))));
+            gestor.paraGestionar(ligaAna, ana.getUsuarioActual()).partidos().guardarPartido(p.getId(), datos, false);
+            alphasport.ui.ApiControlador luisEnAna = base.cliente(luis.getToken(), ligaAna);
+            luisEnAna.ejecutar("calificacion/votar", java.util.Map.of("partido", p.getId(), "jugador", loc.get(8).getId(), "valor", 9,
+                    "dispositivo", "dispositivo-L1"));
+            boolean juego = sAna.getCampeonato().getPartidos().stream().filter(Partido::isJugado).count() == 1
+                    && sBeto.getCampeonato().getPartidos().stream().noneMatch(Partido::isJugado)
+                    && sAna.getCampeonato().buscarPartido(p.getId()).getVotos().size() == 1
+                    && sBeto.getCampeonato().getPartidos().stream().allMatch(x -> x.getVotos().isEmpty())
+                    && sAna.getMotor().tablaDeFase(0).stream().mapToInt(FilaTabla::getPuntos).sum() == 3
+                    && sBeto.getMotor().tablaDeFase(0).stream().mapToInt(FilaTabla::getPuntos).sum() == 0
+                    // El voto pedido sobre la liga de Beto con el id del partido de Ana no llega a la de Ana.
+                    && "REGLA".equals(codigoDe(() -> base.cliente(luis.getToken(), ligaBeto).ejecutar("calificacion/votar", java.util.Map.of(
+                            "partido", p.getId(), "jugador", loc.get(8).getId(), "valor", 9, "dispositivo", "dispositivo-L2"))))
+                    && sAna.getCampeonato().buscarPartido(p.getId()).getVotos().size() == 1;
+            // Noticias: cada campeonato tiene las suyas y solo su Organizador las modera.
+            base.cliente(luis.getToken(), ligaAna).ejecutar("noticia/proponer", java.util.Map.of("titulo", "Propuesta para Ana", "cuerpo", "Cuerpo de la propuesta"));
+            alphasport.ui.ApiControlador anaEnLiga = base.cliente(ana.getToken(), ligaAna);
+            java.util.function.Function<alphasport.ui.ApiControlador, Integer> pendientes = api -> ((List<?>) ((java.util.Map<?, ?>) api.consultar("noticias")
+                    .get("noticias")).get("pendientes")).size();
+            int idPropuesta = base.getNoticias().pendientes().get(0).getId();
+            boolean noticias = pendientes.apply(anaEnLiga) == 1 && pendientes.apply(betoOtraVez) == 0
+                    // Para Beto la noticia de Ana ni existe: en su campeonato no se ve.
+                    && "REGLA".equals(codigoDe(() -> betoOtraVez.ejecutar("noticia/aprobar", java.util.Map.of("id", idPropuesta))))
+                    && !base.getNoticias().pendientes().get(0).isAprobado();
+            anaEnLiga.ejecutar("noticia/aprobar", java.util.Map.of("id", idPropuesta));
+            noticias &= base.getNoticias().publicadas().get(0).getCampeonato().equals(ligaAna)
+                    && ((List<?>) ((java.util.Map<?, ?>) base.cliente(luis.getToken(), ligaBeto).consultar("noticias").get("noticias")).get("publicadas")).isEmpty();
+            // Terminar uno no afecta a los demas: pasa al historial de Ana y deja de estar en curso.
+            anaEnLiga.ejecutar("campeonato/terminar", java.util.Map.of());
+            boolean terminar = nombres.apply(ana).equals(List.of("Copa Ana")) && nombres.apply(luis).equals(List.of("Copa Ana", "Liga Beto"))
+                    && equipos.apply(ligaBeto).size() == 4 && equipos.apply(copaAna).size() == 2
+                    && gestor.historial(ana.getUsuarioActual()).stream().map(Campeonato::getNombreCampeonato).toList().equals(List.of("Liga Ana"))
+                    && gestor.historial(beto.getUsuarioActual()).isEmpty() && gestor.historial(luis.getUsuarioActual()).size() == 1
+                    && "CAMPEONATO".equals(codigoDe(() -> luisEnAna.ejecutar("calificacion/votar", java.util.Map.of("partido", p.getId(),
+                            "jugador", loc.get(9).getId(), "valor", 9, "dispositivo", "dispositivo-L3"))));
+            correcto = vacio && listado && separados && permisos && elegir && juego && noticias && terminar;
+            if (!correcto) {
+                System.out.println("  vacio=" + vacio + " listado=" + listado + " separados=" + separados + " permisos=" + permisos + " elegir=" + elegir
+                        + " juego=" + juego + " noticias=" + noticias + " terminar=" + terminar);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Varios campeonatos a la vez (dueños, elegir y sin mezclar datos): " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /** Crea un campeonato por la API (ruta «nuevo») con sus equipos y devuelve su codigo. */
+    private static String crearPorApi(alphasport.ui.ApiControlador api, String nombre, TipoFormato formato, String... equipos) throws Exception {
+        ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+        java.util.Map<String, Object> config = new java.util.HashMap<>();
+        config.put("puntosVictoria", cfg.getPuntosVictoria());
+        config.put("puntosEmpate", cfg.getPuntosEmpate());
+        config.put("tamanoGrupo", cfg.getTamanoGrupo());
+        config.put("clasificadosPorGrupo", cfg.getClasificadosPorGrupo());
+        config.put("clasificadosPlayoff", cfg.getClasificadosPlayoff());
+        config.put("tipoPlayoff", cfg.getTipoPlayoff());
+        config.put("rondasSuizo", cfg.getRondasSuizo());
+        config.put("directosSuizo", cfg.getDirectosSuizo());
+        config.put("repechajeSuizo", cfg.getRepechajeSuizo());
+        config.put("criterios", cfg.getCriterios().stream().map(Enum::name).toList());
+        java.util.Map<String, Object> r = api.ejecutar("nuevo", java.util.Map.of("nombre", nombre, "formato", formato.name(), "config", config));
+        for (String equipo : equipos) {
+            api.ejecutar("equipo/rapido", java.util.Map.of("nombre", equipo));
+        }
+        return String.valueOf(((java.util.Map<?, ?>) ((java.util.Map<?, ?>) r.get("estado")).get("campeonato")).get("codigo"));
     }
 
     /** Codigo de la ReglaNegocioException que lanza la accion (null si no lanza ninguna). */

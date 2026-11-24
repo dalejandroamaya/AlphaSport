@@ -36,10 +36,30 @@ public class NoticiasService {
 
     private final RepositorioNoticias repositorio;
     private final RepositorioImagenes imagenes;
+    /** Codigo del campeonato de estas noticias (null = todas, sin separar por campeonato). */
+    private final String campeonato;
 
     public NoticiasService(RepositorioNoticias repositorio, RepositorioImagenes imagenes) {
+        this(repositorio, imagenes, null);
+    }
+
+    private NoticiasService(RepositorioNoticias repositorio, RepositorioImagenes imagenes, String campeonato) {
         this.repositorio = repositorio;
         this.imagenes = imagenes;
+        this.campeonato = campeonato;
+    }
+
+    /**
+     * Las noticias de un campeonato: muestra las suyas y las generales, las nuevas quedan en el y solo se moderan
+     * las suyas. Cada campeonato tiene su propio feed.
+     */
+    public NoticiasService de(String codigoCampeonato) {
+        return new NoticiasService(repositorio, imagenes, codigoCampeonato);
+    }
+
+    /** Codigo del campeonato de estas noticias (null = todas). */
+    public String getCampeonato() {
+        return campeonato;
     }
 
     /** Con las fotos en memoria (pruebas). */
@@ -51,16 +71,33 @@ public class NoticiasService {
 
     /** Feed publico: solo las aprobadas, la mas reciente primero. */
     public List<Noticia> publicadas() {
-        return leer(repositorio::publicadas);
+        return leer(() -> repositorio.publicadas(campeonato));
     }
 
     /** Propuestas de visitantes que esperan moderacion (solo las ve el administrador). */
     public List<Noticia> pendientes() {
-        return leer(repositorio::pendientes);
+        return leer(() -> repositorio.pendientes(campeonato));
     }
 
+    /** La noticia, si se ve en este campeonato (suya o general); si es de otro, como si no existiera. */
     public Noticia buscar(int id) {
-        return leer(() -> repositorio.buscar(id)).orElseThrow(() -> new ReglaNegocioException("La noticia no existe (quizá ya fue eliminada)."));
+        return leer(() -> repositorio.buscar(id)).filter(n -> RepositorioNoticias.delCampeonato(n, campeonato))
+                .orElseThrow(() -> new ReglaNegocioException("La noticia no existe (quizá ya fue eliminada)."));
+    }
+
+    /** Para moderar: la noticia tiene que ser de este campeonato (las generales no se moderan desde un campeonato). */
+    private Noticia buscarParaModerar(int id) {
+        Noticia n = buscar(id);
+        if (campeonato != null && !campeonato.equals(n.getCampeonato())) {
+            throw new ReglaNegocioException("PERMISO", "Esa noticia no es de este campeonato: solo se moderan las del campeonato que gestiona.");
+        }
+        return n;
+    }
+
+    /** Una noticia nueva queda en el campeonato de este servicio. */
+    private Noticia enEsteCampeonato(Noticia n) {
+        n.setCampeonato(campeonato);
+        return n;
     }
 
     private interface Lectura<T> {
@@ -88,7 +125,7 @@ public class NoticiasService {
     /** El visitante propone una noticia: queda pendiente (aprobado = false) hasta que el administrador la apruebe. */
     public Noticia proponer(String titulo, String cuerpo, String autor, Imagen imagen) throws PersistenciaException {
         String nombre = limpiarNombre(autor, "Visitante");
-        Noticia n = new Noticia(0, validarTitulo(titulo), validarCuerpo(cuerpo), nombre, Rol.AFICIONADO, ahora());
+        Noticia n = enEsteCampeonato(new Noticia(0, validarTitulo(titulo), validarCuerpo(cuerpo), nombre, Rol.AFICIONADO, ahora()));
         if (imagen != null) {
             n.setImagenRuta(imagenes.guardar(imagen.datos(), imagen.extension()));
         }
@@ -125,9 +162,9 @@ public class NoticiasService {
         String t = validarTitulo(titulo), c = validarCuerpo(cuerpo);
         Noticia n;
         if (id == null) {
-            n = new Noticia(0, t, c, "Administración", Rol.ORGANIZADOR, ahora());
+            n = enEsteCampeonato(new Noticia(0, t, c, "Administración", Rol.ORGANIZADOR, ahora()));
         } else {
-            n = buscar(id);
+            n = buscarParaModerar(id);
             n.setTitulo(t);
             n.setCuerpo(c);
             n.setAprobado(true); // editar una propuesta pendiente tambien la publica
@@ -148,7 +185,7 @@ public class NoticiasService {
 
     /** Aprueba una propuesta: pasa al feed publico. */
     public Noticia aprobar(int id) throws PersistenciaException {
-        Noticia n = buscar(id);
+        Noticia n = buscarParaModerar(id);
         n.setAprobado(true);
         repositorio.actualizar(n);
         return n;
@@ -156,7 +193,7 @@ public class NoticiasService {
 
     /** Rechaza una propuesta o elimina una noticia publicada (con su foto y sus comentarios). */
     public void eliminar(int id) throws PersistenciaException {
-        Noticia n = buscar(id);
+        Noticia n = buscarParaModerar(id);
         repositorio.eliminar(id);
         if (n.tieneImagen()) {
             imagenes.eliminar(n.getImagenRuta());
@@ -164,7 +201,7 @@ public class NoticiasService {
     }
 
     public void eliminarComentario(int idNoticia, int idComentario) throws PersistenciaException {
-        buscar(idNoticia);
+        buscarParaModerar(idNoticia);
         if (!repositorio.eliminarComentario(idNoticia, idComentario)) {
             throw new ReglaNegocioException("El comentario no existe.");
         }

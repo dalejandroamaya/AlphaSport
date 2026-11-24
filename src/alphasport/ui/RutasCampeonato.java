@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** Rutas del campeonato: crearlo, sus reglas, avanzar, temporadas, divisiones, historial y el estado. */
+/** Rutas de UN campeonato (el elegido): sus reglas, avanzar, temporadas, divisiones y el estado. */
 final class RutasCampeonato implements ModuloRutas {
 
     private final CampeonatoService servicio;
@@ -27,14 +27,10 @@ final class RutasCampeonato implements ModuloRutas {
     @Override
     public void registrar(Rutas<Rutas.Consulta> consultas, Rutas<Rutas.Accion> acciones) {
         consultas.publica("catalogo", p -> presentador.catalogo())
-                .con(Permiso.VER, "estado", p -> presentador.estado())
-                .con(Permiso.VER, "historial", p -> presentador.historial(servicio.historial().listar()));
+                .con(Permiso.VER, "estado", p -> p.api().estado());
         Permiso gestionar = Permiso.GESTIONAR_CAMPEONATO;
-        acciones.con(gestionar, "nuevo", p -> {
-            String movimientos = servicio.crear(p.texto("nombre"), TipoFormato.valueOf(p.texto("formato")), configuracion(p.objeto("config")),
-                    p.si("mismosEquipos"));
-            return p.listo(movimientos.isEmpty() ? null : movimientos); // ascensos y descensos aplicados, si hubo
-        }).con(gestionar, "cambiarFormato", p -> {
+        // «nuevo», «historial» e «historial/eliminar» no son de un campeonato: estan en RutasCampeonatos.
+        acciones.con(gestionar, "cambiarFormato", p -> {
             servicio.cambiarFormato(p.texto("nombre"), TipoFormato.valueOf(p.texto("formato")), configuracion(p.objeto("config")));
             return p.listo(null);
         }).con(gestionar, "cancelar", p -> {
@@ -50,13 +46,10 @@ final class RutasCampeonato implements ModuloRutas {
                 .con(gestionar, "archivar", p -> {
                     servicio.historial().archivarActual();
                     return p.listo(null);
-                }).con(gestionar, "historial/eliminar", p -> {
-                    servicio.historial().eliminarDelHistorial(p.texto("codigo"));
-                    return p.listo(null);
                 });
     }
 
-    private ConfiguracionTorneo configuracion(Map<String, Object> c) {
+    static ConfiguracionTorneo configuracion(Map<String, Object> c) {
         ConfiguracionTorneo cfg = new ConfiguracionTorneo();
         cfg.setPuntosVictoria(entero(c.get("puntosVictoria")));
         cfg.setPuntosEmpate(entero(c.get("puntosEmpate")));
@@ -79,7 +72,7 @@ final class RutasCampeonato implements ModuloRutas {
         return cfg;
     }
 
-    private ArrayList<CriterioDesempate> criterios(List<Object> claves) {
+    static ArrayList<CriterioDesempate> criterios(List<Object> claves) {
         ArrayList<CriterioDesempate> lista = new ArrayList<>();
         for (Object clave : claves) {
             lista.add(CriterioDesempate.valueOf(String.valueOf(clave)));

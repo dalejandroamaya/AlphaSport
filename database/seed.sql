@@ -3,14 +3,15 @@
 --  Ejecutar despues de schema.sql. Crea un torneo configurado (liga sin
 --  iniciar) con 6 equipos, sus tecnicos y 16 jugadores por equipo, y dos
 --  noticias. No crea cuentas: cada persona se registra desde la app.
---  Si ya hay un campeonato en curso no hace nada y avisa.
+--  El torneo queda sin dueno: el primer Organizador lo puede tomar desde
+--  la aplicacion. Si la liga de prueba ya esta en curso no hace nada y avisa.
 -- =====================================================================
 BEGIN;
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM torneos WHERE situacion = 'ACTUAL') THEN
-        RAISE EXCEPTION 'Ya hay un campeonato en curso: seed.sql no toca datos existentes.';
+    IF EXISTS (SELECT 1 FROM torneos WHERE codigo = 'seed0001' AND situacion = 'ACTUAL') THEN
+        RAISE EXCEPTION 'La liga de prueba ya esta en curso: seed.sql no toca datos existentes.';
     END IF;
 END $$;
 
@@ -75,11 +76,15 @@ SELECT s.torneo_id, s.equipo_id, n.id, s.numero, s.nombre, s.documento, s.dorsal
   FROM semilla_jugadores s JOIN nuevas n ON n.documento = s.documento;
 
 -- ---------------------------------------------------------------- noticias
-INSERT INTO noticias (titulo, cuerpo, autor, rol_autor, fecha, aprobado)
-VALUES ('¡Arranca la Liga AlphaSport!', 'Seis equipos buscan el título. Consulte el calendario y las plantillas en la aplicación.',
-        'Administración', 'ADMIN', CURRENT_TIMESTAMP, TRUE),
-       ('Los Pumas ya entrenan', 'El equipo del sur hizo su primera práctica abierta al público este fin de semana.',
-        'Camila', 'VISITANTE', CURRENT_TIMESTAMP, FALSE);
+-- Son de la liga de prueba (torneo_id).
+INSERT INTO noticias (torneo_id, titulo, cuerpo, autor, rol_autor, fecha, aprobado)
+SELECT id, '¡Arranca la Liga AlphaSport!', 'Seis equipos buscan el título. Consulte el calendario y las plantillas en la aplicación.',
+       'Administración', 'ADMIN', CURRENT_TIMESTAMP, TRUE
+  FROM torneos WHERE codigo = 'seed0001' AND situacion = 'ACTUAL';
+INSERT INTO noticias (torneo_id, titulo, cuerpo, autor, rol_autor, fecha, aprobado)
+SELECT id, 'Los Pumas ya entrenan', 'El equipo del sur hizo su primera práctica abierta al público este fin de semana.',
+       'Camila', 'VISITANTE', CURRENT_TIMESTAMP, FALSE
+  FROM torneos WHERE codigo = 'seed0001' AND situacion = 'ACTUAL';
 
 INSERT INTO comentarios (noticia_id, autor, texto)
 SELECT id, 'Andrés', '¡Qué buena noticia!' FROM noticias WHERE titulo = '¡Arranca la Liga AlphaSport!';

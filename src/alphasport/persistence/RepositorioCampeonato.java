@@ -33,6 +33,15 @@ public interface RepositorioCampeonato {
 
     void eliminar() throws PersistenciaException;
 
+    /**
+     * Termina el campeonato: queda en el historial y deja de estar en curso. Por defecto se guarda una copia en
+     * el historial y se elimina; PostgreSQL lo pasa al historial tal como esta (con sus ids).
+     */
+    default void archivarEn(RepositorioHistorial historial, Campeonato campeonato) throws PersistenciaException {
+        historial.archivar(campeonato);
+        eliminar();
+    }
+
     /** true si otro programa guardo cambios despues de la ultima vez que este leyo o guardo. */
     default boolean desactualizado() throws PersistenciaException {
         return false;

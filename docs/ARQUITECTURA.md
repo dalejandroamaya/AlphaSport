@@ -132,7 +132,38 @@ Registrarse ─► RutasSesion «registro» ─► SesionService.registrar ─�
 - **Web sola:** `cuentas.js` tiene las mismas reglas y hace el hash con WebCrypto (PBKDF2-SHA256, 100 000 iteraciones, mismo formato que Java). Las cuentas se guardan en el navegador (`Almacen.cuentas`) y solo sirven ahí.
 - **La regla real está en el servicio**: cada ruta de los módulos `Rutas*` declara el `Permiso` que exige y `ApiControlador` lo revisa antes de ejecutarla; cada `Rol` es un conjunto de permisos. Solo `registro`, `login` y `logout` son públicas. Cada navegador tiene su sesión (`SesionService`, cookie `HttpOnly` y `SameSite`); el respaldo y la exportación también pasan por el controlador.
 - Las interfaces solo **ocultan**: escritorio con `Aplicacion.puedeEditar()`, `soloAdmin(...)` y `puedeVer(vista)`; web con el atributo `data-solo-admin` y `puedeVer()` en `app.js`.
-- **Pendiente:** hoy hay un solo campeonato en curso (`ACTUAL`) para toda la aplicación, así que todos los Organizadores gestionan el mismo. Para que cada uno tenga los suyos haría falta `torneos.organizador_id` (llave foránea a `usuarios`) y que el servicio cargue el campeonato del usuario de la sesión. Tampoco hay recuperar contraseña, verificar correo ni cambiar de rol.
+- **Fuera de alcance:** recuperar contraseña, verificar correo y cambiar de rol.
+
+## Varios campeonatos en curso
+
+Cada Organizador puede tener varios campeonatos activos a la vez; el Aficionado ve todos y elige cuál seguir. Cada campeonato es independiente: sus equipos, partidos, tabla, votos y noticias nunca se mezclan con los de otro.
+
+```
+ApiControlador ──► GestorCampeonatos ──► un CampeonatoService por campeonato (su ContextoCampeonato, su version)
+                    │ paraLeer / paraGestionar (permisos)          │
+                    ▼                                              ▼
+              RepositorioCampeonatos ──► PostgresRepositorioCampeonato atado a UN torneo (por su codigo)
+```
+
+| Pieza | Qué hace |
+|---|---|
+| `torneos.propietario_id` | Dueño de cada campeonato (llave foránea a `usuarios`; NULL = sin dueño). Migración 006 |
+| `RepositorioCampeonatos` | Lista los campeonatos en curso con su organizador, abre uno por su código, crea uno nuevo y deja tomar uno sin dueño. En PostgreSQL: `PostgresRepositorioCampeonatos`; para las pruebas: `RepositorioCampeonatosEnMemoria` |
+| `PostgresRepositorioCampeonato.de(conexion, codigo)` | Repositorio atado a un torneo: guardar, terminar o eliminar solo toca ese torneo. El constructor de siempre sigue siendo «el único en curso» (pruebas y `MigradorArchivos`) y avisa si hay varios |
+| `GestorCampeonatos` (servicio) | Un `CampeonatoService` por campeonato. **Aquí viven los permisos**: `paraLeer` (el Aficionado, cualquiera en curso; el Organizador, los suyos) y `paraGestionar` (solo el dueño). Crea, termina, toma y filtra el historial por dueño. `GestorCampeonatos.unico(servicio)` conserva el comportamiento de un solo campeonato |
+| `NoticiasService.de(codigo)` | Feed de un campeonato: sus noticias y las generales; las nuevas quedan en él y solo su Organizador las modera |
+
+**Cómo viaja el campeonato en cada petición.** Las rutas de un campeonato (equipos, partidos, votación, estado, noticias, respaldo) trabajan sobre el campeonato elegido, que `ApiControlador` decide así:
+
+1. el que pide la petición: la web lo manda en la cabecera `X-AlphaSport-Campeonato` (lo pone `servicioRemoto.js` y lo actualiza con cada respuesta);
+2. si no, el último que eligió la sesión (`campeonato/elegir`, o el que acaba de crear o tomar);
+3. si no, el único que el usuario puede ver, si ve uno solo.
+
+Si no queda ninguno, `estado` responde `hay: false` y `elegir: true` (si hay campeonatos para elegir), y las demás rutas de un campeonato responden el código `CAMPEONATO`. **Nunca se usa «el primero» entre varios.** Pedir un campeonato por la cabecera no da permisos: el gestor revisa siempre que el usuario pueda verlo o cambiarlo (`PERMISO` si no).
+
+**Rutas nuevas** (`RutasCampeonatos`): consulta `campeonatos` (los que ve el usuario, los sin organizador y el elegido); acciones `campeonato/elegir`, `campeonato/terminar` (pasa al historial con sus ids y deja de estar en curso; exige partidos jugados), `campeonato/tomar` (un Organizador toma uno sin dueño). `nuevo` crea uno **más** del Organizador (antes reemplazaba al que había) y `historial` muestra al Organizador solo sus archivados. Abrir un respaldo lo agrega como uno más. Los JSON existentes no cambian: solo se agregan campos (`estado.elegir`).
+
+**Fuera de esta fase:** las pantallas «Mis campeonatos» (fase 2) y «Campeonatos» para elegir (fase 3); la web sola sigue con un solo campeonato en el navegador. Coorganizadores, traspasar un campeonato, buscar o paginar y ver campeonatos sin sesión quedan fuera.
 
 ## Detalle de partido
 
@@ -312,7 +343,7 @@ flowchart LR
 ## Base de datos (PostgreSQL)
 
 ```
-ApiControlador ──► CampeonatoService ──► RepositorioCampeonato ──► PostgresRepositorioCampeonato
+ApiControlador ──► GestorCampeonatos ──► CampeonatoService (uno por campeonato) ──► RepositorioCampeonato ──► PostgresRepositorioCampeonato
                    NoticiasService   ──► RepositorioNoticias   ──► PostgresRepositorioNoticias
                                                                      │ ConexionDB (transacciones)
                                                                      ▼
@@ -328,5 +359,6 @@ ApiControlador ──► CampeonatoService ──► RepositorioCampeonato ─�
 - **`ConsultasDAO`** lee las vistas (tabla de posiciones, última alineación, votaciones activas y notas). La prueba comprueba que dan lo mismo que los cálculos del programa.
 - **Seguridad:** todas las consultas usan parámetros; la contraseña solo está en `db.properties` (ignorado por Git).
 - **Cuentas:** `PostgresRepositorioUsuarios` guarda y lee la tabla `usuarios` (ver «Cuentas, roles y permisos»). La migración 005 cambió sus roles a `ORGANIZADOR` y `AFICIONADO`.
+- **Varios campeonatos:** cada torneo en curso tiene su dueño (`propietario_id`) y se abre con su propio repositorio (ver «Varios campeonatos en curso»). La migración 006 quitó el índice que permitía uno solo.
 
 Prueba: `PruebaPostgres` (en un esquema temporal que se borra al final).

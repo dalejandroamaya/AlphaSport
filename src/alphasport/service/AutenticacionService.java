@@ -92,7 +92,8 @@ public class AutenticacionService {
             case CREADA -> {
             }
         }
-        return cuenta.comoUsuario();
+        // Se vuelve a leer para tener su id (la llave de la tabla usuarios), que identifica al dueno de sus campeonatos.
+        return usuarios.buscar(usuario).orElseThrow(() -> new ReglaNegocioException("No se pudo leer la cuenta recien creada.")).comoUsuario();
     }
 
     /* ---------------------------------------------------------------- validaciones */
