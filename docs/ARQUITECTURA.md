@@ -163,7 +163,22 @@ Si no queda ninguno, `estado` responde `hay: false` y `elegir: true` (si hay cam
 
 **Rutas nuevas** (`RutasCampeonatos`): consulta `campeonatos` (los que ve el usuario, los sin organizador y el elegido); acciones `campeonato/elegir`, `campeonato/terminar` (pasa al historial con sus ids y deja de estar en curso; exige partidos jugados), `campeonato/tomar` (un Organizador toma uno sin dueño). `nuevo` crea uno **más** del Organizador (antes reemplazaba al que había) y `historial` muestra al Organizador solo sus archivados. Abrir un respaldo lo agrega como uno más. Los JSON existentes no cambian: solo se agregan campos (`estado.elegir`).
 
-**Fuera de esta fase:** las pantallas «Mis campeonatos» (fase 2) y «Campeonatos» para elegir (fase 3); la web sola sigue con un solo campeonato en el navegador. Coorganizadores, traspasar un campeonato, buscar o paginar y ver campeonatos sin sesión quedan fuera.
+**Pantalla «Mis campeonatos» (Organizador)**, en la web (`app.js`: `renderCampeonatos`, `actualizarSelector`) y en el escritorio (`Aplicacion.vistaCampeonatos`, `actualizarSelector`):
+
+| Qué | Cómo |
+|---|---|
+| Tarjetas | Una por campeonato suyo: nombre, formato, estado, en qué va (fase o jornada) y su avance (barra de partidos jugados). El que gestiona ahora va resaltado («Gestionando») |
+| Acciones | **Gestionar** (`campeonato/elegir` y abre Equipos), **Terminar…** (`campeonato/terminar`; desactivado sin partidos jugados), **Eliminar…** (elige y `cancelar`) |
+| Sin organizador | Los campeonatos sin dueño aparecen aparte con **Tomar y gestionar** (`campeonato/tomar`) |
+| Sin campeonatos | Una invitación a crear el primero. Ya no se abre a la fuerza el diálogo «Nuevo campeonato» |
+| Cambiar de campeonato | Con dos o más, un selector en la cabecera, junto al nombre del elegido (que siempre se ve) |
+| Menú Archivo | **Nuevo campeonato** crea uno más (no reemplaza al actual); se agrega **Terminar campeonato**; «Cancelar» pasa a **Eliminar campeonato** |
+
+Sin campeonato elegido, el menú lateral solo muestra Mis campeonatos, Partidos y Noticias.
+
+**Web sola (varios campeonatos en el navegador).** `Almacen.campeonatos` guarda cada campeonato por su código (`alphasport.campeonatos`), con `propietario` = usuario local, y `Almacen.elegido` recuerda el último que eligió cada usuario. La primera vez, el campeonato del formato anterior (`alphasport.actual`) y sus noticias pasan al nuevo formato **sin dueño**, para que un Organizador lo tome. `servicioLocal.js` responde las mismas rutas que Java y aplica las mismas reglas (solo el dueño cambia un campeonato; las noticias son de su campeonato). Las cuentas y los campeonatos son de ese navegador; el límite de espacio del navegador es para todos juntos.
+
+**Fuera de esta fase:** la pantalla «Campeonatos» para que el Aficionado elija cuál seguir (fase 3). Coorganizadores, traspasar un campeonato, buscar o paginar y ver campeonatos sin sesión quedan fuera.
 
 ## Detalle de partido
 
