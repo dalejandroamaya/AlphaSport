@@ -41,12 +41,12 @@ public final class MigradorArchivos {
         if (!archivo.existe()) {
             return "Campeonato: no hay archivo.";
         }
-        PostgresRepositorioCampeonato base = new PostgresRepositorioCampeonato(conexion);
-        if (base.existe()) {
-            return "Campeonato: la base de datos ya tiene uno en curso; no se cambió.";
-        }
         Campeonato c = archivo.cargar().orElseThrow();
-        base.guardar(c);
+        boolean yaEsta = new PostgresRepositorioCampeonatos(conexion).activos().stream().anyMatch(a -> a.codigo().equals(c.getCodigo()));
+        if (yaEsta) {
+            return "Campeonato: «" + c.getNombreCampeonato() + "» ya está en la base de datos; no se cambió.";
+        }
+        PostgresRepositorioCampeonato.nuevo(conexion).guardar(c); // uno mas en curso, sin dueno: un Organizador lo puede tomar
         return "Campeonato: «" + c.getNombreCampeonato() + "» (" + c.getEquipos().size() + " equipos, " + c.getPartidos().size() + " partidos).";
     }
 

@@ -25,7 +25,7 @@ public class PostgresRepositorioUsuarios implements RepositorioUsuarios {
 
     @Override
     public Optional<CuentaUsuario> buscar(String usuario) throws PersistenciaException {
-        String sql = "SELECT username, nombre, email, rol, password_hash FROM usuarios WHERE username = ?";
+        String sql = "SELECT id, username, nombre, email, rol, password_hash FROM usuarios WHERE username = ?";
         return conexion.ejecutar(con -> {
             try (PreparedStatement ps = con.prepareStatement(sql)) {
                 ps.setString(1, RepositorioUsuarios.normalizar(usuario));
@@ -88,6 +88,7 @@ public class PostgresRepositorioUsuarios implements RepositorioUsuarios {
         if (rol == null) {
             throw new SQLException("La cuenta " + rs.getString("username") + " tiene un rol desconocido: " + rs.getString("rol"));
         }
-        return new CuentaUsuario(rs.getString("username"), rs.getString("nombre"), rs.getString("email"), rol, rs.getString("password_hash"));
+        return new CuentaUsuario(rs.getString("username"), rs.getString("nombre"), rs.getString("email"), rol, rs.getString("password_hash"),
+                rs.getInt("id"));
     }
 }

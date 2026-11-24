@@ -26,13 +26,15 @@ public class RepositorioNoticiasEnMemoria implements RepositorioNoticias {
     }
 
     @Override
-    public List<Noticia> publicadas() {
-        return noticias.stream().filter(Noticia::isAprobado).sorted(masRecientePrimero()).toList();
+    public List<Noticia> publicadas(String campeonato) {
+        return noticias.stream().filter(n -> n.isAprobado() && RepositorioNoticias.delCampeonato(n, campeonato))
+                .sorted(masRecientePrimero()).toList();
     }
 
     @Override
-    public List<Noticia> pendientes() {
-        return noticias.stream().filter(n -> !n.isAprobado()).sorted(masRecientePrimero()).toList();
+    public List<Noticia> pendientes(String campeonato) {
+        return noticias.stream().filter(n -> !n.isAprobado() && RepositorioNoticias.delCampeonato(n, campeonato))
+                .sorted(masRecientePrimero()).toList();
     }
 
     @Override

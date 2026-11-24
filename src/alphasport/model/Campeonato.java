@@ -22,7 +22,8 @@ public class Campeonato implements Serializable {
     private int pasoActual = 0;
     private int idCampeon = SIN_CAMPEON;
     private long semilla = System.currentTimeMillis();
-    private String codigo;        // identifica el campeonato dentro del historial
+    private String codigo;        // identifica el campeonato (en curso y en el historial)
+    private int propietario;      // id del Organizador que lo creo (0 = sin dueno); un respaldo viejo no lo trae
     private String fechaArchivo;  // cuando se guardo en el historial
     // Ascensos y descensos con los que empezo esta temporada (null en archivos anteriores = ninguno)
     private ArrayList<MovimientoDivision> movimientos = new ArrayList<>();
@@ -282,6 +283,15 @@ public class Campeonato implements Serializable {
 
     public void setCodigo(String codigo) {
         this.codigo = codigo;
+    }
+
+    /** Id de la cuenta del Organizador que lo creo (torneos.propietario_id); 0 = sin dueno. */
+    public int getPropietario() {
+        return propietario;
+    }
+
+    public void setPropietario(int propietario) {
+        this.propietario = propietario;
     }
 
     /** Ascensos y descensos de la temporada anterior que dejaron a cada equipo en su division. */

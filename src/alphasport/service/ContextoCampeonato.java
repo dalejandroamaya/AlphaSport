@@ -35,6 +35,8 @@ public final class ContextoCampeonato {
     private FotosService fotos = new FotosService(new RepositorioFotosEnMemoria());
     private Campeonato campeonato;
     private MotorCampeonato motor;
+    /** Id del Organizador dueno (0 = sin dueno). */
+    private int propietario;
 
     public ContextoCampeonato(RepositorioCampeonato repositorio, RepositorioHistorial historial, Clock reloj, UnidadDeTrabajo unidad) {
         this.repositorio = repositorio;
@@ -75,7 +77,31 @@ public final class ContextoCampeonato {
         return historial;
     }
 
+    /** Id del Organizador dueno de este campeonato (0 = sin dueno, o modo de un solo campeonato). */
+    public int propietario() {
+        return propietario;
+    }
+
+    /**
+     * Fija el dueno: lo usa {@link GestorCampeonatos} al crear un campeonato o cuando un Organizador toma uno sin
+     * dueno. Desde ahi, todo campeonato que pase por este contexto (otro formato, un respaldo, la siguiente
+     * temporada) queda con ese dueno: un respaldo de otro organizador no cambia de quien es.
+     */
+    void asignarPropietario(int id) {
+        propietario = id;
+        if (campeonato != null) {
+            campeonato.setPropietario(id);
+        }
+    }
+
     void usar(Campeonato c) {
+        if (c != null) {
+            if (propietario > 0) {
+                c.setPropietario(propietario);
+            } else {
+                propietario = c.getPropietario();
+            }
+        }
         campeonato = c;
         motor = c == null ? null : new MotorCampeonato(c);
     }
@@ -217,6 +243,26 @@ public final class ContextoCampeonato {
             guardar();
             return true;
         });
+    }
+
+    /**
+     * Termina el campeonato: pasa al historial (con sus ids, notas y votos) y deja de estar en curso. Solo si ya
+     * tuvo partidos jugados; uno sin partidos se elimina en vez de archivarse.
+     */
+    void terminar() throws PersistenciaException {
+        exigirCampeonato();
+        if (campeonato.getPartidos().stream().noneMatch(Partido::isJugado)) {
+            throw new ReglaNegocioException("Este campeonato todavía no tiene partidos jugados: no hay nada que guardar en el historial. "
+                    + "Si ya no lo necesita, elimínelo.");
+        }
+        if (campeonato.getFechaArchivo() == null) {
+            campeonato.setFechaArchivo(LocalDate.now().toString());
+        }
+        enUnaTransaccion(() -> {
+            persistir(() -> repositorio.archivarEn(historial, campeonato));
+            return null;
+        });
+        usar(null);
     }
 
     /**

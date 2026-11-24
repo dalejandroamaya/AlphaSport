@@ -30,6 +30,8 @@ public class ServidorWeb {
 
     /** Nombre de la cookie de sesion. */
     public static final String COOKIE = "alphasport_sesion";
+    /** Cabecera con el codigo del campeonato que pide cada peticion (la pone servicioRemoto.js). */
+    public static final String CABECERA_CAMPEONATO = "X-AlphaSport-Campeonato";
 
     private static final Map<String, String> TIPOS = Map.of(
             "html", "text/html; charset=utf-8", "css", "text/css; charset=utf-8",
@@ -87,7 +89,7 @@ public class ServidorWeb {
         }
         // Este navegador, con la sesion de su cookie. Si entra o sale, enviar() le manda la cookie nueva.
         String token = tokenDeCookie(intercambio);
-        ApiControlador api = this.api.cliente(token);
+        ApiControlador api = this.api.cliente(token, campeonatoPedido(intercambio));
         intercambio.setAttribute(ATRIBUTO_CLIENTE, new Cliente(api, token));
         try {
             // Archivos: el controlador exige el permiso y sincroniza, igual que para el escritorio.
@@ -162,6 +164,15 @@ public class ServidorWeb {
 
     /** Cliente de la peticion y el token con el que llego. */
     private record Cliente(ApiControlador api, String tokenRecibido) {
+    }
+
+    /**
+     * Codigo del campeonato que pide la peticion (cabecera {@value #CABECERA_CAMPEONATO}); null si no lo trae o
+     * no tiene forma de codigo. Elegirlo no da permisos: el gestor revisa que el usuario pueda verlo o cambiarlo.
+     */
+    static String campeonatoPedido(HttpExchange intercambio) {
+        String codigo = intercambio.getRequestHeaders().getFirst(CABECERA_CAMPEONATO);
+        return codigo != null && codigo.matches("[A-Za-z0-9-]{1,40}") ? codigo : null;
     }
 
     /** Token de la cookie de sesion; null si no la trae. */

@@ -25,7 +25,8 @@ public class ConsultasDAO {
     public record Nota(int jugador, double sistema, Double publico, int votos, double notaFinal, boolean mvp) {
     }
 
-    private static final String ACTUAL = "torneo_id = (SELECT id FROM torneos WHERE situacion = 'ACTUAL')";
+    /** El campeonato en curso con ese codigo (puede haber varios en curso). */
+    private static final String DEL_CAMPEONATO = "torneo_id = (SELECT id FROM torneos WHERE codigo = ? AND situacion = 'ACTUAL')";
 
     private final ConexionDB conexion;
 
@@ -33,32 +34,34 @@ public class ConsultasDAO {
         this.conexion = conexion;
     }
 
-    public List<Posicion> tablaPosiciones(int fase) throws PersistenciaException {
-        return conexion.ejecutar(con -> Sql.listar(con, "SELECT * FROM v_tabla_posiciones WHERE " + ACTUAL
+    public List<Posicion> tablaPosiciones(String campeonato, int fase) throws PersistenciaException {
+        return conexion.ejecutar(con -> Sql.listar(con, "SELECT * FROM v_tabla_posiciones WHERE " + DEL_CAMPEONATO
                 + " AND fase = ? ORDER BY grupo, pts DESC, dg DESC, gf DESC, equipo", rs -> new Posicion(rs.getString("grupo"), rs.getInt("equipo_numero"),
                 rs.getString("equipo"), rs.getInt("pj"), rs.getInt("pg"), rs.getInt("pe"), rs.getInt("pp"), rs.getInt("gf"), rs.getInt("gc"),
-                rs.getInt("dg"), rs.getInt("pts")), fase));
+                rs.getInt("dg"), rs.getInt("pts")), campeonato, fase));
     }
 
     /** XI del ultimo partido jugado del equipo, en el orden en que se eligio (vacia si no hay). */
-    public List<Titular> ultimaAlineacion(int equipo) throws PersistenciaException {
+    public List<Titular> ultimaAlineacion(String campeonato, int equipo) throws PersistenciaException {
         return conexion.ejecutar(con -> Sql.listar(con, """
                 SELECT u.* FROM v_ultima_alineacion u
-                 WHERE u.equipo_id = (SELECT e.id FROM equipos e JOIN torneos t ON t.id = e.torneo_id WHERE t.situacion = 'ACTUAL' AND e.numero = ?)
+                 WHERE u.equipo_id = (SELECT e.id FROM equipos e JOIN torneos t ON t.id = e.torneo_id
+                                       WHERE t.codigo = ? AND t.situacion = 'ACTUAL' AND e.numero = ?)
                  ORDER BY u.orden""", rs -> new Titular(rs.getInt("partido_numero"), rs.getInt("jugador_numero"), rs.getInt("dorsal"),
-                rs.getString("nombre"), rs.getString("posicion"), Sql.texto(rs.getString("formacion"))), equipo));
+                rs.getString("nombre"), rs.getString("posicion"), Sql.texto(rs.getString("formacion"))), campeonato, equipo));
     }
 
     /** Primero las que cierran antes. */
-    public List<VotacionActiva> votacionesActivas() throws PersistenciaException {
-        return conexion.ejecutar(con -> Sql.listar(con, "SELECT * FROM v_votaciones_activas ORDER BY cierra_en, partido_numero",
-                rs -> new VotacionActiva(rs.getInt("partido_numero"), rs.getString("local"), rs.getString("visitante"), Sql.ms(rs, "cierra_en"), rs.getInt("votos"))));
+    public List<VotacionActiva> votacionesActivas(String campeonato) throws PersistenciaException {
+        return conexion.ejecutar(con -> Sql.listar(con, "SELECT * FROM v_votaciones_activas WHERE " + DEL_CAMPEONATO + " ORDER BY cierra_en, partido_numero",
+                rs -> new VotacionActiva(rs.getInt("partido_numero"), rs.getString("local"), rs.getString("visitante"), Sql.ms(rs, "cierra_en"), rs.getInt("votos")),
+                campeonato));
     }
 
-    public List<Nota> notas(int partido) throws PersistenciaException {
-        return conexion.ejecutar(con -> Sql.listar(con, "SELECT * FROM v_calificaciones WHERE " + ACTUAL + " AND partido_numero = ? ORDER BY nota_final DESC, dorsal",
+    public List<Nota> notas(String campeonato, int partido) throws PersistenciaException {
+        return conexion.ejecutar(con -> Sql.listar(con, "SELECT * FROM v_calificaciones WHERE " + DEL_CAMPEONATO + " AND partido_numero = ? ORDER BY nota_final DESC, dorsal",
                 rs -> new Nota(rs.getInt("jugador_numero"), rs.getDouble("nota_sistema"),
                         rs.getBigDecimal("promedio_publico") == null ? null : rs.getDouble("promedio_publico"),
-                        rs.getInt("votos"), rs.getDouble("nota_final"), rs.getBoolean("es_mvp")), partido));
+                        rs.getInt("votos"), rs.getDouble("nota_final"), rs.getBoolean("es_mvp")), campeonato, partido));
     }
 }

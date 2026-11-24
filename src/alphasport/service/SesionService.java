@@ -27,6 +27,8 @@ public class SesionService {
     private final Clock reloj;
     private final SecureRandom azar = new SecureRandom();
     private final Map<String, Abierta> sesiones = new ConcurrentHashMap<>();
+    /** Campeonato elegido por cada sesion (token -> codigo). */
+    private final Map<String, String> elegidos = new ConcurrentHashMap<>();
 
     public SesionService(AutenticacionService autenticacion) {
         this(autenticacion, Clock.systemUTC());
@@ -60,6 +62,7 @@ public class SesionService {
     private String abrir(Usuario usuario) {
         Instant ahora = reloj.instant();
         sesiones.values().removeIf(s -> !s.vence().isAfter(ahora)); // limpia las vencidas
+        elegidos.keySet().retainAll(sesiones.keySet());
         byte[] bytes = new byte[32];
         azar.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
@@ -67,8 +70,29 @@ public class SesionService {
         return token;
     }
 
+    /**
+     * Recuerda el campeonato que eligio esta sesion (su codigo): se usa cuando una peticion no dice cual. null lo
+     * olvida. Sin sesion abierta no hace nada.
+     */
+    public void elegir(String token, String codigo) {
+        if (token == null || usuario(token) == null) {
+            return;
+        }
+        if (codigo == null) {
+            elegidos.remove(token);
+        } else {
+            elegidos.put(token, codigo);
+        }
+    }
+
+    /** Codigo del ultimo campeonato que eligio esta sesion; null si no eligio ninguno. */
+    public String elegido(String token) {
+        return token == null ? null : elegidos.get(token);
+    }
+
     public void cerrar(String token) {
         if (token != null) {
+            elegidos.remove(token);
             sesiones.remove(token);
         }
     }

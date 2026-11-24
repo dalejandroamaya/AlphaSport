@@ -21,6 +21,7 @@ public class Noticia implements Serializable {
     private String fecha;                // «2026-11-15 18:40»
     private String imagenRuta = "";      // nombre del archivo de la foto ("" = sin foto)
     private boolean aprobado;            // false = pendiente de moderacion
+    private String campeonato;           // codigo del campeonato al que pertenece (null = general, de antes de los varios campeonatos)
     private ArrayList<Comentario> comentarios = new ArrayList<>();
 
     public Noticia() {
@@ -94,6 +95,15 @@ public class Noticia implements Serializable {
         this.aprobado = aprobado;
     }
 
+    /** Codigo del campeonato al que pertenece; null = noticia general. */
+    public String getCampeonato() {
+        return campeonato;
+    }
+
+    public void setCampeonato(String campeonato) {
+        this.campeonato = campeonato;
+    }
+
     public ArrayList<Comentario> getComentarios() {
         if (comentarios == null) {
             comentarios = new ArrayList<>();
@@ -119,5 +129,6 @@ public class Noticia implements Serializable {
         imagenRuta = (String) campos.get("imagenRuta", "");
         aprobado = campos.get("aprobado", false);
         comentarios = (ArrayList<Comentario>) campos.get("comentarios", null);
+        campeonato = (String) campos.get("campeonato", null); // los archivos de antes no lo traen: noticia general
     }
 }

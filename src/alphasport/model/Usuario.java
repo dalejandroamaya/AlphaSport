@@ -5,12 +5,23 @@ package alphasport.model;
  */
 public final class Usuario {
 
+    /** Id de la cuenta (usuarios.id); 0 si no viene de una cuenta guardada. Identifica al dueno de un campeonato. */
+    private final int id;
     private final String nombre;
     private final Rol rol;
 
-    public Usuario(String nombre, Rol rol) {
+    public Usuario(int id, String nombre, Rol rol) {
+        this.id = id;
         this.nombre = nombre;
         this.rol = rol;
+    }
+
+    public Usuario(String nombre, Rol rol) {
+        this(0, nombre, rol);
+    }
+
+    public int getId() {
+        return id;
     }
 
     public String getNombre() {

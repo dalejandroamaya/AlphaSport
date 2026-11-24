@@ -47,6 +47,16 @@ Si falta alguna, el programa lo avisa al abrir y no toca los datos.
 | `003_documento_unico.sql` | 3 | Dos jugadores no pueden tener el mismo documento |
 | `004_movimientos_division.sql` | 4 | Ascensos y descensos de cada temporada |
 | `005_registro_usuarios.sql` | 5 | Registro de cuentas: roles `ORGANIZADOR` y `AFICIONADO`, usuario y correo en minúsculas |
+| `006_varios_campeonatos.sql` | 6 | Varios campeonatos en curso: dueño de cada torneo y noticias por campeonato |
+
+**Migración 006.** Permite varios campeonatos en curso a la vez. Solo usa SQL básico (`ALTER TABLE`, `UPDATE`, `INSERT … SELECT`):
+
+1. Agrega `noticias.torneo_id` y pone las noticias que ya había en el campeonato en curso (si hay exactamente uno).
+2. Quita el índice `torneos_un_actual`, que permitía un solo campeonato `ACTUAL`.
+3. Agrega `torneos.propietario_id`, llave foránea a `usuarios`: el Organizador dueño de cada campeonato.
+4. Los torneos sin dueño pasan al Organizador más antiguo (el de menor `id`). Si todavía no hay ninguno, quedan sin dueño y el primer Organizador que los **tome** desde la aplicación se queda con ellos.
+
+Va después de la 005 (sin PL/pgSQL no puede frenar con un mensaje si falta: ejecútelas en orden). No borra datos y se puede repetir.
 
 **Migración 005.** Cambia los roles de la tabla `usuarios` (`ADMIN` pasa a `ORGANIZADOR` y `VISITANTE` a `AFICIONADO`), agranda la columna `rol` (antes `VARCHAR(10)`) y deja el usuario y el correo en minúsculas, así «Ana» y «ana» son la misma cuenta. No borra ninguna fila. Las cuentas de demostración que haya creado un `seed.sql` anterior (`admin` y `visitante`) siguen en la tabla con el rol nuevo; si ya no las quiere, bórrelas a mano:
 
@@ -59,6 +69,21 @@ DELETE FROM usuarios WHERE username IN ('admin', 'visitante');
 Ya no hay cuentas de demostración ni entrada como visitante: cada persona pulsa **Registrarse** en la pantalla de entrada y elige su tipo de cuenta. **Organizador** crea y gestiona torneos; **Aficionado** ve resultados y noticias, comenta y califica jugadores. La cuenta queda en la tabla `usuarios` (la clave solo como hash PBKDF2-SHA256, nunca la clave) y la próxima vez basta con **Iniciar sesión**. El primer Organizador es simplemente la primera persona que se registra con ese tipo.
 
 En la **web sola** (`web/index.html` sin Java) no hay base de datos: las cuentas se guardan en el navegador, con la clave en hash, y solo sirven en ese navegador.
+
+## Varios campeonatos
+
+Desde la migración 006 puede haber varios campeonatos en curso a la vez. Cada uno es independiente (sus equipos, partidos, votos y noticias no se mezclan) y tiene un dueño:
+
+- **Organizador:** ve y gestiona solo los campeonatos que creó (o que tomó sin dueño).
+- **Aficionado:** ve todos los campeonatos en curso y elige cuál seguir.
+
+Para saber qué campeonatos hay en curso y de quién son:
+
+```sql
+SELECT t.codigo, t.nombre, u.nombre AS organizador
+  FROM torneos t LEFT JOIN usuarios u ON u.id = t.propietario_id
+ WHERE t.situacion = 'ACTUAL';
+```
 
 ## 3. Credenciales
 
@@ -88,7 +113,7 @@ Si tenía un campeonato en la carpeta `datos/`, ejecute **Pasar datos/ a Postgre
 java -cp "bin;lib/*" alphasport.persistence.postgres.MigradorArchivos
 ```
 
-Pasa el campeonato, el historial y las noticias. No borra los archivos y no reemplaza lo que ya esté en la base (por eso, si quiere sus datos anteriores, no ejecute `seed.sql` antes). Las fotos siguen en `datos/imagenes/`; la base guarda su nombre.
+Pasa el campeonato (como uno más en curso, sin dueño: un Organizador lo puede tomar), el historial y las noticias. No borra los archivos y no reemplaza lo que ya esté en la base (por eso, si quiere sus datos anteriores, no ejecute `seed.sql` antes). Las fotos siguen en `datos/imagenes/`; la base guarda su nombre.
 
 ## 5. Probar
 
@@ -98,7 +123,7 @@ Ejecute **Prueba de PostgreSQL (PruebaPostgres)**: debe terminar en `TODO BIEN`.
 
 | Tabla | Qué guarda |
 |---|---|
-| `torneos`, `torneo_criterios`, `divisiones` | El campeonato en curso (`ACTUAL`) y los del historial (`ARCHIVADO`), con sus reglas. Al empezar otro campeonato, el anterior pasa al historial con sus mismos ids |
+| `torneos`, `torneo_criterios`, `divisiones` | Los campeonatos en curso (`ACTUAL`, puede haber varios) y los del historial (`ARCHIVADO`), con sus reglas y su dueño (`propietario_id`). Terminar un campeonato lo pasa al historial con sus mismos ids |
 | `equipos`, `directores_tecnicos`, `jugadores` | Plantillas. Un jugador que sale queda con `activo = FALSE`: sus goles y votos lo siguen usando |
 | `personas` | Quién es cada jugador (`codigo` UUID): la misma persona en todas las temporadas y copias del historial. No se borra con el torneo |
 | `movimientos_division` | Ascensos y descensos con los que empezó cada temporada: de qué división venía cada equipo, a cuál pasó y en qué puesto terminó |
@@ -107,7 +132,7 @@ Ejecute **Prueba de PostgreSQL (PruebaPostgres)**: debe terminar en `TODO BIEN`.
 | `alineaciones` | Titulares y suplentes de cada partido |
 | `eventos_partido` | Goles (con asistencia), autogoles, tarjetas y cambios |
 | `votos_publico`, `calificaciones_partido` | Votos de los aficionados y la última nota calculada |
-| `noticias`, `comentarios` | Noticias (`aprobado` = publicada) y sus comentarios |
+| `noticias`, `comentarios` | Noticias de cada campeonato (`torneo_id`; vacío = general) y sus comentarios. `aprobado` = publicada |
 | `usuarios` | Cuentas creadas con **Registrarse**: usuario y correo únicos (en minúsculas), rol `ORGANIZADOR` o `AFICIONADO` y la clave en hash |
 
 `id` es la llave de la base y `numero` el id que usa el programa dentro de cada torneo.

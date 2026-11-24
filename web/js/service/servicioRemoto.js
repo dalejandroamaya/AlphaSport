@@ -3,17 +3,32 @@
 /* Servicio que delega en el programa Java (capa service) a traves de su API local. */
 
 function crearServicioRemoto() {
-  const pedir = async (ruta, opciones) => {
+  /*
+   * Codigo del campeonato que muestra esta pestaña: viaja en la cabecera X-AlphaSport-Campeonato de cada
+   * peticion (asi dos pestañas pueden ver campeonatos distintos). Sin el, el programa usa el ultimo elegido en la
+   * sesion o el unico que el usuario puede ver. Se toma de cada respuesta: si el campeonato cambia de codigo
+   * (otro formato, la siguiente temporada) o deja de estar, se sigue solo.
+   */
+  let campeonato = null;
+  const cabeceras = (extra = {}) => (campeonato ? Object.assign({ 'X-AlphaSport-Campeonato': campeonato }, extra) : extra);
+  const recordar = r => {
+    const estado = r && (r.estado || (r.hay !== undefined ? r : null));
+    if (estado) campeonato = estado.hay && estado.campeonato ? estado.campeonato.codigo : null;
+    if (r && r.ok && 'sesion' in r && !r.sesion) campeonato = null; // salio: la proxima cuenta elige el suyo
+    return r;
+  };
+
+  const pedir = async (ruta, opciones = {}) => {
     try {
-      const respuesta = await fetch('/api/' + ruta, opciones);
-      return await respuesta.json();
+      const respuesta = await fetch('/api/' + ruta, Object.assign({}, opciones, { headers: cabeceras(opciones.headers) }));
+      return recordar(await respuesta.json());
     } catch (e) {
       return { ok: false, codigo: 'CONEXION', error: 'No hay conexión con el programa AlphaSport. ¿Sigue abierto?' };
     }
   };
 
   const descargar = async ruta => {
-    const respuesta = await fetch('/api/' + ruta);
+    const respuesta = await fetch('/api/' + ruta, { headers: cabeceras() });
     if (!respuesta.ok) throw new Error('No se pudo descargar el archivo.');
     const disposicion = respuesta.headers.get('Content-Disposition') || '';
     const nombre = decodeURIComponent((/filename\*=UTF-8''([^;]+)/.exec(disposicion) || [, 'archivo'])[1]);
