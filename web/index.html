@@ -59,7 +59,7 @@
   <div id="app" class="app" hidden>
     <aside class="barra-lateral vidrio">
       <div class="marca-lateral"><img src="img/logo.png" alt=""><span>Alpha<b>Sport</b></span><small>Gestor de campeonatos</small></div>
-      <nav class="navegacion" aria-label="Secciones">
+      <nav class="navegacion" id="navegacionSecciones" aria-label="Secciones">
         <button data-vista="campeonatos" hidden><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z"/></svg><span>Mis campeonatos</span></button>
         <button data-vista="equipos" class="activa"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg><span>Equipos</span></button>
         <button data-vista="partidos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span id="navPartidos">Partidos</span></button>
@@ -69,6 +69,7 @@
         <button data-vista="sanciones"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="9" height="13" rx="1.5"/><rect x="10" y="7" width="9" height="13" rx="1.5"/></svg><span>Estadísticas</span></button>
         <button data-vista="noticias"><svg viewBox="0 0 24 24"><path d="M4 5h13v14H6a2 2 0 0 1-2-2V5ZM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4"/></svg><span>Noticias</span></button>
         <button data-vista="reglas"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7"/></svg><span>Reglas</span></button>
+        <button type="button" class="nav-mas" id="navMas" aria-expanded="false" aria-controls="navegacionSecciones" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Más</span></button>
       </nav>
       <div class="lateral-pie">
         <span id="chipRol" class="chip chip-rol"></span>
@@ -116,7 +117,7 @@
       <section id="vista-campeonatos" class="vista" hidden>
         <div class="cabecera-vista">
           <div><h2>Mis campeonatos</h2><p id="ayudaCampeonatos" class="sutil">Cada campeonato tiene sus propios equipos, partidos y resultados. Elija cuál gestionar.</p></div>
-          <button type="button" id="btnNuevoCampeonato" class="btn primario">+ Nuevo campeonato</button>
+          <button type="button" id="btnNuevoCampeonato" class="btn">+ Nuevo campeonato</button>
         </div>
         <div id="listaCampeonatos" class="grid-campeonatos"></div>
         <div id="bloqueSinOrganizador" hidden>

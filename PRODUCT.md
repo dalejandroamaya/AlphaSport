@@ -28,7 +28,7 @@ Seis formatos reales explicados en lenguaje de cancha (Liga, Copa, Tipo Mundial,
 - Arquitectura en capas ui → service → persistence → model; el motor web (`web/js/service/motor.js`) replica las reglas del servicio Java.
 - La web es HTML, CSS y JavaScript sin framework ni paso de compilación; debe abrirse con doble clic en `web/index.html`.
 - Pruebas automáticas: `web/pruebas/simulacion.html` y `SimulacionFormatos` (Java) deben terminar en «TODO BIEN».
-- Usuario de prueba `admin` / `123` (documentado en el README, no en la interfaz).
+- Cuentas reales: cada persona se registra como Organizador (gestiona sus campeonatos) o Aficionado (ve, vota y comenta). Contraseñas con hash; en la web sola las cuentas quedan en el navegador.
 - La versión de escritorio JavaFX adoptará después el mismo diseño que la web.
 
 ## Brand Commitments
@@ -36,7 +36,7 @@ Seis formatos reales explicados en lenguaje de cancha (Liga, Copa, Tipo Mundial,
 - Nombre AlphaSport y su logo (`web/img/logo.png`, `web/img/logo-texto.png`) se conservan tal cual.
 - La esencia es el ambiente de estadio de fútbol.
 - Todo debe ser funcional y utilizable en modo oscuro y en modo claro, con el mismo nivel de acabado en ambos.
-- Pedido explícito del dueño para el rediseño: ventanas suaves y modernas, mejores fuentes, mejores imágenes de fondo, transparencias y animaciones, sin que se note un frontend genérico.
+- Dirección vigente pedida por el dueño: estilo de marcador en vivo (plano, compacto, letra Inter) con los colores de AlphaSport, sin que se note un frontend genérico.
 
 ## Evidence on Hand
 

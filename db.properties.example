@@ -5,3 +5,5 @@ db.port=5432
 db.name=alphasport_db
 db.user=postgres
 db.password=SU_CONTRASENA_AQUI
+# Solo para una base en internet (por ejemplo Neon): conexion cifrada. Con PostgreSQL local, deje la linea comentada.
+# db.ssl=require

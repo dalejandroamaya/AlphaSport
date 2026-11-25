@@ -1,9 +1,8 @@
 package alphasport.ui;
 
-import alphasport.persistence.ArchivoRepositorioFotos;
-import alphasport.persistence.ImagenesEnDisco;
 import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.postgres.ConexionDB;
+import alphasport.persistence.postgres.PostgresImagenes;
 import alphasport.persistence.postgres.PostgresRepositorioCampeonatos;
 import alphasport.persistence.postgres.PostgresRepositorioHistorial;
 import alphasport.persistence.postgres.PostgresRepositorioNoticias;
@@ -34,6 +33,7 @@ public final class FabricaAplicacion implements AutoCloseable {
     private ConexionDB conexion;
     private GestorCampeonatos gestor;
     private FotosService fotos;
+    private PostgresImagenes imagenes;
     private NoticiasService noticias;
 
     /** Con la conexion de db.properties. */
@@ -65,7 +65,7 @@ public final class FabricaAplicacion implements AutoCloseable {
 
     public NoticiasService noticias() throws PersistenciaException {
         if (noticias == null) {
-            noticias = new NoticiasService(new PostgresRepositorioNoticias(conexion()), new ImagenesEnDisco(CARPETA_DATOS.resolve("imagenes")));
+            noticias = new NoticiasService(new PostgresRepositorioNoticias(conexion()), imagenes());
         }
         return noticias;
     }
@@ -91,12 +91,24 @@ public final class FabricaAplicacion implements AutoCloseable {
         return gestor;
     }
 
-    /** Fotos de jugadores y escudos, en datos/imagenes (las comparten todos los campeonatos). */
-    private FotosService fotos() {
+    /** Fotos de jugadores y escudos, en la base (las comparten todos los campeonatos y todos los computadores). */
+    private FotosService fotos() throws PersistenciaException {
         if (fotos == null) {
-            fotos = new FotosService(new ArchivoRepositorioFotos(CARPETA_DATOS));
+            fotos = new FotosService(imagenes());
         }
         return fotos;
+    }
+
+    /**
+     * Fotos, escudos y fotos de noticias en la tabla imagenes. La primera vez sube las que quedaron de antes en
+     * datos/imagenes (no las borra), para que también las vean los demás computadores que usan la misma base.
+     */
+    private PostgresImagenes imagenes() throws PersistenciaException {
+        if (imagenes == null) {
+            imagenes = new PostgresImagenes(conexion(), CARPETA_DATOS.resolve("imagenes"));
+            imagenes.subirArchivosAnteriores();
+        }
+        return imagenes;
     }
 
     /** El controlador que usan las dos interfaces (el escritorio lo usa directo; la web, por ServidorWeb). */

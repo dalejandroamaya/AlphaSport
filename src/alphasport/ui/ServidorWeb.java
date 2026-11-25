@@ -19,8 +19,9 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Servidor local: entrega la interfaz web (HTML, CSS, JS) y la API JSON en /api/.
- * Solo escucha en 127.0.0.1, asi que no es accesible desde otros equipos.
+ * Servidor de la version web: entrega la interfaz (HTML, CSS, JS) y la API JSON en /api/.
+ * Normalmente solo escucha en 127.0.0.1, asi que no es accesible desde otros equipos. Publicado en internet
+ * ({@link #iniciarEnInternet}) atiende solo la direccion publica indicada (por ejemplo, la de Render).
  * <p>
  * Cada navegador tiene su propia sesion: el token va en la cookie {@value #COOKIE} con HttpOnly (el JavaScript
  * no la puede leer) y SameSite=Strict (otra pagina no la puede usar). Ademas la API solo responde si el
@@ -43,6 +44,8 @@ public class ServidorWeb {
     private final ApiControlador api;
     private HttpServer servidor;
     private int puerto;
+    /** Direccion publica (por ejemplo alphasport.onrender.com); null = servidor local. */
+    private String anfitrionPublico;
     /** Que hacer cuando el administrador pulsa «Cerrar programa» (por defecto, solo detener el servidor). */
     private Runnable alSalir = () -> {
     };
@@ -73,6 +76,21 @@ public class ServidorWeb {
         throw new IOException("No hay puertos libres entre " + puertoInicial + " y " + (puertoInicial + 19));
     }
 
+    /**
+     * Publicado en internet (Render): escucha en todas las interfaces del puerto dado y solo acepta la direccion
+     * publica. El proveedor pone el HTTPS delante. «Cerrar programa» queda desactivado.
+     */
+    public int iniciarEnInternet(int puerto, String anfitrion) throws IOException {
+        this.anfitrionPublico = anfitrion.toLowerCase();
+        servidor = HttpServer.create(new InetSocketAddress(puerto), 0);
+        servidor.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
+        servidor.createContext("/api/", this::atenderApi);
+        servidor.createContext("/", this::atenderArchivo);
+        servidor.start();
+        this.puerto = puerto;
+        return puerto;
+    }
+
     public void detener() {
         if (servidor != null) {
             servidor.stop(0);
@@ -101,6 +119,9 @@ public class ServidorWeb {
                 responder(intercambio, 200, api.abrirRespaldo(intercambio.getRequestBody().readAllBytes()));
             } else if (metodo.equals("POST") && ruta.equals("salir")) {
                 api.exigirAdministrador();
+                if (anfitrionPublico != null) {
+                    throw new ReglaNegocioException("En la versión en internet el programa no se cierra.");
+                }
                 responder(intercambio, 200, Presentador.mapa("ok", true));
                 new Thread(() -> {
                     detener();
@@ -193,9 +214,15 @@ public class ServidorWeb {
         return COOKIE + "=" + (token == null ? "; Max-Age=0" : token) + "; Path=/; HttpOnly; SameSite=Strict";
     }
 
+    /** En internet la cookie solo viaja por HTTPS. */
+    private String cookieDe(String token) {
+        return anfitrionPublico == null ? cookie(token) : cookie(token) + "; Secure";
+    }
+
     /** Direcciones con las que se puede abrir este servidor. */
     private Set<String> anfitriones() {
-        return Set.of("127.0.0.1:" + puerto, "localhost:" + puerto, "[::1]:" + puerto);
+        return anfitrionPublico != null ? Set.of(anfitrionPublico)
+                : Set.of("127.0.0.1:" + puerto, "localhost:" + puerto, "[::1]:" + puerto);
     }
 
     /**
@@ -206,7 +233,8 @@ public class ServidorWeb {
     private String origenInvalido(HttpExchange intercambio) {
         String host = intercambio.getRequestHeaders().getFirst("Host");
         if (host == null || !anfitriones().contains(host.toLowerCase())) {
-            return "Abra AlphaSport con la dirección que muestra el programa (http://127.0.0.1:" + puerto + ").";
+            return anfitrionPublico != null ? "Abra AlphaSport con su dirección: https://" + anfitrionPublico
+                    : "Abra AlphaSport con la dirección que muestra el programa (http://127.0.0.1:" + puerto + ").";
         }
         if (intercambio.getRequestMethod().equals("GET")) {
             return null;
@@ -216,7 +244,7 @@ public class ServidorWeb {
             String referer = intercambio.getRequestHeaders().getFirst("Referer");
             origen = referer == null ? null : referer.replaceFirst("^(https?://[^/]+).*$", "$1");
         }
-        if (origen == null || !anfitriones().contains(origen.toLowerCase().replaceFirst("^http://", ""))) {
+        if (origen == null || !anfitriones().contains(origen.toLowerCase().replaceFirst(anfitrionPublico != null ? "^https?://" : "^http://", ""))) {
             return "Acción rechazada: no viene de la página de AlphaSport.";
         }
         return null;
@@ -234,7 +262,7 @@ public class ServidorWeb {
 
     private void enviar(HttpExchange intercambio, int codigo, String tipo, byte[] datos) throws IOException {
         if (intercambio.getAttribute(ATRIBUTO_CLIENTE) instanceof Cliente c && !Objects.equals(c.api().getToken(), c.tokenRecibido())) {
-            intercambio.getResponseHeaders().set("Set-Cookie", cookie(c.api().getToken())); // entro, cambio de usuario o salio
+            intercambio.getResponseHeaders().set("Set-Cookie", cookieDe(c.api().getToken())); // entro, cambio de usuario o salio
         }
         intercambio.getResponseHeaders().set("Content-Type", tipo);
         intercambio.sendResponseHeaders(codigo, datos.length);
