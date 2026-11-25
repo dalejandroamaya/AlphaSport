@@ -5,6 +5,9 @@ import java.net.URI;
 
 /**
  * Version web del programa Java: inicia el servidor local y abre la interfaz en el navegador.
+ * <p>
+ * En internet (Render) el proveedor da la variable PORT: entonces atiende la direccion publica
+ * (RENDER_EXTERNAL_HOSTNAME, o ALPHASPORT_HOST en otro proveedor) y no abre ningun navegador.
  */
 public class AlphaSportApp {
 
@@ -19,6 +22,26 @@ public class AlphaSportApp {
             System.err.println(e.getMessage());
             fabrica.close();
             System.exit(1);
+            return;
+        }
+        String puertoInternet = System.getenv("PORT");
+        if (puertoInternet != null && !puertoInternet.isBlank()) {
+            String anfitrion = System.getenv("RENDER_EXTERNAL_HOSTNAME");
+            if (anfitrion == null || anfitrion.isBlank()) {
+                anfitrion = System.getenv("ALPHASPORT_HOST");
+            }
+            if (anfitrion == null || anfitrion.isBlank()) {
+                System.err.println("Falta la dirección pública: defina ALPHASPORT_HOST (por ejemplo alphasport.onrender.com).");
+                fabrica.close();
+                System.exit(1);
+                return;
+            }
+            servidor.iniciarEnInternet(Integer.parseInt(puertoInternet.trim()), anfitrion.trim());
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                servidor.detener();
+                fabrica.close();
+            }));
+            System.out.println("AlphaSport está publicado en https://" + anfitrion.trim() + "/ (puerto " + puertoInternet.trim() + ")");
             return;
         }
         servidor.alSalir(() -> System.exit(0)); // «Cerrar programa» en la web termina este proceso

@@ -438,6 +438,7 @@ public class Aplicacion extends Application {
 
     /** Pantalla de entrada: pestañas «Iniciar sesión» y «Registrarse» en la misma tarjeta. */
     void mostrarLogin() {
+        detenerActualizacion(); // sin sesión no hay nada que revisar
         ImageView logo = new ImageView(imagen("logo-texto.png"));
         logo.setFitWidth(240);
         logo.setPreserveRatio(true);
@@ -560,7 +561,13 @@ public class Aplicacion extends Application {
         t.setMaxWidth(Double.MAX_VALUE);
         VBox campo = new VBox(5, t, control);
         for (String p : pista) {
-            campo.getChildren().add(etiqueta(p, "sutil", "pista-campo"));
+            Label ayuda = etiqueta(p, "sutil", "pista-campo");
+            // La ayuda completa, en varias líneas si hace falta (antes se cortaba con «…»): para que JavaFX la parta,
+            // la etiqueta debe poder ocupar todo el ancho y crecer en alto.
+            ayuda.setWrapText(true);
+            ayuda.setMaxWidth(Double.MAX_VALUE);
+            ayuda.setMinHeight(Region.USE_PREF_SIZE);
+            campo.getChildren().add(ayuda);
         }
         return campo;
     }
@@ -707,6 +714,54 @@ public class Aplicacion extends Application {
         ponerRaiz(raiz);
         scene.getRoot().getStyleClass().add("plano"); // la aplicación va sobre fondo liso; la foto queda en la entrada
         render(); // sin campeonato elegido, render() muestra «Mis campeonatos» o el aviso
+        iniciarActualizacion();
+    }
+
+    /* ---------------------------------------------------------------- actualización automática */
+
+    /** Cada cuánto se revisa si otro equipo cambió el campeonato (una consulta mínima a la base). */
+    static final javafx.util.Duration CADA = javafx.util.Duration.seconds(5);
+    private javafx.animation.Timeline actualizador;
+
+    /**
+     * En vivo: varios computadores usan la misma base (por ejemplo en Neon). Cada pocos segundos se pide el estado
+     * —el servicio solo recarga si cambió la versión del campeonato— y se redibuja únicamente si cambió algo.
+     * No molesta: se pausa con la ventana minimizada y espera mientras haya otra ventana abierta o se esté escribiendo.
+     */
+    private void iniciarActualizacion() {
+        if (actualizador == null) {
+            actualizador = new javafx.animation.Timeline(new javafx.animation.KeyFrame(CADA, e -> revisarCambios()));
+            actualizador.setCycleCount(javafx.animation.Animation.INDEFINITE);
+        }
+        actualizador.play();
+    }
+
+    private void detenerActualizacion() {
+        if (actualizador != null) {
+            actualizador.stop();
+        }
+    }
+
+    void revisarCambios() {
+        if (api.getUsuarioActual() == null || stage.isIconified() || !stage.isShowing()) {
+            return; // minimizada: no se consulta (en una base en internet, así puede «dormir» y no gasta)
+        }
+        boolean otraVentana = javafx.stage.Window.getWindows().stream()
+                .anyMatch(w -> w != stage && w.isShowing() && w instanceof Stage);
+        if (otraVentana || scene.getFocusOwner() instanceof javafx.scene.control.TextInputControl) {
+            return; // un editor o diálogo abierto, o alguien escribiendo: se revisa en la próxima vuelta
+        }
+        Map<String, Object> nuevo;
+        try {
+            nuevo = api.consultar("estado");
+        } catch (RuntimeException e) {
+            return; // sin conexión por un momento: se intenta de nuevo en la próxima vuelta
+        }
+        if (nuevo != null && !nuevo.equals(E)) {
+            E = nuevo;
+            render();
+            aviso("Actualizado con los cambios de otro equipo.");
+        }
     }
 
     /** Muestra u oculta un nodo y lo saca del layout. */
@@ -1079,7 +1134,8 @@ public class Aplicacion extends Application {
         Map<String, Object> r = consultarCampeonatos();
         List<Map<String, Object>> lista = l(r, "campeonatos"), sin = l(r, "sinOrganizador");
         String actual = b(E, "hay") ? s(m(E, "campeonato"), "codigo") : "";
-        Button nuevo = boton("+ Nuevo campeonato", "primario");
+        // Lo principal de esta vista es gestionar (la cabecera); crear otro campeonato es secundario.
+        Button nuevo = boton("+ Nuevo campeonato");
         nuevo.setOnAction(e -> dialogos.nuevo(false, false));
         VBox caja = seccion("Mis campeonatos", "Cada campeonato tiene sus propios equipos, partidos y resultados. Elija cuál gestionar.", nuevo);
         if (lista.isEmpty()) {
@@ -1127,14 +1183,15 @@ public class Aplicacion extends Application {
             tomar.setOnAction(e -> tomarCampeonato(codigo));
             botones.getChildren().add(tomar);
         } else {
-            Button gestionar = boton(actual ? "Seguir gestionando" : "Gestionar", "primario");
+            Button gestionar = boton(actual ? "Seguir gestionando" : "Gestionar");
             gestionar.setOnAction(e -> elegirCampeonato(codigo, "equipos"));
-            Button terminar = boton("Terminar…", "fantasma");
+            Button terminar = boton("Terminar…", "mini", "fantasma");
             terminar.setDisable(jugados == 0); // sin partidos jugados no hay nada que guardar en el historial
             terminar.setOnAction(e -> terminarCampeonato(codigo, nombre, "Terminado".equals(s(x, "estado"))));
-            Button eliminar = boton("Eliminar…", "peligro");
+            Button eliminar = boton("Eliminar…", "mini", "peligro");
             eliminar.setOnAction(e -> eliminarCampeonato(codigo, nombre));
-            botones.getChildren().addAll(gestionar, terminar, eliminar);
+            botones.getChildren().addAll(gestionar, espacio(), terminar, eliminar); // las acciones secundarias, juntas a la derecha
+            botones.setAlignment(Pos.CENTER_LEFT);
         }
         VBox tarjeta = new VBox(10, cabecera, chips, etiqueta(s(x, "fase"), "sutil"), barra, avance, botones);
         tarjeta.getStyleClass().addAll("vidrio", "tarjeta-campeonato");
@@ -1227,6 +1284,7 @@ public class Aplicacion extends Application {
         TextField nombre = new TextField();
         nombre.setPromptText("Nombre del equipo");
         nombre.setPrefWidth(240);
+        nombre.setMinWidth(200); // que el texto de ayuda no se corte cuando falta espacio
         nombre.setDisable(iniciado);
         Button agregar = boton("Agregar");
         agregar.setDisable(iniciado);
@@ -1412,7 +1470,11 @@ public class Aplicacion extends Application {
         }
         HBox fila = new HBox(14, escudoTarjeta, datos);
         fila.setAlignment(Pos.CENTER_LEFT);
-        VBox tarjeta = new VBox(10, fila, botones);
+        // Los botones siempre al fondo: así quedan alineados entre tarjetas aunque el texto ocupe una o dos líneas.
+        Region empuje = new Region();
+        VBox.setVgrow(empuje, Priority.ALWAYS);
+        VBox tarjeta = new VBox(10, fila, empuje, botones);
+        tarjeta.setMinHeight(160);
         tarjeta.getStyleClass().addAll("vidrio", "tarjeta-equipo");
         if (b(e, "retirado")) {
             tarjeta.setOpacity(.5);

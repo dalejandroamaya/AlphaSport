@@ -73,6 +73,7 @@ public final class PruebaPostgres {
         probar("Documento único también en la base de datos", PruebaPostgres::probarDocumentoUnico);
         probar("Ascensos y descensos al pasar de temporada", PruebaPostgres::probarAscensos);
         probar("Migraciones del esquema (database/migraciones)", PruebaPostgres::probarMigraciones);
+        probar("Imágenes en la base: fotos, escudos y noticias", PruebaPostgres::probarImagenes);
         probar("Cuentas: registro e inicio de sesión en la tabla usuarios", PruebaPostgres::probarCuentas);
         probar("Varios campeonatos en curso: dueños, sin mezclar datos y terminar uno", PruebaPostgres::probarVariosCampeonatos);
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
@@ -195,7 +196,7 @@ public final class PruebaPostgres {
         c = ConexionDB.leerConfiguracion(vacio);
         boolean leida = c.url().equals("jdbc:postgresql://otro:9999/base") && c.clave().equals("secreta") && !c.toString().contains("secreta");
         boolean sinBase = mensaje(new ConexionDB.Configuracion(CONFIGURACION.host(), CONFIGURACION.puerto(), "no_existe_" + System.nanoTime(),
-                CONFIGURACION.usuario(), CONFIGURACION.clave())).contains("no existe");
+                CONFIGURACION.usuario(), CONFIGURACION.clave(), CONFIGURACION.ssl())).contains("no existe");
         boolean sinServidor = mensaje(new ConexionDB.Configuracion("localhost", 1, "x", "x", "x")).contains("No hay conexión");
         // Si el trabajo falla se deshace completo y la conexion sigue sirviendo.
         boolean deshace;
@@ -227,7 +228,7 @@ public final class PruebaPostgres {
         });
         boolean completas = tablas.containsAll(List.of("usuarios", "torneos", "divisiones", "equipos", "jugadores", "partidos", "alineaciones",
                 "eventos_partido", "noticias", "comentarios", "votos_publico", "calificaciones_partido", "v_tabla_posiciones",
-                "v_ultima_alineacion", "v_votaciones_activas", "v_calificaciones"));
+                "v_ultima_alineacion", "v_votaciones_activas", "v_calificaciones", "imagenes"));
         sql(db, "INSERT INTO usuarios (nombre, username, password_hash, rol) VALUES ('A', 'a', 'x', 'ORGANIZADOR')");
         boolean restricciones = falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash) VALUES ('B', 'a', 'x')"))
                 && falla(PersistenciaException.class, () -> sql(db, "INSERT INTO usuarios (nombre, username, password_hash, rol) VALUES ('B', 'b', 'x', 'JEFE')"))
@@ -719,6 +720,44 @@ public final class PruebaPostgres {
         return p.isWalkover() && !jugado.isWalkover();
     }
 
+    /**
+     * PostgresImagenes: fotos, escudos y fotos de noticias en la tabla imagenes (las ven todos los computadores
+     * de la misma base). Las de antes, en datos/imagenes, se suben solas y no se duplican.
+     */
+    private static boolean probarImagenes(ConexionDB db) throws Exception {
+        Path carpeta = Files.createTempDirectory("imagenes-anteriores");
+        byte[] vieja = {1, 2, 3, 4}, otra = {9, 8, 7};
+        Files.write(carpeta.resolve("jugador-aaaaaaaaaaaa.jpg"), vieja);
+        Files.write(carpeta.resolve("noticia-bbbbbbbb.png"), otra);
+        Files.write(carpeta.resolve("no-es-imagen.txt"), new byte[] {0});
+        alphasport.persistence.postgres.PostgresImagenes repo = new alphasport.persistence.postgres.PostgresImagenes(db, carpeta);
+        // Guardar y leer: fotos y escudos (RepositorioFotos) y fotos de noticias (RepositorioImagenes).
+        byte[] foto = {10, 20, 30};
+        String nombreFoto = repo.guardar(foto, "jugador", "jpg");
+        String nombreEscudo = repo.guardar(new byte[] {5}, "escudo", "png");
+        String nombreNoticia = repo.guardar(new byte[] {6, 6}, "png");
+        boolean guardar = nombreFoto.matches("jugador-[a-z0-9]{12}\\.jpg") && nombreEscudo.matches("escudo-[a-z0-9]{12}\\.png")
+                && nombreNoticia.matches("noticia-[a-z0-9]{8}\\.png") && java.util.Arrays.equals(repo.leer(nombreFoto), foto)
+                && contar(db, "SELECT COUNT(*) FROM imagenes") == 3;
+        // Borrar (las noticias) y nombres inventados o con «../».
+        repo.eliminar(nombreNoticia);
+        boolean seguridad = repo.leer(nombreNoticia) == null && repo.leer("../db.properties") == null && repo.leer("JUGADOR-x.exe") == null
+                && repo.leer(null) == null && contar(db, "SELECT COUNT(*) FROM imagenes") == 2;
+        // Las de antes: se suben todas una vez (sin el .txt) y repetir no las duplica.
+        int subidas = repo.subirArchivosAnteriores(), otraVez = repo.subirArchivosAnteriores();
+        boolean anteriores = subidas == 2 && otraVez == 0 && contar(db, "SELECT COUNT(*) FROM imagenes") == 4
+                && java.util.Arrays.equals(repo.leer("jugador-aaaaaaaaaaaa.jpg"), vieja);
+        // Una que falta en la base pero sigue en la carpeta: se sube al pedirla.
+        Files.write(carpeta.resolve("escudo-cccccccccccc.png"), otra);
+        boolean alPedir = java.util.Arrays.equals(repo.leer("escudo-cccccccccccc.png"), otra)
+                && contar(db, "SELECT COUNT(*) FROM imagenes WHERE nombre = 'escudo-cccccccccccc.png'") == 1;
+        if (!(guardar && seguridad && anteriores && alPedir)) {
+            System.out.println("  guardar=" + guardar + " seguridad=" + seguridad + " anteriores=" + anteriores + " (" + subidas + "/" + otraVez
+                    + ") alPedir=" + alPedir);
+        }
+        return guardar && seguridad && anteriores && alPedir;
+    }
+
     /** Las migraciones llevan una base anterior a la misma estructura que schema.sql y se pueden repetir. */
     private static boolean probarMigraciones(ConexionDB db) throws Exception {
         boolean anterior = walkoverAnterior();
@@ -743,7 +782,9 @@ public final class PruebaPostgres {
         cuentas &= contar(db, "SELECT COUNT(*) FROM torneos WHERE propietario_id = (SELECT id FROM usuarios WHERE username = 'admin')")
                 == contar(db, "SELECT COUNT(*) FROM torneos") && contar(db, "SELECT COUNT(*) FROM torneos") == 2
                 && contar(db, "SELECT COUNT(*) FROM noticias n JOIN torneos t ON t.id = n.torneo_id WHERE t.situacion = 'ACTUAL'") == 1
-                && contar(db, "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'torneos_un_actual'") == 0;
+                && contar(db, "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'torneos_un_actual'") == 0
+                // 007: la tabla de imagenes
+                && contar(db, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'imagenes'") == 1;
         boolean igual = cuentas && foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 2; // el campeonato y su copia
         // Una persona por jugador, compartida por el campeonato en curso y su copia del historial.
         int jugadores = contar(db, "SELECT COUNT(*) FROM jugadores j JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ACTUAL'");
@@ -939,6 +980,8 @@ public final class PruebaPostgres {
 
     /** Deja la base como la creaba la primera version de schema.sql. */
     private static void volverAVersionCero(ConexionDB db) throws Exception {
+        // Como antes de la 007: las imagenes todavia en la carpeta datos/imagenes.
+        sql(db, "DROP TABLE imagenes");
         // Como antes de la 006: un solo campeonato en curso, torneos sin dueno y noticias sin campeonato.
         sql(db, "ALTER TABLE noticias DROP COLUMN torneo_id");
         sql(db, "ALTER TABLE torneos DROP COLUMN propietario_id");

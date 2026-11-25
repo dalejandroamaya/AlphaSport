@@ -24,10 +24,24 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
 
     public static final Path ARCHIVO = Path.of("db.properties");
     /** Version del esquema que necesita el programa (la ultima de database/migraciones). */
-    public static final int VERSION_ESQUEMA = 6;
+    public static final int VERSION_ESQUEMA = 7;
 
     /** Datos de conexion. */
-    public record Configuracion(String host, int puerto, String base, String usuario, String clave) {
+    /**
+     * @param ssl modo SSL del driver (db.ssl): vacío = como el servidor lo permita (base local);
+     *            «require» = conexión cifrada obligatoria, como piden las bases en la nube (Neon).
+     */
+    public record Configuracion(String host, int puerto, String base, String usuario, String clave, String ssl) {
+
+        /** Sin SSL configurado (base local o pruebas). */
+        public Configuracion(String host, int puerto, String base, String usuario, String clave) {
+            this(host, puerto, base, usuario, clave, "");
+        }
+
+        /** true si la conexión debe ir cifrada (una base en internet). */
+        public boolean conSsl() {
+            return ssl != null && !ssl.isBlank() && !ssl.equalsIgnoreCase("disable");
+        }
 
         public String url() {
             return "jdbc:postgresql://" + host + ":" + puerto + "/" + base;
@@ -61,8 +75,16 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
         this.esquema = esquema;
     }
 
-    /** Configuracion de db.properties con los valores por defecto para lo que falte. */
+    /**
+     * Configuracion de db.properties con los valores por defecto para lo que falte. Si no hay db.properties y
+     * existe la variable de entorno DATABASE_URL (asi se configura en Render), se usa esa cadena. En
+     * db.properties, db.url (la cadena completa) reemplaza a db.host, db.user, db.password...
+     */
     public static Configuracion leerConfiguracion(Path archivo) throws PersistenciaException {
+        String cadena = System.getenv("DATABASE_URL");
+        if (!Files.isRegularFile(archivo) && cadena != null && !cadena.isBlank()) {
+            return desdeCadena(cadena.trim());
+        }
         Properties p = new Properties();
         if (Files.isRegularFile(archivo)) {
             try (Reader lector = Files.newBufferedReader(archivo, StandardCharsets.UTF_8)) {
@@ -70,6 +92,11 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
             } catch (IOException | IllegalArgumentException e) {
                 throw new PersistenciaException("No se pudo leer " + archivo, e);
             }
+        }
+        // db.url: la cadena completa de Neon (la escribe configurar_base.bat).
+        String url = p.getProperty("db.url");
+        if (url != null && !url.isBlank()) {
+            return desdeCadena(url.trim());
         }
         String clave = p.getProperty("db.password");
         if (clave == null) {
@@ -82,8 +109,43 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
         } catch (NumberFormatException e) {
             throw new PersistenciaException("El puerto (db.port) de " + archivo + " no es un número", e);
         }
+        String ssl = p.getProperty("db.ssl", "").trim().toLowerCase();
+        if (!ssl.isEmpty() && !java.util.Set.of("disable", "allow", "prefer", "require", "verify-ca", "verify-full").contains(ssl)) {
+            throw new PersistenciaException("db.ssl de " + archivo + " debe ser require (bases en la nube como Neon) o quedar vacío: " + ssl, null);
+        }
         return new Configuracion(p.getProperty("db.host", "localhost").trim(), puerto,
-                p.getProperty("db.name", "alphasport_db").trim(), p.getProperty("db.user", "postgres").trim(), clave.trim());
+                p.getProperty("db.name", "alphasport_db").trim(), p.getProperty("db.user", "postgres").trim(), clave.trim(), ssl);
+    }
+
+    /**
+     * Lee una cadena como la que da Neon: postgresql://usuario:clave@servidor/base?sslmode=require.
+     * Usa la conexion directa (sin «-pooler») y, si no dice sslmode, conexion cifrada.
+     */
+    static Configuracion desdeCadena(String cadena) throws PersistenciaException {
+        try {
+            java.net.URI u = new java.net.URI(cadena.replaceFirst("^postgres(ql)?://", "http://"));
+            String datos = u.getRawUserInfo();
+            if (u.getHost() == null || datos == null || !datos.contains(":")) {
+                throw new PersistenciaException("DATABASE_URL debe tener la forma postgresql://usuario:clave@servidor/base", null);
+            }
+            String usuario = java.net.URLDecoder.decode(datos.substring(0, datos.indexOf(':')), StandardCharsets.UTF_8);
+            String clave = java.net.URLDecoder.decode(datos.substring(datos.indexOf(':') + 1), StandardCharsets.UTF_8);
+            String base = u.getPath() == null || u.getPath().length() <= 1 ? "neondb" : u.getPath().substring(1);
+            String ssl = "require";
+            if (u.getRawQuery() != null) {
+                for (String parte : u.getRawQuery().split("&")) {
+                    if (parte.startsWith("sslmode=")) {
+                        ssl = parte.substring("sslmode=".length()).toLowerCase();
+                    }
+                }
+            }
+            if (!java.util.Set.of("disable", "allow", "prefer", "require", "verify-ca", "verify-full").contains(ssl)) {
+                ssl = "require";
+            }
+            return new Configuracion(u.getHost().replace("-pooler", ""), u.getPort() > 0 ? u.getPort() : 5432, base, usuario, clave, ssl);
+        } catch (java.net.URISyntaxException | IllegalArgumentException e) {
+            throw new PersistenciaException("DATABASE_URL no es una cadena de conexión válida (postgresql://…)", null);
+        }
     }
 
     public Configuracion getConfiguracion() {
@@ -151,17 +213,50 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
                 Properties p = new Properties();
                 p.setProperty("user", configuracion.usuario());
                 p.setProperty("password", configuracion.clave());
-                p.setProperty("connectTimeout", "5");
+                // Una base en internet (Neon) puede tardar unos segundos en «despertar» la primera vez.
+                p.setProperty("connectTimeout", configuracion.conSsl() ? "30" : "5");
                 p.setProperty("ApplicationName", "AlphaSport");
+                if (configuracion.conSsl()) {
+                    p.setProperty("sslmode", configuracion.ssl());
+                    p.setProperty("tcpKeepAlive", "true"); // que el router no corte la conexión mientras no se usa
+                }
                 if (esquema != null) {
                     p.setProperty("currentSchema", esquema);
                 }
-                conexion = DriverManager.getConnection(configuracion.url(), p);
+                conexion = conectar(p);
+                if (esquema != null) {
+                    // Algunos servidores en internet (Neon) no aplican currentSchema al conectar: se fija aquí, antes de
+                    // abrir la transacción, para que un ROLLBACK no lo deshaga.
+                    try (java.sql.Statement st = conexion.createStatement()) {
+                        st.execute("SET search_path TO \"" + esquema.replace("\"", "\"\"") + "\"");
+                    }
+                }
                 conexion.setAutoCommit(false);
             }
             return conexion;
         } catch (SQLException e) {
             throw traducir(e);
+        }
+    }
+
+    /** Abre la conexión. Con una base en internet, si falla la red lo intenta otra vez antes de rendirse. */
+    private Connection conectar(Properties p) throws SQLException {
+        int intentos = configuracion.conSsl() ? 3 : 1;
+        for (int i = 1; ; i++) {
+            try {
+                return DriverManager.getConnection(configuracion.url(), p);
+            } catch (SQLException e) {
+                String estado = e.getSQLState() == null ? "" : e.getSQLState();
+                if (i >= intentos || !estado.startsWith("08")) {
+                    throw e;
+                }
+                try {
+                    Thread.sleep(1000L * i);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
+            }
         }
     }
 
@@ -178,7 +273,9 @@ public final class ConexionDB implements AutoCloseable, UnidadDeTrabajo {
         String estado = e.getSQLState() == null ? "" : e.getSQLState();
         String donde = configuracion.host() + ":" + configuracion.puerto();
         if (estado.startsWith("08")) {
-            return new PersistenciaException("No hay conexión con PostgreSQL en " + donde + ". ¿Está encendido el servicio?", e);
+            return new PersistenciaException(configuracion.conSsl()
+                    ? "No hay conexión con la base de datos en internet (" + configuracion.host() + "). Revise su conexión a internet e intente de nuevo."
+                    : "No hay conexión con PostgreSQL en " + donde + ". ¿Está encendido el servicio?", e);
         }
         return switch (estado) {
             case "28P01", "28000" -> new PersistenciaException("PostgreSQL rechazó el usuario o la contraseña de " + configuracion.usuario()

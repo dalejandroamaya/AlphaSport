@@ -24,7 +24,7 @@ java -cp "bin;lib/*" alphasport.ui.AlphaSportApp
 4. Clic derecho en `alphasport_db` → **Query Tool**.
 5. Botón **Open File** (carpeta) → `database/schema.sql` → **Execute** (F5). Debe decir *Query returned successfully*.
 6. Opcional, para empezar con datos de prueba: abra `database/seed.sql` y ejecútelo igual.
-7. Clic derecho en **Schemas → public → Tables → Refresh**: aparecen 21 tablas, y 4 en **Views**.
+7. Clic derecho en **Schemas → public → Tables → Refresh**: aparecen 22 tablas, y 4 en **Views**.
 
 Los dos archivos van en una transacción: si algo falla no cambian nada. `schema.sql` no borra datos (si las tablas ya existen, avisa y no hace nada) y `seed.sql` no hace nada si ya hay un campeonato en curso.
 
@@ -48,6 +48,7 @@ Si falta alguna, el programa lo avisa al abrir y no toca los datos.
 | `004_movimientos_division.sql` | 4 | Ascensos y descensos de cada temporada |
 | `005_registro_usuarios.sql` | 5 | Registro de cuentas: roles `ORGANIZADOR` y `AFICIONADO`, usuario y correo en minúsculas |
 | `006_varios_campeonatos.sql` | 6 | Varios campeonatos en curso: dueño de cada torneo y noticias por campeonato |
+| `007_imagenes.sql` | 7 | Fotos, escudos y fotos de noticias en la tabla `imagenes` (las ven todos los computadores) |
 
 **Migración 006.** Permite varios campeonatos en curso a la vez. Solo usa SQL básico (`ALTER TABLE`, `UPDATE`, `INSERT … SELECT`):
 
@@ -102,8 +103,40 @@ Abra `db.properties` y escriba su contraseña:
 | `db.name` | `alphasport_db` |
 | `db.user` | `postgres` |
 | `db.password` | la variable de entorno `ALPHASPORT_DB_PASSWORD` |
+| `db.ssl` | vacío (base local). Con una base en internet, `require` |
 
 La contraseña no tiene valor por defecto en el código a propósito: quedaría publicada en el repositorio.
+
+### Una base compartida en internet (Neon)
+
+Con PostgreSQL en cada computador, cada uno tiene su propia base: una cuenta creada en un PC no existe en otro. Para que todos vean las mismas cuentas, campeonatos, resultados y fotos, usen una sola base en internet. Neon (https://neon.tech) es PostgreSQL en la nube con plan gratuito:
+
+1. Cree la cuenta y un proyecto (la región más cercana: desde Colombia, AWS US East).
+2. En **Connect**, desactive *Connection pooling* (el host no debe decir `-pooler`) y copie los datos de la conexión.
+3. En `db.properties` (el mismo para todo el equipo, repartido por un medio privado):
+   ```
+   db.host=ep-xxxx.region.aws.neon.tech
+   db.port=5432
+   db.name=alphasport_db
+   db.user=neondb_owner
+   db.password=...
+   db.ssl=require
+   ```
+4. Cree las tablas en esa base (pasos 2 y 4 de esta guía, con el **SQL Editor** de Neon o con pgAdmin conectado a Neon).
+
+**Para los demás del equipo:** quien ya tiene la base pasa la cadena de conexión (`postgresql://…`) por un medio privado. El otro ejecuta `configurar_base.bat` (en la carpeta del proyecto), la pega y queda listo: el archivo crea `db.properties` con `db.url=…`. Nunca suban esa cadena ni `db.properties` al repositorio (es público).
+
+### La web publicada en internet (Render)
+
+El `Dockerfile` publica la versión web (sin el escritorio) en Render, con la misma base de Neon:
+
+1. En Render: **New → Web Service**, elija este repositorio, rama `main`, **Language: Docker**, región **Virginia (US East)** (junto a Neon) y plan **Free**.
+2. En **Environment Variables** agregue `DATABASE_URL` con la cadena de Neon. Render da solo `PORT` y la dirección pública.
+3. Cada cambio que llegue a `main` se publica solo. Si el cambio trae una migración nueva, aplíquela en Neon antes.
+
+En internet no aparece «Cerrar programa» y la sesión viaja solo por HTTPS. El plan gratis «duerme» tras unos minutos sin visitas: la primera visita tarda unos segundos más.
+
+Notas: cada acción viaja por internet (un poco más lenta que la base local) y Neon «duerme» la base tras unos minutos sin uso, así que la primera acción puede tardar uno o dos segundos. La web sola (`index.html` sin Java) no usa la base: sigue guardando en el navegador.
 
 ## 4. Pasar los datos anteriores
 
@@ -113,7 +146,7 @@ Si tenía un campeonato en la carpeta `datos/`, ejecute **Pasar datos/ a Postgre
 java -cp "bin;lib/*" alphasport.persistence.postgres.MigradorArchivos
 ```
 
-Pasa el campeonato (como uno más en curso, sin dueño: un Organizador lo puede tomar), el historial y las noticias. No borra los archivos y no reemplaza lo que ya esté en la base (por eso, si quiere sus datos anteriores, no ejecute `seed.sql` antes). Las fotos siguen en `datos/imagenes/`; la base guarda su nombre.
+Pasa el campeonato (como uno más en curso, sin dueño: un Organizador lo puede tomar), el historial y las noticias. No borra los archivos y no reemplaza lo que ya esté en la base (por eso, si quiere sus datos anteriores, no ejecute `seed.sql` antes). Las fotos de `datos/imagenes/` se suben solas a la tabla `imagenes` la primera vez que se abre el programa (los archivos no se borran).
 
 ## 5. Probar
 
@@ -126,6 +159,7 @@ Ejecute **Prueba de PostgreSQL (PruebaPostgres)**: debe terminar en `TODO BIEN`.
 | `torneos`, `torneo_criterios`, `divisiones` | Los campeonatos en curso (`ACTUAL`, puede haber varios) y los del historial (`ARCHIVADO`), con sus reglas y su dueño (`propietario_id`). Terminar un campeonato lo pasa al historial con sus mismos ids |
 | `equipos`, `directores_tecnicos`, `jugadores` | Plantillas. Un jugador que sale queda con `activo = FALSE`: sus goles y votos lo siguen usando |
 | `personas` | Quién es cada jugador (`codigo` UUID): la misma persona en todas las temporadas y copias del historial. No se borra con el torneo |
+| `imagenes` | Fotos de jugadores, escudos y fotos de noticias (los bytes). Así las ven todos los computadores de la misma base |
 | `movimientos_division` | Ascensos y descensos con los que empezó cada temporada: de qué división venía cada equipo, a cuál pasó y en qué puesto terminó |
 | `fases`, `fase_participantes`, `fase_grupos`, `fase_cuadro` | Fases, grupos y llaves |
 | `partidos` | Fixture, previa, resultado y votación (`horas_votacion`, `finalizado_en`, `votacion_cerrada_en`) |
@@ -146,7 +180,9 @@ Ejecute **Prueba de PostgreSQL (PruebaPostgres)**: debe terminar en `TODO BIEN`.
 
 ## 7. Escritorio y web a la vez
 
-Se pueden usar al mismo tiempo. Antes de cada consulta o acción se revisa `torneos.version` y, si cambió, se vuelve a leer. Si los dos guardan a la vez, el segundo recibe un aviso y los datos nuevos, en vez de pisar el cambio.
+Se pueden usar al mismo tiempo, también desde varios computadores con la misma base. Antes de cada consulta o acción se revisa `torneos.version` y, si cambió, se vuelve a leer. Si los dos guardan a la vez, el segundo recibe un aviso y los datos nuevos, en vez de pisar el cambio.
+
+**En vivo:** el escritorio y la web con Java revisan esa versión cada 5 segundos y se redibujan solos cuando otro equipo cambió algo («Actualizado con los cambios de otro equipo»). Esperan mientras haya un diálogo abierto o se esté escribiendo, y se pausan con la ventana minimizada o la pestaña oculta (así una base en internet puede «dormir»).
 
 Si edita una tabla a mano en pgAdmin mientras el programa está abierto, súbale la versión para que lo note:
 
@@ -159,6 +195,7 @@ UPDATE torneos SET version = version + 1 WHERE situacion = 'ACTUAL';
 | Mensaje | Qué hacer |
 |---|---|
 | No hay conexión con PostgreSQL… | Inicie el servicio `postgresql-x64-…` de Windows y revise `db.host` y `db.port` |
+| No hay conexión con la base de datos en internet… | Revise la conexión a internet y los datos de `db.properties` (con Neon, `db.ssl=require`) |
 | PostgreSQL rechazó el usuario o la contraseña… | Corrija `db.user` y `db.password` en `db.properties` |
 | La base de datos … no existe | Paso 2 |
 | … no tiene las tablas de AlphaSport | Ejecute `database/schema.sql` |

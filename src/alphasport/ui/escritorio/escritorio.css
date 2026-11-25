@@ -49,9 +49,9 @@
     -borde: rgba(11, 23, 38, 0.11);
     -texto: #0b1726;
     -sutil: #4b5b73;
-    -cesped: #078a52;
-    -cesped-2: #056b40;
-    -cesped-suave: rgba(7, 138, 82, 0.13);
+    -cesped: #057545;
+    -cesped-2: #04603a;
+    -cesped-suave: rgba(5, 117, 69, 0.13);
     -oro: #e0a62a;
     -oro-2: #b07a0a;
     -oro-texto: #865c00;
@@ -140,7 +140,7 @@
     -fx-background-color: rgba(255, 255, 255, 0.5), linear-gradient(to bottom, #5af0b0, -cesped 45%, -cesped-2);
     -fx-background-insets: 0, 1 0 0 0;
     -fx-border-color: transparent;
-    -fx-text-fill: #03170d;
+    -fx-text-fill: -sobre-cesped;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 16, 0, 0, 6);
 }
 .btn.primario:hover { -fx-background-color: rgba(255, 255, 255, 0.6), linear-gradient(to bottom, #7af5c2, #44eca4 45%, -cesped); }
@@ -202,7 +202,7 @@
 .date-picker .arrow-button { -fx-background-color: transparent; }
 .check-box .box { -fx-background-color: -campo; -fx-border-color: rgba(128, 140, 160, 0.5); -fx-border-radius: 6; -fx-background-radius: 6; }
 .check-box:selected .box { -fx-background-color: -cesped; -fx-border-color: -cesped; }
-.check-box:selected .mark { -fx-background-color: #03170d; }
+.check-box:selected .mark { -fx-background-color: -sobre-cesped; }
 
 /* ------------------------------------------------------------------ login */
 .login-tarjeta { -fx-padding: 34 32 30 32; }
@@ -380,7 +380,7 @@
 .tarjeta { -fx-padding: 24; }
 .regla { -fx-text-fill: -sutil; }
 .criterio, .fila-lista { -fx-background-color: -campo; -fx-background-radius: 14; -fx-border-color: -borde; -fx-border-radius: 14; -fx-padding: 8 12; }
-.orden { -fx-background-color: -cesped; -fx-background-radius: 999; -fx-text-fill: #03170d; -fx-font-family: "Inter Bold"; -fx-min-width: 30; -fx-min-height: 30; -fx-alignment: center; }
+.orden { -fx-background-color: -cesped; -fx-background-radius: 999; -fx-text-fill: -sobre-cesped; -fx-font-family: "Inter Bold"; -fx-min-width: 30; -fx-min-height: 30; -fx-alignment: center; }
 .dorsal { -fx-background-color: -cesped-suave; -fx-background-radius: 10; -fx-text-fill: -cesped; -fx-font-family: "Inter Bold"; -fx-min-width: 34; -fx-min-height: 30; -fx-alignment: center; }
 
 /* ------------------------------------------------------------------ ventanas suaves */
@@ -437,7 +437,7 @@
 .tab-pane .tab-header-background { -fx-background-color: transparent; }
 .tab-pane .tab { -fx-background-color: transparent; -fx-background-radius: 999; -fx-border-color: -borde; -fx-border-radius: 999; -fx-padding: 5 14; }
 .tab-pane .tab:selected { -fx-background-color: -cesped; -fx-border-color: -cesped; }
-.tab-pane .tab:selected .tab-label { -fx-text-fill: #03170d; -fx-font-family: "Inter SemiBold"; }
+.tab-pane .tab:selected .tab-label { -fx-text-fill: -sobre-cesped; -fx-font-family: "Inter SemiBold"; }
 .tab-pane > .tab-content-area { -fx-padding: 14 0 0 0; }
 .lista-historial { -fx-background-color: transparent; -fx-border-color: -borde; -fx-border-radius: 14; -fx-background-radius: 14; }
 .lista-historial .list-cell { -fx-background-color: transparent; -fx-text-fill: -texto; -fx-padding: 11; -fx-border-color: transparent transparent -borde transparent; }
@@ -527,7 +527,7 @@
 .xi-jugador:disabled { -fx-opacity: 0.55; }
 .xi-jugador.titular:disabled { -fx-opacity: 0.85; }
 .fila-alineacion { -fx-background-color: -campo; -fx-background-radius: 10; -fx-padding: 5 10; }
-.fila-alineacion.entro { -fx-border-color: transparent transparent transparent -cesped; -fx-border-width: 0 0 0 3; }
+.fila-alineacion.entro { -fx-background-color: -cesped-suave; -fx-background-radius: 6; }
 .titulo-alineacion { -fx-font-family: "Inter SemiBold"; -fx-font-size: 16px; }
 
 /* =====================================================================
@@ -654,6 +654,7 @@
    ===================================================================== */
 .raiz {
     -fondo: #050a12;
+    -sobre-cesped: #03170d;
     -superficie: #0b1522;
     -superficie-2: #12233a;
     -linea: rgba(150, 185, 230, 0.1);
@@ -671,6 +672,7 @@
 }
 .raiz.claro {
     -fondo: #e7ecf2;
+    -sobre-cesped: white;
     -superficie: #ffffff;
     -superficie-2: #dfe7f1;
     -linea: rgba(11, 23, 38, 0.09);
@@ -723,10 +725,10 @@
 .raiz.claro .btn:hover { -fx-background-color: #dfe6ef; -fx-border-color: transparent; }
 .btn:pressed { -fx-scale-x: 1; -fx-scale-y: 1; }
 .btn:focused { -fx-border-color: -cian; }
-.btn.primario, .raiz.claro .btn.primario { -fx-background-color: -cesped; -fx-text-fill: #03170d; -fx-effect: null; }
+.btn.primario, .raiz.claro .btn.primario { -fx-background-color: -cesped; -fx-text-fill: -sobre-cesped; -fx-effect: null; }
 .raiz.claro .btn.primario { -fx-text-fill: white; }
 .btn.primario:hover { -fx-background-color: #5af0b0; }
-.raiz.claro .btn.primario:hover { -fx-background-color: #0a9a5c; }
+.raiz.claro .btn.primario:hover { -fx-background-color: -cesped-2; }
 .btn.dorado, .raiz.claro .btn.dorado, .btn.primario.dorado { -fx-background-color: #f7c75a; -fx-text-fill: #2a1900; -fx-effect: null; }
 .btn.dorado:hover { -fx-background-color: #ffd77d; }
 .btn.fantasma, .raiz.claro .btn.fantasma { -fx-background-color: transparent; }
@@ -875,7 +877,7 @@
 .raiz.claro .tab-pane .tab { -fx-background-color: #edf1f6; }
 .tab-pane .tab .tab-label, .detalle-pestanas .tab .tab-label { -fx-text-fill: -texto; -fx-font-family: "Inter Bold"; -fx-font-size: 11.5px; }
 .tab-pane .tab:selected, .detalle-pestanas .tab:selected, .raiz.claro .tab-pane .tab:selected { -fx-background-color: -cesped; -fx-border-color: transparent; }
-.tab-pane .tab:selected .tab-label, .detalle-pestanas .tab:selected .tab-label { -fx-text-fill: #03170d; }
+.tab-pane .tab:selected .tab-label, .detalle-pestanas .tab:selected .tab-label { -fx-text-fill: -sobre-cesped; }
 .raiz.claro .tab-pane .tab:selected .tab-label { -fx-text-fill: white; }
 .tab-pane .tab:focused .focus-indicator { -fx-border-color: transparent; }
 
@@ -907,7 +909,7 @@
     -texto: #0b1726;
     -sutil: #4b5b73;
     -rojo: #c8243f;
-    -cesped-suave: rgba(7, 138, 82, 0.13);
+    -cesped-suave: rgba(5, 117, 69, 0.13);
     -superficie: #ffffff;
     -linea: rgba(11, 23, 38, 0.09);
 }

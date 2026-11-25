@@ -14,4 +14,5 @@ desktop.ini
 
 # Credenciales locales de la base de datos (cada quien copia db.properties.example)
 db.properties
+db.properties.local
 .env

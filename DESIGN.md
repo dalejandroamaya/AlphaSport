@@ -16,13 +16,14 @@ colors:
   rojo-alerta: "#ff6b81"
   ambar: "#ffb950"
   cian-foco: "#74dcff"
-  cesped-dia: "#078a52"
+  cesped-dia: "#057545"
   oro-texto-dia: "#865c00"
   texto-dia: "#0b1726"
   fondo-dia: "#e7ecf2"
   superficie-dia: "#ffffff"
   superficie-2-dia: "#dfe7f1"
   tinta-cesped: "#03170d"
+  sobre-cesped-dia: "#ffffff"
   tinta-oro: "#2a1900"
   rojo-suave: "#ffa3b1"
   gris-coronacion: "#c3cfe2"
@@ -118,7 +119,7 @@ Cada ronda es un panel con una barra de encabezado en mayúsculas, y cada partid
 Una noche azul profunda con dos luces de estadio: verde césped para lo que está en juego y dorado para lo que se gana.
 
 ### Primary
-- **Verde césped** (cesped): botón principal, pestaña activa, estado «jugado», sección activa de la navegación y bordes de foco. En modo claro baja a **verde cancha de día** (cesped-dia).
+- **Verde césped** (cesped): botón principal, pestaña activa, estado «jugado», sección activa de la navegación y bordes de foco. En modo claro baja a **verde cancha de día** (cesped-dia, 5,8:1 con blanco). El texto sobre el verde usa el token **sobre-cesped**: tinta oscura de noche (tinta-cesped) y blanco de día (sobre-cesped-dia).
 
 ### Secondary
 - **Dorado de trofeo** (oro): el líder de la tabla, el ganador de la final, la cabecera de un torneo terminado y la coronación. En modo claro el texto dorado usa **oro de medalla** (oro-texto-dia).
@@ -141,7 +142,7 @@ Una noche azul profunda con dos luces de estadio: verde césped para lo que est�
 
 ## Typography
 
-**Font:** Inter (regular, semibold y bold), con Segoe UI y Arial de respaldo. Se guarda en `web/fuentes` y la usan la web y el escritorio.
+**Font:** Inter (regular, semibold y bold), con Segoe UI y Arial de respaldo. Se guarda en `web/fuentes`: la web usa `Inter-latin.woff2` (variable, 48 KB, todo el español) y el escritorio los TTF de cada peso (JavaFX no lee WOFF2).
 
 ### Hierarchy
 - **Display** (700, clamp(1.5rem, 2.4vw, 2rem)): nombre del torneo en la cabecera.
@@ -157,7 +158,7 @@ Una noche azul profunda con dos luces de estadio: verde césped para lo que est�
 
 Dos columnas en pantallas anchas: barra lateral de 248 px y área principal, con 12 px de separación y de margen. El área principal apila la cabecera del torneo y la vista activa; cada vista abre con su panel (título, ayuda y filtros) y debajo su contenido. Los partidos van en una sola columna de filas dentro del panel de su ronda.
 
-Por debajo de 1000 px la barra lateral pasa a una barra de navegación inferior. Por debajo de 640 px la columna de fecha de cada fila se angosta y la tabla de posiciones muestra solo las columnas principales.
+Por debajo de 1000 px la barra lateral pasa a una barra de navegación inferior. Por debajo de 640 px esa barra muestra las 4 secciones que más usa cada rol (Organizador: Partidos, Posiciones, Equipos, Torneos; Aficionado: Partidos, Votaciones, Posiciones, Noticias) y «Más», que abre el resto en filas encima de la barra; las etiquetas nunca bajan de 11 px. La columna de fecha de cada fila se angosta y la tabla de posiciones muestra solo las columnas principales.
 
 ## Elevation & Depth
 

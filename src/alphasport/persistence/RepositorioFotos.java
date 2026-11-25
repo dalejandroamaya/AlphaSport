@@ -3,7 +3,8 @@ package alphasport.persistence;
 /**
  * Donde se guardan las fotos de los jugadores (tipo cedula) y los escudos de los equipos.
  * El campeonato solo anota el nombre de cada archivo; los bytes viven aqui. Hay dos
- * implementaciones: {@link ArchivoRepositorioFotos} (carpeta datos/imagenes) y
+ * implementaciones: {@link alphasport.persistence.postgres.PostgresImagenes} (tabla imagenes, la que usa el programa),
+ * {@link ArchivoRepositorioFotos} (carpeta datos/imagenes) y
  * {@link RepositorioFotosEnMemoria} (pruebas).
  */
 public interface RepositorioFotos {
