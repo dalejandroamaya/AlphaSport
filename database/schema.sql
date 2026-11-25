@@ -11,7 +11,7 @@ CREATE TABLE esquema_version (
     version      INTEGER PRIMARY KEY,
     aplicada_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO esquema_version (version) VALUES (6);
+INSERT INTO esquema_version (version) VALUES (7);
 
 -- ---------------------------------------------------------------- usuarios
 -- Cuentas creadas con «Registrarse»: usuario y correo en minusculas (unicos sin importar mayusculas).
@@ -320,6 +320,15 @@ CREATE TABLE calificaciones_partido (
 );
 CREATE INDEX calificaciones_jugador ON calificaciones_partido (jugador_id);
 CREATE UNIQUE INDEX calificaciones_un_mvp ON calificaciones_partido (partido_id) WHERE es_mvp;
+
+-- ---------------------------------------------------------------- imagenes
+-- Fotos de jugadores, escudos y fotos de noticias: el nombre es el que guardan jugadores.foto, equipos.escudo
+-- y noticias.imagen_ruta. En la base (y no en datos/imagenes) para que las vean todos los computadores.
+CREATE TABLE imagenes (
+    nombre  VARCHAR(80) PRIMARY KEY,
+    datos   BYTEA       NOT NULL,
+    creada  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- ---------------------------------------------------------------- noticias
 -- Cada noticia es de un campeonato (torneo_id); las de antes de los varios campeonatos pueden no tenerlo.

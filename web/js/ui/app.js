@@ -249,12 +249,41 @@ function aplicarPermisos() {
   $('chipRol').hidden = !S;
   $('chipLectura').hidden = !S || admin;
   $('btnAvanzar').hidden = !admin || !E.hay; // sin campeonato elegido no hay nada que iniciar
-  $('menuCerrar').hidden = servicio.modo !== 'java' || !admin;
+  // «Cerrar programa» solo en el programa local (publicado en internet no se cierra).
+  $('menuCerrar').hidden = servicio.modo !== 'java' || !admin || !['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
+  ajustarNavMovil();
   if (!admin && cargaRapida) {
     cargaRapida = false;
     $('btnRapido').setAttribute('aria-pressed', 'false');
   }
 }
+
+/*
+ * En vivo (solo con el servidor Java, que es el que comparte la base entre computadores): cada pocos segundos
+ * se pide el estado —el servidor solo recarga si cambió la versión del campeonato— y se redibuja únicamente si
+ * otro equipo cambió algo. Se pausa con la pestaña oculta, con un diálogo abierto o mientras se escribe.
+ */
+const ACTUALIZAR_CADA_MS = 5000;
+let revisando = false;
+async function revisarCambios() {
+  if (servicio.modo !== 'java' || !S || document.hidden || revisando || $('app').hidden) return;
+  const escribiendo = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName);
+  if (escribiendo || document.querySelector('dialog[open]')) return;
+  revisando = true;
+  try {
+    const nuevo = await servicio.estado();
+    if (nuevo && nuevo.ok !== false && JSON.stringify(nuevo) !== JSON.stringify(E)) {
+      E = nuevo;
+      render();
+      aviso('Actualizado con los cambios de otro equipo.');
+    }
+  } catch (e) {
+    // sin conexión por un momento: se intenta de nuevo en la próxima vuelta
+  } finally {
+    revisando = false;
+  }
+}
+setInterval(revisarCambios, ACTUALIZAR_CADA_MS);
 
 async function mostrarApp() {
   $('login').hidden = true;
@@ -314,6 +343,8 @@ async function renderCampeonatos() {
   await cargarCampeonatos();
   const actual = E.hay ? E.campeonato.codigo : null, lista = misCampeonatos.campeonatos || [], sin = misCampeonatos.sinOrganizador || [];
   $('ayudaCampeonatos').hidden = !lista.length;
+  // Con campeonatos, lo principal es gestionarlos (la cabecera); crear otro es secundario. Sin ninguno, crear es lo principal.
+  $('btnNuevoCampeonato').classList.toggle('primario', !lista.length);
   $('listaCampeonatos').innerHTML = lista.length ? lista.map(x => tarjetaCampeonatoHtml(x, x.codigo === actual)).join('')
     : `<div class="vacio vidrio"><img src="img/balon.svg" alt=""><span>Todavía no tiene campeonatos. Cree el primero: después registra sus equipos y lo inicia.</span>
        <button type="button" class="btn primario" data-crear-campeonato>Crear mi primer campeonato</button></div>`;
@@ -325,9 +356,11 @@ function tarjetaCampeonatoHtml(x, actual, paraTomar = false) {
   const pct = x.partidos ? Math.round(100 * x.partidosJugados / x.partidos) : 0, codigo = esc(x.codigo);
   const acciones = paraTomar
     ? `<button type="button" class="btn primario" data-tomar="${codigo}">Tomar y gestionar</button>`
-    : `<button type="button" class="btn primario" data-gestionar="${codigo}">${actual ? 'Seguir gestionando' : 'Gestionar'}</button>
-       <button type="button" class="btn fantasma" data-terminar="${codigo}"${x.partidosJugados ? '' : ' disabled title="Se puede terminar cuando tenga partidos jugados"'}>Terminar…</button>
-       <button type="button" class="btn peligro" data-eliminar="${codigo}">Eliminar…</button>`;
+    : `<button type="button" class="btn" data-gestionar="${codigo}">${actual ? 'Seguir gestionando' : 'Gestionar'}</button>
+       <span class="acciones-tarjeta">
+         <button type="button" class="btn mini fantasma" data-terminar="${codigo}"${x.partidosJugados ? '' : ' disabled title="Se puede terminar cuando tenga partidos jugados"'}>Terminar…</button>
+         <button type="button" class="btn mini peligro" data-eliminar="${codigo}">Eliminar…</button>
+       </span>`;
   return `<article class="tarjeta-campeonato vidrio${actual ? ' actual' : ''}" aria-label="${esc(x.nombre)}">
     <header><h3>${esc(x.nombre)}</h3>${actual ? '<span class="chip chip-actual">Gestionando</span>' : ''}</header>
     <div class="chips"><span class="chip">${esc(x.formatoNombre)}</span><span class="chip">${esc(x.estado)}</span><span class="chip">${x.equipos} equipos</span></div>
@@ -442,17 +475,60 @@ function render() {
   if (!$('vista-noticias').hidden) renderNoticias();
 }
 
+/*
+ * Celular: la barra inferior no alcanza para todas las secciones. Quedan a mano las 4 que más usa cada rol
+ * (el Organizador carga resultados al borde de la cancha; el Aficionado sigue partidos y vota) y el resto
+ * se abre con «Más». En pantallas grandes no cambia nada: es la barra lateral de siempre.
+ */
+const NAV_PRINCIPALES = {
+  organizador: ['partidos', 'posiciones', 'equipos', 'campeonatos'],
+  aficionado: ['partidos', 'votaciones', 'posiciones', 'noticias']
+};
+const NAV_CORTOS = { campeonatos: 'Torneos', partidos: 'Partidos', sanciones: 'Estadísticas' };
+function ajustarNavMovil() {
+  const nav = document.querySelector('.navegacion');
+  const visibles = [...nav.querySelectorAll('button[data-vista]')].filter(b => !b.hidden);
+  const nombres = visibles.map(b => b.dataset.vista);
+  const preferidas = NAV_PRINCIPALES[puedeEditar() ? 'organizador' : 'aficionado'].filter(v => nombres.includes(v));
+  const orden = [...new Set([...preferidas, ...nombres])];
+  const caben = orden.length <= 5; // con 5 o menos no hace falta «Más»
+  visibles.forEach(b => {
+    const i = orden.indexOf(b.dataset.vista);
+    b.style.setProperty('--orden-movil', i);
+    b.classList.toggle('nav-extra', !caben && i >= 4);
+    // En la barra del celular los nombres largos usan una etiqueta corta; el nombre completo queda para el lector de pantalla.
+    const texto = b.querySelector('span');
+    if (texto && NAV_CORTOS[b.dataset.vista]) {
+      texto.dataset.corto = NAV_CORTOS[b.dataset.vista];
+      b.setAttribute('aria-label', texto.textContent.trim());
+    }
+  });
+  $('navMas').hidden = caben;
+  cerrarNavMas();
+  marcarNavMas(document.querySelector('.navegacion button[data-vista].activa')?.dataset.vista);
+}
+/** «Más» se ve activo cuando la sección abierta está dentro de su panel. */
+function marcarNavMas(nombre) {
+  const b = nombre && document.querySelector(`.navegacion button[data-vista="${nombre}"]`);
+  $('navMas').classList.toggle('activa', !!(b && b.classList.contains('nav-extra')));
+}
+function cerrarNavMas() {
+  document.querySelector('.navegacion').classList.remove('abierta');
+  $('navMas').setAttribute('aria-expanded', 'false');
+}
+
 function mostrarVista(nombre) {
   if (!$('vista-' + nombre)) nombre = 'equipos';
   if (!puedeVer(nombre)) nombre = VISTA_INICIAL_VISITANTE; // el visitante no ve Equipos ni Reglas
   // Sin campeonato elegido las demás vistas tendrían datos viejos: el Organizador va a «Mis campeonatos».
   if (!E.hay && !['noticias', 'campeonatos'].includes(nombre)) nombre = puedeVer('campeonatos') ? 'campeonatos' : 'partidos';
   document.querySelectorAll('.vista').forEach(v => { v.hidden = v.id !== 'vista-' + nombre; });
-  document.querySelectorAll('.navegacion button').forEach(b => {
+  document.querySelectorAll('.navegacion button[data-vista]').forEach(b => {
     b.classList.toggle('activa', b.dataset.vista === nombre);
     b.setAttribute('aria-current', b.dataset.vista === nombre ? 'page' : 'false');
   });
   guardarPreferencia(CLAVE_PESTANA, nombre);
+  marcarNavMas(nombre);
   if (nombre === 'votaciones') renderVotaciones();
   if (nombre === 'noticias') renderNoticias(); // las noticias se piden al servicio al abrir la sección
   if (nombre === 'campeonatos') renderCampeonatos();
@@ -2492,7 +2568,18 @@ function conectarEventos() {
   });
   document.querySelector('.navegacion').addEventListener('click', e => {
     const b = e.target.closest('button[data-vista]');
-    if (b) mostrarVista(b.dataset.vista);
+    if (b) { cerrarNavMas(); mostrarVista(b.dataset.vista); }
+  });
+  $('navMas').addEventListener('click', () => {
+    const abierta = document.querySelector('.navegacion').classList.toggle('abierta');
+    $('navMas').setAttribute('aria-expanded', String(abierta));
+  });
+  // El panel de «Más» se cierra con Escape o tocando fuera de la barra.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.querySelector('.navegacion.abierta')) { cerrarNavMas(); $('navMas').focus(); }
+  });
+  document.addEventListener('pointerdown', e => {
+    if (document.querySelector('.navegacion.abierta') && !e.target.closest('.barra-lateral')) cerrarNavMas();
   });
   $('btnAvanzar').addEventListener('click', avanzar);
   $('btnCampeon').addEventListener('click', verCampeon);

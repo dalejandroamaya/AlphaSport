@@ -164,7 +164,7 @@ public class MotorCampeonato {
 
     public String describirEstado() {
         if (!campeonato.isIniciado()) {
-            return "Sin iniciar: registre los equipos y pulse \"Iniciar campeonato\".";
+            return "Sin iniciar: registre los equipos y pulse «Iniciar campeonato».";
         }
         if (campeonato.isTerminado()) {
             return "Terminado. " + textoCampeones();
@@ -174,10 +174,10 @@ public class MotorCampeonato {
         int pendientes = contarPendientes(indice);
         String texto = "Fase actual: " + fase.getNombre();
         if (fase.getTipo() != TipoFase.LIGA && fase.getTipo() != TipoFase.GRUPOS) {
-            texto += " - ronda " + ultimaRonda(indice);
+            texto += " · ronda " + ultimaRonda(indice); // mismo texto que la web sola (motor.js)
         }
-        return texto + (pendientes > 0 ? " - " + (pendientes == 1 ? "1 partido pendiente" : pendientes + " partidos pendientes")
-                : " - completa: pulse \"Cerrar ronda y avanzar\"");
+        return texto + (pendientes > 0 ? " · " + (pendientes == 1 ? "1 partido pendiente" : pendientes + " partidos pendientes")
+                : " · completa: pulse «Cerrar ronda y avanzar»");
     }
 
     private void agregarFase(Fase fase) {
