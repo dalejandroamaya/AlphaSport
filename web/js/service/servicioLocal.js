@@ -6,9 +6,16 @@
  */
 
 function crearServicioLocal() {
-  let c = Almacen.campeonato.cargar();
-  if (c && !FORMATOS[c.formato]) c = null;
-  let m = c ? new Motor(c) : null;
+  /*
+   * Como GestorCampeonatos en Java: puede haber varios campeonatos en curso en este navegador
+   * (Almacen.campeonatos), cada uno con su dueño (c.propietario = usuario local; '' = sin dueño).
+   * «c» es el que eligió el usuario con sesión; se elige al entrar (ver cargarElegido).
+   */
+  let c = null;
+  let m = null;
+  // Lo primero: pasar el campeonato del formato anterior (y sus noticias) a varios campeonatos, antes de que
+  // las noticias se lean; si no, su copia en memoria pisaría la migración al guardar.
+  Almacen.campeonatos.listar();
 
   class ErrorRegla extends Error {
     constructor(mensaje, codigo = 'REGLA') { super(mensaje); this.codigo = codigo; }
@@ -22,7 +29,7 @@ function crearServicioLocal() {
   };
   const exigirNoIniciado = () => { if (m.iniciado()) throw new ErrorRegla('El campeonato ya inició: no se pueden agregar equipos nuevos.'); };
   const usar = nuevo => { c = nuevo; m = new Motor(c); };
-  const guardar = () => Almacen.campeonato.guardar(c);
+  const guardar = () => Almacen.campeonatos.guardar(c);
 
   function archivarActual() {
     if (!c || !c.partidos.some(P.jugado)) return;
@@ -171,7 +178,7 @@ function crearServicioLocal() {
   }
 
   function estado() {
-    if (!c) return { hay: false };
+    if (!c) return { hay: false, elegir: visibles().length > 0 };
     const general = m.tablaGeneral();
     const campeon = m.terminado() ? general.find(f => f.id === c.campeon) : null;
     return {
@@ -251,7 +258,9 @@ function crearServicioLocal() {
   }
 
   function historial() {
-    const lista = Almacen.historial.listar().filter(x => x.datos && FORMATOS[x.datos.formato]).map(x => x.datos);
+    // El Organizador ve solo sus campeonatos archivados; el Aficionado, todos.
+    const lista = Almacen.historial.listar().filter(x => x.datos && FORMATOS[x.datos.formato]).map(x => x.datos)
+      .filter(x => !esOrganizador() || x.propietario === usuario.usuario);
     return { lista: lista.map(detalleHistorial), palmares: palmares(lista) };
   }
 
@@ -626,6 +635,60 @@ function crearServicioLocal() {
     }
   }
 
+  /* ---------------------------------------------------------------- varios campeonatos (como GestorCampeonatos) */
+
+  const esOrganizador = () => !!(usuario && ROLES[usuario.rol].puedeEditar);
+  const valido = x => !!(x && FORMATOS[x.formato]);
+  /** El Organizador ve los suyos; el Aficionado, todos. */
+  const puedeVer = x => !esOrganizador() || x.propietario === usuario.usuario;
+  const visibles = () => (usuario ? Almacen.campeonatos.listar().filter(x => valido(x) && puedeVer(x)) : []);
+
+  /** Este navegador pasa a trabajar con ese campeonato (null = ninguno) y lo recuerda para el usuario. */
+  function elegir(codigo) {
+    const x = codigo ? Almacen.campeonatos.cargar(codigo) : null;
+    if (valido(x)) usar(x); else { c = null; m = null; }
+    if (usuario) Almacen.elegido.guardar(usuario.usuario, c ? c.codigo : null);
+  }
+
+  /** Al entrar: el último que eligió el usuario si todavía lo puede ver; si no, el único que ve; si no, ninguno. */
+  function cargarElegido() {
+    c = null;
+    m = null;
+    if (!usuario) return;
+    const lista = visibles(), previo = Almacen.elegido.cargar(usuario.usuario);
+    const x = lista.find(y => y.codigo === previo) || (lista.length === 1 ? lista[0] : null);
+    if (x) usar(x);
+  }
+
+  /** Para cambiar el campeonato elegido hay que ser su Organizador (dueño). */
+  function exigirDueno() {
+    exigirAdministrador();
+    exigir();
+    if (c.propietario !== usuario.usuario) {
+      throw new ErrorRegla(c.propietario ? 'Este campeonato es de otro organizador: solo puede gestionar los suyos.'
+        : 'Este campeonato no tiene organizador: tómelo antes de gestionarlo.', 'PERMISO');
+    }
+  }
+
+  function buscarActivo(codigo) {
+    const x = codigo ? Almacen.campeonatos.cargar(codigo) : null;
+    if (!valido(x)) throw new ErrorRegla('Ese campeonato ya no está en curso. Elija otro.', 'CAMPEONATO');
+    return x;
+  }
+
+  /** Mismo JSON que la consulta «campeonatos» de Java (RutasCampeonatos). */
+  function resumenCampeonato(x) {
+    const mo = new Motor(x), cuenta = Almacen.cuentas.listar().find(k => k.usuario === x.propietario);
+    return {
+      codigo: x.codigo, nombre: x.nombre, formato: x.formato, formatoNombre: FORMATOS[x.formato].nombre,
+      estado: mo.terminado() ? 'Terminado' : mo.iniciado() ? 'En curso' : 'Por iniciar', fase: mo.describirEstado(),
+      organizador: x.propietario ? (cuenta ? cuenta.nombre : x.propietario) : null, sinOrganizador: !x.propietario,
+      equipos: mo.activos().length, partidosJugados: x.partidos.filter(P.jugado).length, partidos: x.partidos.length
+    };
+  }
+
+  cargarElegido();
+
   /** Respuesta de error con el mismo formato que la API de Java. */
   const fallo = e => ({ ok: false, codigo: e.codigo || 'ERROR', error: e.message });
 
@@ -644,6 +707,7 @@ function crearServicioLocal() {
       const claveHash = await Cuentas.hash(datos.clave);
       Almacen.cuentas.guardar([...cuentas, { usuario: datos.usuario, nombre: datos.nombre, correo: datos.correo, rol: datos.rol, claveHash }]);
       abrirSesion(datos.usuario, datos.rol);
+      cargarElegido();
       return 'Cuenta creada. ¡Le damos la bienvenida a AlphaSport!';
     },
     login: async d => {
@@ -653,18 +717,23 @@ function crearServicioLocal() {
       const coincide = await Cuentas.coincide(typeof d.clave === 'string' ? d.clave : '', cuenta ? cuenta.claveHash : hashFicticio);
       if (!cuenta || !coincide || !ROLES[cuenta.rol]) throw new ErrorRegla('Usuario o contraseña incorrectos.', 'LOGIN');
       abrirSesion(nombre, cuenta.rol);
+      cargarElegido();
     },
     logout: () => {
       usuario = null;
+      c = null;
+      m = null;
       Almacen.sesion.eliminar();
     },
+    // Un campeonato MÁS del Organizador (los demás siguen en curso); queda elegido.
     nuevo: d => {
       const nombre = String(d.nombre || '').trim();
       if (!nombre) throw new ErrorRegla('Escriba el nombre del campeonato.');
       if (!d.config.criterios.length) throw new ErrorRegla('Escoja al menos un criterio de desempate.');
       const nuevo = nuevoCampeonato(nombre, d.formato, Object.assign(configuracionPorDefecto(), d.config));
       nuevo.movimientos = [];
-      if (d.mismosEquipos && c) {
+      nuevo.propietario = usuario.usuario;
+      if (d.mismosEquipos && c && c.propietario === usuario.usuario) { // los equipos del elegido, si es suyo
         // Como en Java: con los mismos equipos de una liga terminada (y las mismas divisiones) se aplican los ascensos y descensos.
         const mismaLiga = d.formato === 'LIGA' && numeroDivisiones(nuevo) === numeroDivisiones(c);
         const calculados = mismaLiga && conAscensos(c) && m.terminado() ? movimientosDeLaTemporada() : [];
@@ -674,15 +743,15 @@ function crearServicioLocal() {
           if (e) { e.division = mv.divisionNueva; nuevo.movimientos.push(Object.assign({}, mv, { idEquipo: e.id })); }
         }
       }
-      archivarActual();
       usar(nuevo);
+      guardar();
+      elegir(nuevo.codigo);
       return resumenMovimientos(nuevo.movimientos);
     },
     cancelar: () => {
       exigir();
-      c = null;
-      m = null;
-      Almacen.campeonato.eliminar();
+      Almacen.campeonatos.eliminar(c.codigo);
+      elegir(null);
     },
     cambiarFormato: d => {
       exigir();
@@ -690,7 +759,38 @@ function crearServicioLocal() {
       const nombre = String(d.nombre || '').trim() || c.nombre;
       const nuevo = nuevoCampeonato(nombre, d.formato, Object.assign(configuracionPorDefecto(), d.config));
       importarEquipos(nuevo, c.equipos);
+      Object.assign(nuevo, { codigo: c.codigo, propietario: c.propietario }); // el mismo campeonato, con otro formato
       usar(nuevo);
+    },
+    // Varios campeonatos: elegir uno, terminarlo (pasa al historial) o tomar uno sin organizador.
+    'campeonato/elegir': d => {
+      const x = buscarActivo(d.codigo);
+      if (!puedeVer(x)) throw new ErrorRegla('Este campeonato es de otro organizador: solo puede ver y gestionar los suyos.', 'PERMISO');
+      elegir(x.codigo);
+    },
+    'campeonato/terminar': d => {
+      if (d.codigo && (!c || c.codigo !== d.codigo)) {
+        const x = buscarActivo(d.codigo);
+        if (x.propietario !== usuario.usuario) throw new ErrorRegla('Este campeonato es de otro organizador: solo puede gestionar los suyos.', 'PERMISO');
+        usar(x);
+      }
+      exigirDueno();
+      if (!c.partidos.some(P.jugado)) {
+        throw new ErrorRegla('Este campeonato todavía no tiene partidos jugados: no hay nada que guardar en el historial. Si ya no lo necesita, elimínelo.');
+      }
+      if (!c.fechaArchivo) c.fechaArchivo = new Date().toISOString().slice(0, 10);
+      Almacen.historial.archivar(c);
+      Almacen.campeonatos.eliminar(c.codigo);
+      elegir(null);
+      return 'El campeonato terminó y quedó en el historial.';
+    },
+    'campeonato/tomar': d => {
+      const x = buscarActivo(d.codigo);
+      if (x.propietario) throw new ErrorRegla('Ese campeonato ya tiene organizador.', 'PERMISO');
+      x.propietario = usuario.usuario;
+      Almacen.campeonatos.guardar(x);
+      elegir(x.codigo);
+      return 'Ahora usted organiza este campeonato.';
     },
     // Clausura de un torneo corto o siguiente temporada de una liga (con ascensos y descensos si hay divisiones).
     siguiente: d => {
@@ -704,6 +804,7 @@ function crearServicioLocal() {
         movimientos = movimientosDeLaTemporada();
       }
       archivarActual();
+      const anterior = c.codigo;
       const copia = JSON.parse(JSON.stringify(c));
       Object.assign(copia, { nombre, partidos: [], fases: [], paso: 0, campeon: -1, semilla: Math.floor(Math.random() * 2147483647), codigo: nuevoCodigo(), fechaArchivo: null });
       copia.equipos = copia.equipos.filter(e => !e.retirado);
@@ -711,6 +812,9 @@ function crearServicioLocal() {
       movimientos.forEach(mv => { const e = copia.equipos.find(x => x.id === mv.idEquipo); if (e) e.division = mv.divisionNueva; });
       copia.movimientos = movimientos;
       usar(copia);
+      guardar();
+      Almacen.campeonatos.eliminar(anterior); // la temporada anterior ya quedó en el historial
+      elegir(copia.codigo);
       return resumenMovimientos(movimientos);
     },
     'equipo/division': d => {
@@ -783,15 +887,18 @@ function crearServicioLocal() {
     },
     archivar: () => archivarActual(),
     'historial/eliminar': d => {
-      if (!Almacen.historial.eliminar(d.codigo)) throw new ErrorRegla('No se encontró ese campeonato en el historial.');
+      const h = Almacen.historial.listar().find(x => x.codigo === d.codigo);
+      if (!h) throw new ErrorRegla('No se encontró ese campeonato en el historial.');
+      if (h.datos && h.datos.propietario !== usuario.usuario) throw new ErrorRegla('Ese campeonato del historial es de otro organizador.', 'PERMISO');
+      Almacen.historial.eliminar(d.codigo);
     },
-    // Noticias (mismas rutas y mensajes que ApiControlador)
-    'noticia/proponer': d => { noticias.proponer(d); return '¡Gracias! Su noticia quedó pendiente: se publicará cuando el administrador la apruebe.'; },
-    'noticia/comentar': d => { noticias.comentar(d.id, d.autor, d.texto); return 'Comentario publicado.'; },
-    'noticia/guardar': d => { noticias.publicar(d); return d.id == null ? 'Noticia publicada.' : 'Noticia guardada.'; },
-    'noticia/aprobar': d => { noticias.aprobar(d.id); return 'Noticia aprobada: ya aparece en el feed.'; },
-    'noticia/eliminar': d => { noticias.eliminar(d.id); return d.rechazo ? 'Propuesta rechazada.' : 'Noticia eliminada.'; },
-    'comentario/eliminar': d => { noticias.eliminarComentario(d.noticia, d.id); return 'Comentario eliminado.'; },
+    // Noticias del campeonato elegido (mismas rutas y mensajes que ApiControlador)
+    'noticia/proponer': d => { exigir(); noticias.proponer(d, c.codigo); return '¡Gracias! Su noticia quedó pendiente: se publicará cuando el administrador la apruebe.'; },
+    'noticia/comentar': d => { exigir(); noticias.comentar(d.id, d.autor, d.texto, c.codigo); return 'Comentario publicado.'; },
+    'noticia/guardar': d => { noticias.publicar(d, c.codigo); return d.id == null ? 'Noticia publicada.' : 'Noticia guardada.'; },
+    'noticia/aprobar': d => { noticias.aprobar(d.id, c.codigo); return 'Noticia aprobada: ya aparece en el feed.'; },
+    'noticia/eliminar': d => { noticias.eliminar(d.id, c.codigo); return d.rechazo ? 'Propuesta rechazada.' : 'Noticia eliminada.'; },
+    'comentario/eliminar': d => { noticias.eliminarComentario(d.noticia, d.id, c.codigo); return 'Comentario eliminado.'; },
     // [REQ-07] Voto del público: solo los visitantes (el administrador ya influye en la nota del sistema).
     'calificacion/votar': d => {
       exigir();
@@ -823,14 +930,20 @@ function crearServicioLocal() {
   /** Lo único que un visitante puede crear: proponer noticias (quedan pendientes), comentar y [REQ-07] calificar jugadores. */
   const RUTAS_VISITANTE = new Set(['noticia/proponer', 'noticia/comentar', 'calificacion/votar']);
 
-  /** Mismo JSON que Presentador.noticias en Java. «imagen» es la foto como data URL ('' = sin foto). */
+  /** Las que no exigen ser dueño: cualquier Organizador crea o toma un campeonato (el dueño se revisa dentro). */
+  const RUTAS_ORGANIZADOR = new Set(['nuevo', 'campeonato/tomar', 'campeonato/terminar', 'historial/eliminar']);
+
+  /**
+   * Mismo JSON que Presentador.noticias en Java, con las noticias del campeonato elegido (y las generales); sin
+   * campeonato, solo las generales. Modera solo su Organizador. «imagen» es la foto como data URL ('' = sin foto).
+   */
   function noticiasJson() {
-    const admin = !!(usuario && ROLES[usuario.rol].puedeEditar);
+    const admin = !!(c && esOrganizador() && c.propietario === usuario.usuario), campeonato = c ? c.codigo : '';
     const noticia = n => ({
       id: n.id, titulo: n.titulo, cuerpo: n.cuerpo, autor: n.autor, deVisitante: ['AFICIONADO', 'VISITANTE'].includes(n.rolAutor), fecha: n.fecha, // VISITANTE: noticias guardadas antes del cambio
       imagen: n.imagenRuta || '', aprobado: n.aprobado, comentarios: n.comentarios.map(x => Object.assign({}, x))
     });
-    return { publicadas: noticias.publicadas().map(noticia), pendientes: admin ? noticias.pendientes().map(noticia) : [], puedeModerar: admin };
+    return { publicadas: noticias.publicadas(campeonato).map(noticia), pendientes: admin ? noticias.pendientes(campeonato).map(noticia) : [], puedeModerar: admin };
   }
 
   const nombreArchivo = s => s.trim().replace(/[^a-zA-Z0-9-_]+/g, '_') || 'campeonato';
@@ -860,6 +973,19 @@ function crearServicioLocal() {
     },
     async historial() {
       try { exigirSesion(); return historial(); } catch (e) { return fallo(e); }
+    },
+    /** Campeonatos en curso que ve el usuario (mismo JSON que GET /api/campeonatos). */
+    async campeonatos() {
+      try {
+        exigirSesion();
+        const todos = Almacen.campeonatos.listar().filter(valido);
+        return {
+          ok: true, campeonatos: todos.filter(puedeVer).map(resumenCampeonato),
+          sinOrganizador: esOrganizador() ? todos.filter(x => !x.propietario).map(resumenCampeonato) : [], elegido: c ? c.codigo : null
+        };
+      } catch (e) {
+        return fallo(e);
+      }
     },
     async noticias() {
       try { exigirSesion(); return { ok: true, noticias: noticiasJson() }; } catch (e) { return fallo(e); }
@@ -895,8 +1021,9 @@ function crearServicioLocal() {
       const comando = comandos[ruta];
       if (!comando) return { ok: false, codigo: 'ERROR', error: 'Acción desconocida: ' + ruta };
       try {
-        if (RUTAS_VISITANTE.has(ruta)) exigirSesion();                  // cualquiera con sesión: proponer y comentar
-        else if (!RUTAS_PUBLICAS.has(ruta)) exigirAdministrador();      // toda acción que modifica datos pasa por aquí
+        if (RUTAS_VISITANTE.has(ruta) || ruta === 'campeonato/elegir') exigirSesion(); // cualquiera con sesión: proponer, comentar, votar y elegir
+        else if (RUTAS_ORGANIZADOR.has(ruta)) exigirAdministrador();     // crear, tomar, terminar: el dueño se revisa dentro
+        else if (!RUTAS_PUBLICAS.has(ruta)) exigirDueno();              // toda acción que cambia un campeonato: solo su Organizador
         const mensaje = (await comando(cuerpo)) || null; // registro y login esperan el hash de WebCrypto
         if (ruta === 'logout') return { ok: true };
         if (ruta.startsWith('noticia/') || ruta.startsWith('comentario/')) {
@@ -910,7 +1037,7 @@ function crearServicioLocal() {
           try {
             guardar();
           } catch (e) {
-            const anterior = Almacen.campeonato.cargar();
+            const anterior = Almacen.campeonatos.cargar(c.codigo);
             if (anterior) usar(anterior);
             throw new ErrorRegla('El navegador no tiene más espacio para guardar (las fotos ocupan espacio). '
               + 'No se guardó este cambio: quite algunas fotos o use el programa Java, que las guarda en archivos.');
@@ -938,10 +1065,12 @@ function crearServicioLocal() {
         if (!datos || !FORMATOS[datos.formato] || !Array.isArray(datos.equipos) || !Array.isArray(datos.partidos) || !Array.isArray(datos.fases)) {
           throw new Error('formato');
         }
-        if (!datos.codigo) datos.codigo = nuevoCodigo();
-        archivarActual();
+        // Entra como un campeonato más del Organizador: nunca reemplaza a uno que ya está en curso.
+        if (!datos.codigo || Almacen.campeonatos.cargar(datos.codigo)) datos.codigo = nuevoCodigo();
+        datos.propietario = usuario.usuario;
         usar(datos);
         guardar();
+        elegir(datos.codigo);
         return { ok: true, mensaje: `Se abrió «${datos.nombre}».`, estado: estado() };
       } catch (e) {
         return { ok: false, codigo: 'ARCHIVO', error: 'El archivo no es un respaldo válido de AlphaSport.' };

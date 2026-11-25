@@ -36,7 +36,19 @@ function crearNoticiasLocal(ErrorRegla) {
 
   const ahora = () => { const d = new Date(), dos = x => String(x).padStart(2, '0'); return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())} ${dos(d.getHours())}:${dos(d.getMinutes())}`; };
   const masReciente = (a, b) => b.fecha.localeCompare(a.fecha) || b.id - a.id;
-  const buscar = id => { const n = lista.find(x => x.id === id); if (!n) throw new ErrorRegla('La noticia no existe (quizá ya fue eliminada).'); return n; };
+  /** Se ve en ese campeonato: es suya o es general (sin campeonato). campeonato null = todas. */
+  const delCampeonato = (n, campeonato) => campeonato == null || !n.campeonato || n.campeonato === campeonato;
+  const buscar = (id, campeonato) => {
+    const n = lista.find(x => x.id === id && delCampeonato(x, campeonato));
+    if (!n) throw new ErrorRegla('La noticia no existe (quizá ya fue eliminada).');
+    return n;
+  };
+  /** Para moderar: tiene que ser de este campeonato (las generales no se moderan desde un campeonato). */
+  const buscarParaModerar = (id, campeonato) => {
+    const n = buscar(id, campeonato);
+    if (campeonato != null && n.campeonato !== campeonato) throw new ErrorRegla('Esa noticia no es de este campeonato: solo se moderan las del campeonato que gestiona.', 'PERMISO');
+    return n;
+  };
 
   function guardar() {
     try {
@@ -73,35 +85,40 @@ function crearNoticiasLocal(ErrorRegla) {
     return dataUrl;
   }
 
+  /*
+   * Cada noticia es de un campeonato (su código, como NoticiasService.de en Java): el feed de un campeonato
+   * muestra las suyas y las generales; las nuevas quedan en él y solo se moderan las suyas. campeonato null = todas.
+   */
   return {
-    publicadas: () => lista.filter(n => n.aprobado).sort(masReciente),
-    pendientes: () => lista.filter(n => !n.aprobado).sort(masReciente),
+    publicadas: campeonato => lista.filter(n => n.aprobado && delCampeonato(n, campeonato)).sort(masReciente),
+    pendientes: campeonato => lista.filter(n => !n.aprobado && delCampeonato(n, campeonato)).sort(masReciente),
     /** Visitante: queda pendiente (aprobado = false) hasta que el administrador la apruebe. */
-    proponer(d) {
+    proponer(d, campeonato) {
       const n = { id: sigNoticia, titulo: validarTitulo(d.titulo), cuerpo: validarCuerpo(d.cuerpo), autor: nombre(d.autor, 'Visitante'),
-        rolAutor: 'AFICIONADO', fecha: ahora(), imagenRuta: validarImagen(d.imagen), aprobado: false, comentarios: [] };
+        rolAutor: 'AFICIONADO', fecha: ahora(), imagenRuta: validarImagen(d.imagen), aprobado: false, comentarios: [], campeonato: campeonato || null };
       lista.push(n);
       guardar();
       sigNoticia++;
     },
     /** Administrador: crea (sin id) o edita; queda publicada. */
-    publicar(d) {
+    publicar(d, campeonato) {
       const t = validarTitulo(d.titulo), c = validarCuerpo(d.cuerpo), foto = validarImagen(d.imagen);
       let n;
       if (d.id == null) {
-        n = { id: sigNoticia++, titulo: t, cuerpo: c, autor: 'Administración', rolAutor: 'ORGANIZADOR', fecha: ahora(), imagenRuta: '', aprobado: true, comentarios: [] };
+        n = { id: sigNoticia++, titulo: t, cuerpo: c, autor: 'Administración', rolAutor: 'ORGANIZADOR', fecha: ahora(), imagenRuta: '', aprobado: true,
+          comentarios: [], campeonato: campeonato || null };
         lista.push(n);
       } else {
-        n = buscar(d.id);
+        n = buscarParaModerar(d.id, campeonato);
         Object.assign(n, { titulo: t, cuerpo: c, aprobado: true }); // editar una propuesta también la publica
       }
       if (foto || d.quitarImagen) n.imagenRuta = foto;
       guardar();
     },
-    aprobar(id) { buscar(id).aprobado = true; guardar(); },
-    eliminar(id) { buscar(id); lista = lista.filter(n => n.id !== id); guardar(); },
-    comentar(id, autor, texto) {
-      const n = buscar(id);
+    aprobar(id, campeonato) { buscarParaModerar(id, campeonato).aprobado = true; guardar(); },
+    eliminar(id, campeonato) { buscarParaModerar(id, campeonato); lista = lista.filter(n => n.id !== id); guardar(); },
+    comentar(id, autor, texto, campeonato) {
+      const n = buscar(id, campeonato);
       if (!n.aprobado) throw new ErrorRegla('Solo se puede comentar una noticia publicada.');
       const limpio = String(texto || '').trim();
       if (!limpio) throw new ErrorRegla('Escriba el comentario.');
@@ -109,8 +126,8 @@ function crearNoticiasLocal(ErrorRegla) {
       n.comentarios.push({ id: sigComentario++, autor: FiltroPalabras.sanear(nombre(autor, 'Anónimo')), texto: FiltroPalabras.sanear(limpio), fecha: ahora() });
       guardar();
     },
-    eliminarComentario(idNoticia, idComentario) {
-      const n = buscar(idNoticia), antes = n.comentarios.length;
+    eliminarComentario(idNoticia, idComentario, campeonato) {
+      const n = buscarParaModerar(idNoticia, campeonato), antes = n.comentarios.length;
       n.comentarios = n.comentarios.filter(c => c.id !== idComentario);
       if (n.comentarios.length === antes) throw new ErrorRegla('El comentario no existe.');
       guardar();

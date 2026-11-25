@@ -286,6 +286,14 @@
 
 /* equipos */
 .tarjeta-equipo { -fx-padding: 18; }
+/* Mis campeonatos: una tarjeta por campeonato con su avance; la que se gestiona ahora, con borde verde. */
+.tarjeta-campeonato { -fx-padding: 16 18; }
+.tarjeta-campeonato.actual { -fx-border-color: rgba(46, 229, 152, 0.55); -fx-border-radius: 12; -fx-border-width: 1.5; }
+.chip-actual { -fx-text-fill: -cesped; }
+.progreso .bar { -fx-background-color: -cesped; -fx-background-insets: 0; -fx-background-radius: 6; }
+.progreso .track { -fx-background-color: rgba(128, 140, 160, 0.22); -fx-background-insets: 0; -fx-background-radius: 6; }
+.progreso { -fx-pref-height: 9; }
+.selector-campeonato { -fx-pref-width: 260; }
 .tarjeta-equipo:hover { -fx-border-color: rgba(255, 255, 255, 0.26); }
 .escudo-texto { -fx-text-fill: white; -fx-font-family: "Inter Bold"; -fx-font-size: 19px; -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 4, 0, 0, 2); }
 
@@ -904,3 +912,6 @@
     -linea: rgba(11, 23, 38, 0.09);
 }
 .context-menu .menu-item .label { -fx-font-family: "Inter"; -fx-font-weight: normal; -fx-font-size: 13.5px; }
+
+/* El campeonato que se gestiona conserva su borde sobre los paneles planos (tambien en modo claro). */
+.vidrio.tarjeta-campeonato.actual, .raiz.claro .vidrio.tarjeta-campeonato.actual { -fx-border-color: -cesped; -fx-border-width: 1.5; -fx-border-radius: 8; }
