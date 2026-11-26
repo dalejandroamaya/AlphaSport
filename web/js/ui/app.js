@@ -8,8 +8,10 @@ const ESTADOS_TEXTO = { PENDIENTE: 'Pendiente', EN_JUEGO: 'En juego', JUGADO: 'J
 const VISTAS_SOLO_ADMIN = ['equipos', 'reglas']; // «campeonatos»: Mis campeonatos (Organizador) o Campeonatos activos (Aficionado)
 /** Último campeonato que siguió cada Aficionado en este navegador (usuario -> código). */
 const CLAVE_SEGUIDOS = 'alphasport.seguidos';
-const VISTAS_SOLO_VISITANTE = ['votaciones'];
-const VISTA_INICIAL_VISITANTE = 'partidos';
+const VISTAS_SOLO_VISITANTE = ['votaciones', 'inicio'];
+const VISTA_INICIAL_VISITANTE = 'inicio'; // el Aficionado entra a su «Inicio»: hoy, próximos, resultados, líder y noticias
+/** Vistas que tienen sentido sin un campeonato elegido (las demás se ocultan del menú). */
+const VISTAS_SIN_CAMPEONATO = ['campeonatos', 'noticias', 'inicio', 'perfil'];
 
 let servicio = null;
 let catalogo = null;
@@ -155,12 +157,10 @@ async function iniciar() {
   servicio = await crearServicio();
   catalogo = await servicio.catalogo();
   conectarEventos();
+  actualizarReglasClave(); // lista de reglas de la contraseña y «Crear cuenta» desactivado
   $('jgPosicion').innerHTML = catalogo.gruposPosiciones
     ? catalogo.gruposPosiciones.map(g => `<optgroup label="${esc(g.grupo)}">${g.posiciones.map(p => `<option>${esc(p)}</option>`).join('')}</optgroup>`).join('')
     : catalogo.posiciones.map(p => `<option>${esc(p)}</option>`).join('');
-  // El chip solo informa cuando la web la sirve el programa Java; en la versión web sola es ruido.
-  $('chipModo').textContent = '☕ Programa Java';
-  $('chipModo').hidden = servicio.modo !== 'java';
   const formaciones = catalogo.formaciones || [];
   const opciones = '<option value="">Sin definir</option>' + formaciones.map(f => `<option>${esc(f)}</option>`).join('');
   $('fmLocal').innerHTML = opciones;
@@ -197,6 +197,40 @@ async function registrarse(e) {
   await iniciarSesion('registro', cuerpo, 'registroError');
 }
 
+/** Dibuja una lista de reglas (cumplida / pendiente) y dice si se cumplen todas. */
+function listaReglas(ul, reglas) {
+  ul.innerHTML = reglas.map(r =>
+    `<li class="${r.cumple ? 'cumplida' : 'pendiente'}">${esc(r.texto)}<span class="sr-only">: ${r.cumple ? 'cumplida' : 'pendiente'}</span></li>`).join('');
+  return reglas.every(r => r.cumple);
+}
+
+/** Pista bajo un campo: el problema en rojo, o el texto de «bien» en verde (vacío si no se ha escrito nada). */
+function estadoCampo(el, escrito, problema, bien) {
+  el.textContent = !escrito ? '' : problema || bien;
+  el.classList.toggle('mal', escrito && !!problema);
+  el.classList.toggle('bien', escrito && !problema);
+  return escrito && !problema;
+}
+
+/** Lo que valida en vivo la confirmación de la contraseña. */
+function estadoConfirmacion(el, clave, confirmacion) {
+  return estadoCampo(el, confirmacion !== '', clave === confirmacion ? null : 'Las contraseñas no coinciden.', 'Las contraseñas coinciden.');
+}
+
+/**
+ * Registro: marca en vivo las reglas del usuario y de la contraseña, el correo y la confirmación (las mismas
+ * reglas y textos que el servicio), y deja «Crear cuenta» desactivado hasta que todo cumpla. El inicio de
+ * sesión no revisa nada de esto: las cuentas antiguas siguen entrando.
+ */
+function actualizarReglasClave() {
+  const usuario = listaReglas($('reglasUsuario'), Cuentas.reglasUsuario($('regUsuario').value));
+  const correo = estadoCampo($('estadoCorreo'), $('regCorreo').value.trim() !== '',
+    Cuentas.problemaCorreo(Cuentas.normalizar($('regCorreo').value)), 'Correo válido.');
+  const clave = listaReglas($('reglasClave'), Cuentas.reglasClave($('regClave').value));
+  const igual = estadoConfirmacion($('estadoConfirmacion'), $('regClave').value, $('regConfirmacion').value);
+  document.querySelector('#formRegistro button[type=submit]').disabled = !(usuario && correo && clave && igual);
+}
+
 async function iniciarSesion(ruta, cuerpo, idError = 'loginError') {
   const boton = document.querySelector(`#${idError === 'loginError' ? 'formLogin' : 'formRegistro'} button[type=submit]`);
   boton.disabled = true; // el hash de la clave tarda un momento: evita enviar dos veces
@@ -204,7 +238,8 @@ async function iniciarSesion(ruta, cuerpo, idError = 'loginError') {
   try {
     r = await servicio.ejecutar(ruta, cuerpo);
   } finally {
-    boton.disabled = false;
+    if (ruta === 'registro') actualizarReglasClave(); // sigue desactivado si la clave no cumple
+    else boton.disabled = false;
   }
   if (!r.ok) {
     mostrarErrorAcceso(idError, r.error);
@@ -227,6 +262,7 @@ function limpiarAcceso() {
   ['loginClave', 'regClave', 'regConfirmacion'].forEach(id => { $(id).value = ''; });
   mostrarErrorAcceso('loginError', '');
   mostrarErrorAcceso('registroError', '');
+  actualizarReglasClave();
 }
 
 /** Muestra «Iniciar sesión» o «Registrarse». */
@@ -281,6 +317,7 @@ function mostrarAcceso(cual) {
 function volverAlLogin(motivo) {
   S = null;
   document.querySelectorAll('dialog[open]').forEach(d => d.close());
+  history.replaceState(null, '', location.pathname + location.search); // sin sesión no hay ruta de vista
   $('app').hidden = true;
   $('login').hidden = false;
   limpiarAcceso();
@@ -299,9 +336,9 @@ async function cerrarSesion() {
 function aplicarPermisos() {
   const admin = puedeEditar();
   document.querySelectorAll('[data-solo-admin]').forEach(el => { el.hidden = !admin; });
-  // Sin campeonato elegido solo quedan la lista de campeonatos y las noticias (las generales no dependen de uno).
+  // Sin campeonato, las vistas que solo mostrarían un aviso vacío se ocultan (las noticias no dependen de él).
   document.querySelectorAll('.navegacion button[data-vista]').forEach(b => {
-    b.hidden = !puedeVer(b.dataset.vista) || (!E.hay && !['campeonatos', 'noticias'].includes(b.dataset.vista));
+    b.hidden = !puedeVer(b.dataset.vista) || (!E.hay && !VISTAS_SIN_CAMPEONATO.includes(b.dataset.vista));
   });
   // El Aficionado elige qué campeonato seguir entre los activos; el Organizador gestiona los suyos.
   $('navCampeonatos').textContent = admin ? 'Mis campeonatos' : 'Campeonatos activos';
@@ -315,7 +352,6 @@ function aplicarPermisos() {
   }
   $('chipRol').textContent = S ? S.rolNombre + (admin ? '' : ' · solo lectura') : '';
   $('chipRol').hidden = !S;
-  $('chipLectura').hidden = !S || admin;
   $('btnAvanzar').hidden = !admin || !E.hay; // sin campeonato elegido no hay nada que iniciar
   // «Cerrar programa» solo en el programa local (publicado en internet no se cierra).
   $('menuCerrar').hidden = servicio.modo !== 'java' || !admin || !['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
@@ -368,9 +404,208 @@ async function mostrarApp() {
     return;
   }
   render();
-  // El Aficionado vuelve directo al campeonato que seguía; si no seguía ninguno, empieza en «Campeonatos activos»
-  // para elegir cuál seguir, aunque haya uno solo.
-  mostrarVista(puedeEditar() ? leerPreferencia(CLAVE_PESTANA) || 'equipos' : seguido ? VISTA_INICIAL_VISITANTE : 'campeonatos');
+  // Si la dirección ya trae una vista de este campeonato (recargar la página), se abre esa; si no, la de inicio:
+  // el Organizador, la última que usó; el Aficionado, su «Inicio».
+  const ruta = leerRuta(location.hash);
+  const deLaRuta = ruta && ruta.vista && (!ruta.campeonato || ruta.campeonato === E.campeonato.codigo) ? ruta.vista : null;
+  // El Aficionado que ya seguía un campeonato va a su «Inicio»; si no, a «Campeonatos activos» para elegir.
+  conHistorial('replace', () => mostrarVista(deLaRuta || (puedeEditar() ? leerPreferencia(CLAVE_PESTANA) || 'equipos' : seguido ? VISTA_INICIAL_VISITANTE : 'campeonatos')));
+}
+
+/* ---------------------------------------------------------------- botón atrás (historial del navegador) */
+
+/** Cómo anota la siguiente vista en el historial: «push» (nueva entrada), «replace» o «none» (al volver). */
+let modoHistorial = 'push';
+
+/** Ejecuta fn anotando las vistas con otro modo (por ejemplo al entrar o al volver con el botón atrás). */
+function conHistorial(modo, fn) {
+  const antes = modoHistorial;
+  modoHistorial = modo;
+  try { return fn(); } finally { modoHistorial = antes; }
+}
+
+/** Dirección de una vista o de un partido: #/partidos, #/campeonato/{código}/posiciones, …/partido/{id}. */
+function rutaDe(vista, partido) {
+  const base = E && E.hay && E.campeonato ? `#/campeonato/${encodeURIComponent(E.campeonato.codigo)}` : '#';
+  return partido != null ? `${base}/partido/${partido}` : `${base}/${vista}`;
+}
+
+/** Lee #/campeonato/{código}/{vista} o …/partido/{id}; null si la dirección no es una ruta de la app. */
+function leerRuta(hash) {
+  const m = /^#\/(?:campeonato\/([^/]+)\/?)?(?:partido\/(\d+)|([a-z]+))?$/.exec(hash || '');
+  return m ? { campeonato: m[1] ? decodeURIComponent(m[1]) : null, partido: m[2] ? Number(m[2]) : null, vista: m[3] || null } : null;
+}
+
+/** Anota la ruta según el modo: así «atrás» vuelve a la vista anterior y solo sale en la primera pantalla. */
+function anotarRuta(estado, ruta) {
+  if (modoHistorial === 'none' || !S || location.hash === ruta) return;
+  if (modoHistorial === 'replace' || !history.state) history.replaceState(estado, '', ruta);
+  else history.pushState(estado, '', ruta);
+}
+
+const vistaActual = () => ((document.querySelector('.vista:not([hidden])') || { id: 'vista-' }).id).replace('vista-', '');
+
+/** Botón atrás o adelante: abre la vista (o el partido) de esa entrada sin anotar otra. */
+async function alNavegarHistorial() {
+  if (!S || $('app').hidden) return; // sin sesión no hay vistas: el login no se toca
+  const ruta = leerRuta(location.hash) || {};
+  modoHistorial = 'none';
+  try {
+    if (ruta.campeonato && E.hay && ruta.campeonato !== E.campeonato.codigo) {
+      await gestionarCampeonato(ruta.campeonato, ruta.vista || vistaActual()); // otro campeonato que puede ver
+    }
+    if (ruta.partido != null) {
+      await abrirDetalle(ruta.partido);
+    } else {
+      if ($('dlgDetalle').open) $('dlgDetalle').close();
+      mostrarVista(ruta.vista || (puedeEditar() ? 'equipos' : VISTA_INICIAL_VISITANTE));
+    }
+  } finally {
+    modoHistorial = 'push';
+  }
+  // Si la vista no se podía ver (rol o sin campeonato), la dirección queda en la que de verdad se muestra.
+  if (ruta.partido == null && location.hash !== rutaDe(vistaActual())) history.replaceState({ vista: vistaActual() }, '', rutaDe(vistaActual()));
+}
+
+/* ---------------------------------------------------------------- inicio del Aficionado */
+
+/** Fecha de hoy como AAAA-MM-DD (hora local), igual que las fechas de los partidos. */
+function hoyIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Un partido en una línea, con su marcador si ya empezó; abre el detalle. */
+function filaInicioHtml(p) {
+  const centro = conMarcador(p) ? `<b>${p.gl} : ${p.gv}</b>` : '<span class="sutil">vs</span>';
+  const meta = p.estado === 'EN_JUEGO' ? 'En juego' : [fechaDefinida(p) ? fechaTexto(p) : 'Fecha por definir', p.hora].filter(Boolean).join(' · ');
+  return `<li><button type="button" class="inicio-fila" data-detalle-inicio="${p.id}">
+    <span class="inicio-equipos">${esc(p.localNombre)} ${centro} ${esc(p.visitanteNombre)}</span><small class="sutil">${esc(meta)}</small></button></li>`;
+}
+
+function bloqueInicio(titulo, vista, enlace, contenido) {
+  return `<section class="inicio-bloque vidrio"><header><h3>${titulo}</h3>${vista ? `<button type="button" class="btn mini fantasma" data-ir="${vista}">${enlace} →</button>` : ''}</header>${contenido}</section>`;
+}
+
+/**
+ * «Inicio» del Aficionado, armado con lo que ya se cargó (sin rutas nuevas del servidor): partidos de hoy y
+ * próximos, últimos resultados, líder de la tabla y últimas noticias, con enlace a cada vista.
+ */
+async function renderInicio() {
+  const panel = $('panelInicio');
+  if (!E.hay) {
+    $('ayudaInicio').textContent = '';
+    panel.innerHTML = `<div class="inicio-vacio vidrio">${vacioHtml('Todavía no sigue ningún campeonato.')}
+      <button type="button" class="btn primario" data-ir="campeonatos">Elegir un campeonato</button></div>`;
+    return;
+  }
+  $('ayudaInicio').textContent = `Lo más reciente de «${E.campeonato.nombre}».`;
+  const hoy = hoyIso();
+  const porFecha = (a, b) => (fechaDefinida(a) ? a.fecha + (a.hora || '') : '9') .localeCompare(fechaDefinida(b) ? b.fecha + (b.hora || '') : '9') || a.id - b.id;
+  const enJuego = E.partidos.filter(p => p.estado === 'EN_JUEGO');
+  const deHoy = E.partidos.filter(p => !p.jugado && p.estado !== 'EN_JUEGO' && p.fecha === hoy);
+  const proximos = E.partidos.filter(p => !p.jugado && p.estado === 'PENDIENTE' && (!fechaDefinida(p) || p.fecha > hoy)).sort(porFecha).slice(0, 4);
+  const resultados = E.partidos.filter(p => p.jugado).sort((a, b) => porFecha(b, a)).slice(0, 4);
+  const lista = ps => `<ul class="inicio-lista">${ps.map(filaInicioHtml).join('')}</ul>`;
+  const bloques = [];
+  if (enJuego.length || deHoy.length) bloques.push(bloqueInicio('Hoy', 'partidos', 'Partidos', lista([...enJuego, ...deHoy])));
+  bloques.push(bloqueInicio('Próximos partidos', 'partidos', 'Calendario',
+    proximos.length ? lista(proximos) : '<p class="sutil">No hay partidos pendientes.</p>'));
+  bloques.push(bloqueInicio('Últimos resultados', 'partidos', 'Resultados',
+    resultados.length ? lista(resultados) : '<p class="sutil">Todavía no se juega ningún partido.</p>'));
+  const tabla = (E.tablas || [])[0], lider = tabla && tabla.filas[0];
+  if (lider && lider.pj > 0) {
+    bloques.push(bloqueInicio('Líder', 'posiciones', 'Posiciones',
+      `<p class="inicio-lider"><b>${esc(lider.nombre)}</b> <span class="sutil">${lider.pts} pts · ${lider.pj} PJ${E.tablas.length > 1 ? ' · ' + esc(tabla.texto) : ''}</span></p>`));
+  }
+  panel.innerHTML = bloques.join('') + bloqueInicio('Últimas noticias', 'noticias', 'Noticias', '<p class="sutil">Cargando…</p>');
+  const r = await servicio.noticias();
+  const ultimo = panel.lastElementChild;
+  if (!ultimo || vistaActual() !== 'inicio') return;
+  const noticias = r.ok ? r.noticias.publicadas.slice(0, 3) : [];
+  ultimo.outerHTML = bloqueInicio('Últimas noticias', 'noticias', 'Noticias', noticias.length
+    ? `<ul class="inicio-lista">${noticias.map(n => `<li><button type="button" class="inicio-fila" data-ir="noticias"><span>${esc(n.titulo)}</span><small class="sutil">${esc(n.fecha || '')}</small></button></li>`).join('')}</ul>`
+    : '<p class="sutil">No hay noticias publicadas.</p>');
+}
+
+/* ---------------------------------------------------------------- Mi perfil */
+
+let perfilActual = null;
+
+/** Pide el perfil de la sesión y llena los tres bloques (datos, verificar correo y cambiar contraseña). */
+async function renderPerfil() {
+  const r = await servicio.perfil();
+  if (!r.ok) { if (r.codigo === 'LOGIN') volverAlLogin('Su sesión terminó. Inicie sesión de nuevo.'); else aviso(r.error); return; }
+  mostrarPerfil(r.perfil);
+  ['pfClaveCorreo', 'pfClaveActual', 'pfClaveNueva', 'pfConfirmacion', 'pfCodigo'].forEach(id => { $(id).value = ''; });
+  ['pfErrorDatos', 'pfErrorCodigo', 'pfErrorClave'].forEach(id => mostrarErrorAcceso(id, ''));
+  actualizarFormPerfil();
+}
+
+function mostrarPerfil(p) {
+  perfilActual = p;
+  $('pfUsuario').textContent = p.usuario;
+  $('pfRol').textContent = p.rol;
+  $('pfNombre').value = p.nombre;
+  $('pfCorreo').value = p.correo;
+  $('pfInsignia').textContent = p.correoVerificado ? 'Correo verificado' : 'Correo sin verificar';
+  $('pfInsignia').className = 'insignia-correo ' + (p.correoVerificado ? 'verificado' : 'sin-verificar');
+  $('pfDemo').hidden = !p.demostracion;
+  $('formVerificar').hidden = p.correoVerificado; // ya verificado: no hay nada que hacer aquí
+  $('pfAyudaVerificar').textContent = p.codigoPendiente
+    ? 'Ya pidió un código: escríbalo abajo. Puede pedir otro si no le llegó.'
+    : 'Pida un código de 6 dígitos. Vence en 15 minutos y tiene 5 intentos.';
+}
+
+/** Revisa en vivo el correo y la contraseña nueva (mismas reglas que el registro) y pide la clave si cambia el correo. */
+function actualizarFormPerfil() {
+  const correo = Cuentas.normalizar($('pfCorreo').value);
+  const otroCorreo = !!perfilActual && correo !== Cuentas.normalizar(perfilActual.correo);
+  $('pfCampoClaveCorreo').hidden = !otroCorreo;
+  estadoCampo($('pfEstadoCorreo'), otroCorreo, Cuentas.problemaCorreo(correo), 'Correo válido. Quedará sin verificar.');
+  const clave = listaReglas($('pfReglasClave'), Cuentas.reglasClave($('pfClaveNueva').value));
+  const igual = estadoConfirmacion($('pfEstadoConfirmacion'), $('pfClaveNueva').value, $('pfConfirmacion').value);
+  $('pfCambiarClave').disabled = !(clave && igual && $('pfClaveActual').value);
+}
+
+async function accionPerfil(ruta, cuerpo, idError) {
+  mostrarErrorAcceso(idError, '');
+  const r = await servicio.ejecutar(ruta, cuerpo);
+  if (!r.ok) { mostrarErrorAcceso(idError, r.error); if (r.perfil) mostrarPerfil(r.perfil); return false; }
+  if (r.perfil) mostrarPerfil(r.perfil);
+  if (r.mensaje) aviso(r.mensaje);
+  return true;
+}
+
+function conectarPerfil() {
+  $('perfil').addEventListener('click', () => mostrarVista('perfil'));
+  ['pfCorreo', 'pfClaveActual', 'pfClaveNueva', 'pfConfirmacion'].forEach(id => $(id).addEventListener('input', actualizarFormPerfil));
+  $('formDatos').addEventListener('submit', async e => {
+    e.preventDefault();
+    // Solo nombre, correo y la clave si cambia el correo: la cuenta la pone el servicio desde la sesión.
+    if (await accionPerfil('perfil/datos', { nombre: $('pfNombre').value, correo: $('pfCorreo').value, claveActual: $('pfClaveCorreo').value }, 'pfErrorDatos')) {
+      $('pfClaveCorreo').value = '';
+      actualizarFormPerfil();
+    }
+  });
+  $('formClave').addEventListener('submit', async e => {
+    e.preventDefault();
+    await accionPerfil('perfil/clave', { claveActual: $('pfClaveActual').value, clave: $('pfClaveNueva').value, confirmacion: $('pfConfirmacion').value }, 'pfErrorClave');
+    ['pfClaveActual', 'pfClaveNueva', 'pfConfirmacion'].forEach(id => { $(id).value = ''; });
+    actualizarFormPerfil(); // las claves escritas se borran siempre
+  });
+  $('pfEnviarCodigo').addEventListener('click', () => accionPerfil('perfil/codigo', {}, 'pfErrorCodigo'));
+  $('formVerificar').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (await accionPerfil('perfil/verificar', { codigo: $('pfCodigo').value }, 'pfErrorCodigo')) $('pfCodigo').value = '';
+  });
+}
+
+function clicInicio(e) {
+  const ir = e.target.closest('[data-ir]');
+  if (ir) { mostrarVista(ir.dataset.ir); return; }
+  const partido = e.target.closest('[data-detalle-inicio]');
+  if (partido) abrirDetalle(Number(partido.dataset.detalleInicio));
 }
 
 /**
@@ -638,9 +873,9 @@ function cerrarNavMas() {
 
 function mostrarVista(nombre) {
   if (!$('vista-' + nombre)) nombre = 'equipos';
-  if (!puedeVer(nombre)) nombre = VISTA_INICIAL_VISITANTE; // el visitante no ve Equipos ni Reglas
+  if (!puedeVer(nombre)) nombre = puedeEditar() ? 'equipos' : VISTA_INICIAL_VISITANTE; // cada rol, solo lo que puede ver
   // Sin campeonato elegido las demás vistas tendrían datos viejos: se va a la lista de campeonatos.
-  if (!E.hay && !['noticias', 'campeonatos'].includes(nombre)) nombre = puedeVer('campeonatos') ? 'campeonatos' : 'partidos';
+  if (!E.hay && !VISTAS_SIN_CAMPEONATO.includes(nombre)) nombre = 'campeonatos';
   document.querySelectorAll('.vista').forEach(v => { v.hidden = v.id !== 'vista-' + nombre; });
   document.querySelectorAll('.navegacion button[data-vista]').forEach(b => {
     b.classList.toggle('activa', b.dataset.vista === nombre);
@@ -648,6 +883,9 @@ function mostrarVista(nombre) {
   });
   guardarPreferencia(CLAVE_PESTANA, nombre);
   marcarNavMas(nombre);
+  anotarRuta({ vista: nombre }, rutaDe(nombre)); // «atrás» vuelve aquí
+  if (nombre === 'inicio') renderInicio();
+  if (nombre === 'perfil') renderPerfil();
   if (nombre === 'votaciones') renderVotaciones();
   if (nombre === 'noticias') renderNoticias(); // las noticias se piden al servicio al abrir la sección
   if (nombre === 'campeonatos') renderCampeonatos();
@@ -1080,7 +1318,8 @@ function dibujarListaPartidos() {
       (estado === 'aplazados' && (p.estado === 'APLAZADO' || p.estado === 'SUSPENDIDO'))));
   const cont = $('listaPartidos');
   if (!lista.length) {
-    cont.innerHTML = vacioHtml(!E.campeonato.iniciado ? 'El fixture se genera automáticamente al pulsar «Iniciar campeonato».'
+    cont.innerHTML = vacioHtml(!E.campeonato.iniciado ? (puedeEditar() ? 'El fixture se genera automáticamente al pulsar «Iniciar campeonato».'
+      : 'El calendario aparece cuando el organizador inicie el campeonato.')
       : previa && !E.partidos.some(p => !p.jugado) ? 'Todos los partidos ya se jugaron.'
       : previa ? 'No hay partidos por jugar con estos filtros.' : 'No hay partidos con estos filtros.');
     return;
@@ -1902,7 +2141,8 @@ async function abrirDetalle(id, pestana = 'resumen') {
   $('dpCabecera').innerHTML = cabeceraDetalle(p);
   dibujarDetalle();
   if (!$('dlgDetalle').open) $('dlgDetalle').showModal();
-  $('dpCerrar').focus();
+  anotarRuta({ partido: id }, rutaDe(null, id)); // «atrás» cierra el detalle y vuelve a la vista
+  $('dpVolver').focus();
 }
 
 /** Escudo de la cabecera del detalle: el administrador lo toca para cambiarlo o quitarlo. */
@@ -2009,7 +2249,7 @@ async function renderNoticias(datos) {
   const admin = puedeEditar();
   $('ayudaNoticias').textContent = admin
     ? 'Publique noticias oficiales y apruebe o rechace las que envían los visitantes.'
-    : 'Noticias del torneo. Puede comentar o proponer una noticia: el administrador la revisa antes de publicarla.';
+    : 'Comente o proponga una noticia: el organizador la revisa antes de publicarla.';
   $('btnNuevaNoticia').textContent = admin ? '+ Nueva noticia' : 'Proponer una noticia';
   if (admin) {
     // Administrador: «Pendientes por aprobar» y «Publicadas y oficiales» en pestañas separadas.
@@ -2632,6 +2872,9 @@ function conectarEventos() {
   editorNuevo = editorCriterios($('criteriosNuevo'));
   $('formLogin').addEventListener('submit', entrar);
   $('formRegistro').addEventListener('submit', registrarse);
+  // Usuario, correo, contraseña y confirmación se revisan mientras se escribe (las mismas reglas que el servicio).
+  $('ayudaUsuario').textContent = Cuentas.AYUDA_USUARIO;
+  ['regUsuario', 'regCorreo', 'regClave', 'regConfirmacion'].forEach(id => $(id).addEventListener('input', actualizarReglasClave));
   // Campeonatos: el Organizador crea, gestiona, termina, elimina o toma; el Aficionado elige cuál seguir. Los dos cambian desde la cabecera.
   $('btnNuevoCampeonato').addEventListener('click', () => abrirNuevo(false));
   $('listaCampeonatos').addEventListener('click', clicCampeonatos);
@@ -2674,7 +2917,15 @@ function conectarEventos() {
     destino.focus();
   });
   $('dpCerrar').addEventListener('click', () => $('dlgDetalle').close());
-  $('dpX').addEventListener('click', () => $('dlgDetalle').close());
+  $('dpVolver').addEventListener('click', () => $('dlgDetalle').close());
+  // Cerrar el detalle (Volver, Escape o el botón de abajo) es como «atrás»: la dirección vuelve a la vista.
+  $('dlgDetalle').addEventListener('close', () => {
+    const ruta = leerRuta(location.hash);
+    if (modoHistorial !== 'none' && ruta && ruta.partido != null) history.back();
+  });
+  window.addEventListener('popstate', alNavegarHistorial);
+  $('panelInicio').addEventListener('click', clicInicio);
+  conectarPerfil();
   $('dpEditar').addEventListener('click', () => {
     const id = detalleActual && detalleActual.partido.id;
     $('dlgDetalle').close();

@@ -31,6 +31,40 @@ public interface RepositorioUsuarios {
      */
     Alta crear(CuentaUsuario cuenta) throws PersistenciaException;
 
+    /* ---------------------------------------------------------------- Mi perfil */
+
+    /**
+     * Estado de la verificacion del correo de una cuenta.
+     *
+     * @param codigoHash hash del codigo de 6 digitos pendiente, o null si no hay ninguno
+     * @param venceEn milisegundos desde 1970 en que vence el codigo (0 si no hay)
+     * @param intentos intentos fallidos con el codigo actual
+     */
+    record Verificacion(boolean correoVerificado, String codigoHash, long venceEn, int intentos) {
+
+        public static final Verificacion NINGUNA = new Verificacion(false, null, 0, 0);
+    }
+
+    /**
+     * Cambia el nombre y el correo de la cuenta (el usuario no cambia). Si el correo es otro, la cuenta queda
+     * con el correo sin verificar y sin codigo pendiente.
+     *
+     * @return CORREO_EN_USO si otra cuenta ya tiene ese correo (no cambia nada); CREADA si se guardo
+     */
+    Alta actualizarDatos(String usuario, String nombre, String correo) throws PersistenciaException;
+
+    /** Guarda el hash de la clave nueva. */
+    void cambiarClave(String usuario, String claveHash) throws PersistenciaException;
+
+    /** Guarda (o, con codigoHash null, borra) el codigo de verificacion, su vencimiento y los intentos fallidos. */
+    void guardarCodigo(String usuario, String codigoHash, long venceEn, int intentos) throws PersistenciaException;
+
+    /** El estado de la verificacion del correo; NINGUNA si la cuenta no existe. */
+    Verificacion verificacion(String usuario) throws PersistenciaException;
+
+    /** Marca el correo como verificado y borra el codigo. */
+    void marcarVerificado(String usuario) throws PersistenciaException;
+
     /** Usuario o correo como se guardan: sin espacios alrededor y en minusculas ("" si es null). */
     static String normalizar(String texto) {
         return texto == null ? "" : texto.trim().toLowerCase(java.util.Locale.ROOT);

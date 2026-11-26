@@ -73,7 +73,7 @@ import javafx.util.Duration;
  */
 public class Aplicacion extends Application {
 
-    static final String[] VISTAS = {"campeonatos", "equipos", "partidos", "votaciones", "posiciones", "llaves", "sanciones", "noticias", "reglas"};
+    static final String[] VISTAS = {"campeonatos", "equipos", "partidos", "votaciones", "posiciones", "llaves", "sanciones", "noticias", "reglas", "perfil"};
     /**
      * Vistas que el visitante no ve (no le aportan: son de gestión). «Campeonatos» la ven los dos: el Organizador
      * gestiona los suyos y el Aficionado elige cuál seguir.
@@ -83,7 +83,7 @@ public class Aplicacion extends Application {
     static final java.util.Set<String> VISTAS_SOLO_VISITANTE = java.util.Set.of("votaciones");
     /** Vista con la que entra el visitante. */
     static final String VISTA_INICIAL_VISITANTE = "partidos";
-    static final String[] NOMBRES_VISTAS = {"Mis campeonatos", "Equipos", "Partidos", "Votaciones", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas"};
+    static final String[] NOMBRES_VISTAS = {"Mis campeonatos", "Equipos", "Partidos", "Votaciones", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas", "Mi perfil"};
     static final String[] ICONOS_VISTAS = {
         "M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z",
         "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z",
@@ -93,7 +93,8 @@ public class Aplicacion extends Application {
         "M3 4h5v6H3M3 14h5v6H3M8 7h4v10H8M12 12h5M17 9h4v6h-4",
         "M6.5 4h6a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 5 15.5v-10A1.5 1.5 0 0 1 6.5 4ZM15 7h3a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6a1.5 1.5 0 0 1-1.5-1.5V18",
         "M4 5h13v14H6a2 2 0 0 1-2-2V5ZM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4",
-        "M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7"};
+        "M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7",
+        "M12 4a4 4 0 1 1 0 8a4 4 0 0 1 0-8ZM4 21a8 8 0 0 1 16 0"};
     /* Iconos de trazo (24x24) en lugar de emojis. */
     static final String ICONO_TROFEO = "M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z";
     static final String ICONO_LUNA = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z";
@@ -166,6 +167,10 @@ public class Aplicacion extends Application {
         });
         catalogo = api.consultar("catalogo");
         dialogos = new Dialogos(this);
+        // MODO DEMOSTRACIÓN: el código para verificar el correo se muestra en una ventana (además de la consola).
+        alphasport.service.EnviadorCorreoDemostracion.alEnviar((correo, codigo) -> javafx.application.Platform.runLater(() ->
+                dialogos.mensaje("Código de verificación (modo demostración)", "No se envió un correo real. El código para "
+                        + correo + " es: " + codigo + ". Vence en 15 minutos y tiene 5 intentos.")));
         Fotos.usar(this);
         cargarFuentes();
         scene = new Scene(new StackPane(), 1280, 820);
@@ -471,21 +476,40 @@ public class Aplicacion extends Application {
         TextField correo = new TextField();
         correo.setPromptText("nombre@correo.com");
         PasswordField nuevaClave = new PasswordField();
-        nuevaClave.setPromptText("Mínimo 8 caracteres, con letras y números");
+        nuevaClave.setPromptText("Su contraseña");
         PasswordField confirmacion = new PasswordField();
         confirmacion.setPromptText("Repita la contraseña");
         Label errorRegistro = errorAcceso();
         Button crear = boton("Crear cuenta", "primario", "ancho");
         crear.setMaxWidth(Double.MAX_VALUE);
+        // Usuario, correo, contraseña y confirmación se revisan mientras se escribe, con las mismas reglas y textos
+        // que el servicio; «Crear cuenta» espera a que todo cumpla. El inicio de sesión no revisa nada de esto.
+        VBox reglasUsuario = listaReglas();
+        VBox reglasClave = listaReglas();
+        Label estadoCorreo = pistaEstado();
+        Label estadoConfirmacion = pistaEstado();
+        Runnable marcarReglas = () -> {
+            boolean usuarioBien = marcarReglas(reglasUsuario, alphasport.service.AutenticacionService.reglasUsuario(nuevoUsuario.getText()));
+            boolean correoBien = estadoCampo(estadoCorreo, !correo.getText().isBlank(),
+                    alphasport.service.AutenticacionService.problemaCorreo(correo.getText()), "Correo válido.");
+            boolean claveBien = marcarReglas(reglasClave, alphasport.service.AutenticacionService.reglasClave(nuevaClave.getText()));
+            boolean igual = estadoCampo(estadoConfirmacion, !confirmacion.getText().isEmpty(),
+                    nuevaClave.getText().equals(confirmacion.getText()) ? null : "Las contraseñas no coinciden.", "Las contraseñas coinciden.");
+            crear.setDisable(!(usuarioBien && correoBien && claveBien && igual));
+        };
+        for (TextField campo : List.of(nuevoUsuario, correo, nuevaClave, confirmacion)) {
+            campo.textProperty().addListener((o, antes, ahora) -> marcarReglas.run());
+        }
+        marcarReglas.run();
         // El tipo elegido viaja tal cual: el servicio solo acepta ORGANIZADOR o AFICIONADO y valida todo lo demás.
         crear.setOnAction(e -> entrarConCuenta(errorRegistro, "registro", mapa(
                 "tipo", tipos.getSelectedToggle() == null ? "" : tipos.getSelectedToggle().getUserData(),
                 "nombre", nombre.getText(), "usuario", nuevoUsuario.getText(), "correo", correo.getText(),
                 "clave", nuevaClave.getText(), "confirmacion", confirmacion.getText()), nuevaClave, confirmacion));
         VBox formRegistro = formularioAcceso(campoAcceso("Tipo de cuenta", opcionesTipo), campoAcceso("Nombre", nombre),
-                campoAcceso("Usuario", nuevoUsuario, "De 3 a 30 caracteres: letras sin tilde, números, punto, guion o guion bajo."),
-                campoAcceso("Correo", correo), campoAcceso("Contraseña", nuevaClave), campoAcceso("Confirmar contraseña", confirmacion),
-                errorRegistro, crear);
+                campoAcceso("Usuario", nuevoUsuario, alphasport.service.AutenticacionService.AYUDA_USUARIO), reglasUsuario,
+                campoAcceso("Correo", correo), estadoCorreo, campoAcceso("Contraseña", nuevaClave), reglasClave,
+                campoAcceso("Confirmar contraseña", confirmacion), estadoConfirmacion, errorRegistro, crear);
 
         javafx.scene.control.Tab tabEntrar = new javafx.scene.control.Tab("Iniciar sesión", formEntrar);
         javafx.scene.control.Tab tabRegistro = new javafx.scene.control.Tab("Registrarse");
@@ -550,6 +574,43 @@ public class Aplicacion extends Application {
         error.managedProperty().bind(error.visibleProperty());
         error.setMaxWidth(Double.MAX_VALUE);
         return error;
+    }
+
+    /** Caja para una lista de reglas (usuario o contraseña) que se marca mientras se escribe. */
+    static VBox listaReglas() {
+        VBox lista = new VBox(2);
+        lista.getStyleClass().add("reglas-clave");
+        return lista;
+    }
+
+    /** Dibuja las reglas como cumplida (✓) o pendiente (○) y dice si se cumplen todas. */
+    static boolean marcarReglas(VBox lista, List<alphasport.service.AutenticacionService.Regla> reglas) {
+        lista.getChildren().clear();
+        for (alphasport.service.AutenticacionService.Regla r : reglas) {
+            Label regla = etiqueta((r.cumple() ? "✓  " : "○  ") + r.texto(), "regla-clave", r.cumple() ? "cumplida" : "pendiente");
+            regla.setAccessibleText(r.texto() + (r.cumple() ? ": cumplida" : ": pendiente"));
+            lista.getChildren().add(regla);
+        }
+        return reglas.stream().allMatch(alphasport.service.AutenticacionService.Regla::cumple);
+    }
+
+    /** Pista bajo un campo que dice en vivo si el dato sirve. */
+    static Label pistaEstado() {
+        Label pista = etiqueta("", "regla-clave");
+        pista.setWrapText(true);
+        pista.setMaxWidth(Double.MAX_VALUE);
+        pista.managedProperty().bind(pista.visibleProperty());
+        pista.setVisible(false);
+        return pista;
+    }
+
+    /** El problema en rojo o el texto de «bien» en verde; oculta la pista si no se ha escrito nada. */
+    static boolean estadoCampo(Label pista, boolean escrito, String problema, String bien) {
+        pista.setVisible(escrito);
+        pista.setText(problema != null ? problema : bien);
+        pista.getStyleClass().removeAll("cumplida", "error-campo");
+        pista.getStyleClass().add(problema != null ? "error-campo" : "cumplida");
+        return escrito && problema == null;
     }
 
     private static VBox formularioAcceso(Node... nodos) {
@@ -624,6 +685,9 @@ public class Aplicacion extends Application {
             if ((puedeEditar() ? VISTAS_SOLO_VISITANTE : VISTAS_SOLO_ADMIN).contains(clave)) {
                 continue; // el visitante no ve Equipos ni Reglas; el administrador no ve Votaciones
             }
+            if (clave.equals("votaciones") && !vista.equals("votaciones") && (E == null || l(E, "partidos").stream().noneMatch(p -> b(m(p, "votacion"), "abierta")))) {
+                continue; // sin votaciones abiertas, la sección solo tendría un aviso vacío: no se muestra en el menú
+            }
             SVGPath icono = new SVGPath();
             icono.setContent(ICONOS_VISTAS[i]);
             icono.getStyleClass().add("icono-nav");
@@ -649,14 +713,11 @@ public class Aplicacion extends Application {
         historial.setOnAction(e -> dialogos.historial());
         Button tema = botonTema("Modo claro / oscuro");
         tema.setMaxWidth(Double.MAX_VALUE);
-        Label modo = etiqueta("Escritorio Java", "chip", "chip-modo");
-        modo.setMaxWidth(Double.MAX_VALUE);
-        modo.setAlignment(Pos.CENTER);
         Usuario usuario = api.getUsuarioActual();
         Label chipRol = etiqueta(usuario.getRol().getNombre() + (usuario.puedeEditar() ? "" : " · solo lectura"), "chip");
         chipRol.setMaxWidth(Double.MAX_VALUE);
         chipRol.setAlignment(Pos.CENTER);
-        VBox lateral = new VBox(22, marca, nav, espacio(), new VBox(8, chipRol, historial, tema, modo));
+        VBox lateral = new VBox(22, marca, nav, espacio(), new VBox(8, chipRol, historial, tema));
         lateral.getStyleClass().addAll("vidrio", "barra-lateral");
         lateral.setPrefWidth(248);
         lateral.setMinWidth(248);
@@ -906,7 +967,7 @@ public class Aplicacion extends Application {
             pestanaPartidos = "previa";
             mostrarLogin();
         });
-        soloAdmin(nuevo, itemSiguiente, cambiar, terminar, cancelar, abrir);
+        soloAdmin(nuevo, itemSiguiente, cambiar, terminar, cancelar, respaldo, abrir); // el respaldo, solo el Organizador dueño
         MenuItem salir = new MenuItem("Salir");
         salir.setOnAction(e -> stage.close());
         menu.getItems().addAll(nuevo, itemSiguiente, cambiar, terminar, cancelar, new SeparatorMenuItem(), respaldo, abrir, exportar,
@@ -1108,7 +1169,7 @@ public class Aplicacion extends Application {
         }
         // Sin campeonato elegido las demás vistas tendrían datos viejos: se va a la lista de campeonatos.
         // Las noticias no dependen de tener uno elegido: se ven las generales.
-        if (!b(E, "hay") && !nombre.equals("noticias")) {
+        if (!b(E, "hay") && !nombre.equals("noticias") && !nombre.equals("perfil")) {
             nombre = "campeonatos";
         }
         vista = nombre;
@@ -1125,6 +1186,7 @@ public class Aplicacion extends Application {
             case "sanciones" -> vistaEstadisticas();
             case "reglas" -> vistaReglas();
             case "noticias" -> vistaNoticias();
+            case "perfil" -> vistaPerfil();
             default -> vistaEquipos();
         };
         contenido.getChildren().setAll(nodo);
@@ -1182,6 +1244,117 @@ public class Aplicacion extends Application {
             return api.consultar("campeonatos");
         } catch (ReglaNegocioException e) {
             return mapa("ok", false, "error", e.getMessage(), "campeonatos", List.of(), "sinOrganizador", List.of());
+        }
+    }
+
+    /* ---------------------------------------------------------------- Mi perfil */
+
+    /**
+     * «Mi perfil» (Organizador y Aficionado): datos (nombre y correo), verificar el correo y cambiar la
+     * contraseña. La cuenta es la de la sesión: las peticiones no dicen de quién es.
+     */
+    private Node vistaPerfil() {
+        VBox caja = seccion("Mi perfil", "Sus datos de acceso. El nombre de usuario no se puede cambiar.");
+        Map<String, Object> p;
+        try {
+            p = m(api.consultar("perfil"), "perfil");
+        } catch (RuntimeException e) {
+            caja.getChildren().add(vacio(e.getMessage()));
+            return caja;
+        }
+        boolean verificado = b(p, "correoVerificado");
+        // ---- Mis datos
+        TextField nombre = new TextField(s(p, "nombre"));
+        TextField correo = new TextField(s(p, "correo"));
+        PasswordField claveCorreo = new PasswordField();
+        claveCorreo.setPromptText("Solo si cambia el correo");
+        Label insignia = etiqueta(verificado ? "Correo verificado" : "Correo sin verificar", "chip", verificado ? "insignia-verificado" : "insignia-sin-verificar");
+        Label estadoCorreo = pistaEstado();
+        VBox campoClaveCorreo = campoAcceso("Contraseña actual (para cambiar el correo)", claveCorreo);
+        campoClaveCorreo.managedProperty().bind(campoClaveCorreo.visibleProperty());
+        Runnable revisarCorreo = () -> {
+            boolean otro = !correo.getText().trim().equalsIgnoreCase(s(p, "correo"));
+            campoClaveCorreo.setVisible(otro);
+            estadoCampo(estadoCorreo, otro, alphasport.service.AutenticacionService.problemaCorreo(correo.getText()), "Correo válido. Quedará sin verificar.");
+        };
+        correo.textProperty().addListener((o, a, n) -> revisarCorreo.run());
+        revisarCorreo.run();
+        Label errorDatos = errorAcceso();
+        Button guardar = boton("Guardar datos", "primario");
+        guardar.setOnAction(e -> accionPerfil(errorDatos, "perfil/datos", mapa("nombre", nombre.getText(), "correo", correo.getText(),
+                "claveActual", claveCorreo.getText())));
+        VBox datos = bloquePerfil("Mis datos", etiqueta("Usuario: " + s(p, "usuario") + " · " + s(p, "rol"), "sutil"),
+                campoAcceso("Nombre", nombre), new HBox(8, etiqueta("Correo", "campo-titulo"), insignia), correo, estadoCorreo,
+                campoClaveCorreo, errorDatos, guardar);
+        // ---- Verificar correo (solo si falta)
+        VBox verificar = null;
+        if (!verificado) {
+            TextField codigo = new TextField();
+            codigo.setPromptText("6 dígitos");
+            Label errorCodigo = errorAcceso();
+            Button enviar = boton("Enviar código", "fantasma");
+            enviar.setOnAction(e -> accionPerfil(errorCodigo, "perfil/codigo", mapa()));
+            Button comprobar = boton("Verificar", "primario");
+            comprobar.setOnAction(e -> accionPerfil(errorCodigo, "perfil/verificar", mapa("codigo", codigo.getText())));
+            verificar = bloquePerfil("Verificar correo",
+                    b(p, "demostracion") ? etiqueta("Modo demostración: no se envían correos reales. El código aparece en una ventana.", "chip", "aviso-demo") : new Region(),
+                    etiqueta(b(p, "codigoPendiente") ? "Ya pidió un código: escríbalo abajo. Puede pedir otro si no le llegó."
+                            : "Pida un código de 6 dígitos. Vence en 15 minutos y tiene 5 intentos.", "sutil"),
+                    enviar, campoAcceso("Código", codigo), errorCodigo, comprobar);
+        }
+        // ---- Cambiar contraseña
+        PasswordField actual = new PasswordField(), nueva = new PasswordField(), confirmacion = new PasswordField();
+        VBox reglas = listaReglas();
+        Label estadoConfirmacion = pistaEstado();
+        Label errorClave = errorAcceso();
+        Button cambiar = boton("Cambiar contraseña", "primario");
+        Runnable revisarClave = () -> {
+            boolean claveBien = marcarReglas(reglas, alphasport.service.AutenticacionService.reglasClave(nueva.getText()));
+            boolean igual = estadoCampo(estadoConfirmacion, !confirmacion.getText().isEmpty(),
+                    nueva.getText().equals(confirmacion.getText()) ? null : "Las contraseñas no coinciden.", "Las contraseñas coinciden.");
+            cambiar.setDisable(!(claveBien && igual && !actual.getText().isEmpty()));
+        };
+        for (PasswordField campo : List.of(actual, nueva, confirmacion)) {
+            campo.textProperty().addListener((o, a, n) -> revisarClave.run());
+        }
+        revisarClave.run();
+        cambiar.setOnAction(e -> {
+            accionPerfil(errorClave, "perfil/clave", mapa("claveActual", actual.getText(), "clave", nueva.getText(), "confirmacion", confirmacion.getText()));
+            actual.clear();
+            nueva.clear();
+            confirmacion.clear();
+        });
+        VBox clave = bloquePerfil("Cambiar contraseña", campoAcceso("Contraseña actual", actual), campoAcceso("Contraseña nueva", nueva), reglas,
+                campoAcceso("Confirmar contraseña nueva", confirmacion), estadoConfirmacion, errorClave, cambiar);
+        javafx.scene.layout.FlowPane bloques = new javafx.scene.layout.FlowPane(16, 16);
+        bloques.getChildren().add(datos);
+        if (verificar != null) {
+            bloques.getChildren().add(verificar);
+        }
+        bloques.getChildren().add(clave);
+        caja.getChildren().add(bloques);
+        return caja;
+    }
+
+    private static VBox bloquePerfil(String titulo, Node... nodos) {
+        VBox bloque = new VBox(10, etiqueta(titulo, "h3"));
+        bloque.getChildren().addAll(nodos);
+        bloque.getStyleClass().addAll("vidrio", "tarjeta");
+        bloque.setPadding(new Insets(16));
+        bloque.setPrefWidth(340);
+        return bloque;
+    }
+
+    /** Envía una acción del perfil; si sale bien avisa y vuelve a dibujar el perfil, si no muestra el error en el bloque. */
+    private void accionPerfil(Label error, String ruta, Map<String, Object> datos) {
+        try {
+            Map<String, Object> r = api.ejecutar(ruta, datos);
+            aviso(s(r, "mensaje"));
+            mostrarVista("perfil");
+        } catch (Exception ex) {
+            error.setText(ex.getMessage());
+            error.setWrapText(true);
+            error.setVisible(true);
         }
     }
 
@@ -1675,7 +1848,7 @@ public class Aplicacion extends Application {
             VBox caja = seccion("Partidos", "Calendario y resultados. Toque cualquier partido para ver la previa, el cara a cara, la racha y las alineaciones.",
                     cFase, cEstado, cEquipo);
             caja.getChildren().add(bloquesPartidos(todos.stream().filter(faseYEquipo.and(porEstado)).toList(), false,
-                    iniciado ? "No hay partidos con estos filtros." : sinFixture));
+                    iniciado ? "No hay partidos con estos filtros." : "El calendario aparece cuando el organizador inicie el campeonato."));
             return caja;
         }
         // Administrador: dos pasos separados, como en Noticias. Primero la previa (antes del pitazo), después el resultado.
@@ -2247,7 +2420,7 @@ public class Aplicacion extends Application {
         nueva.setOnAction(e -> dialogos.noticia(null, !admin));
         VBox caja = seccion("Noticias", admin
                 ? "Publique noticias oficiales y apruebe o rechace las que envían los visitantes."
-                : "Noticias del torneo. Puede comentar o proponer una noticia: el administrador la revisa antes de publicarla.", nueva);
+                : "Comente o proponga una noticia: el organizador la revisa antes de publicarla.", nueva);
         List<Map<String, Object>> publicadas = l(datos, "publicadas");
         if (!admin) {
             // Visitante: solo el feed público (aprobado = true).

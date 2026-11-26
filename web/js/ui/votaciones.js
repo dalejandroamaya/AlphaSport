@@ -65,6 +65,9 @@ function contarVotaciones() {
   const cuantas = E.hay ? E.partidos.filter(p => p.votacion && p.votacion.abierta).length : 0;
   $('cuentaVotaciones').textContent = cuantas;
   $('cuentaVotaciones').hidden = cuantas === 0;
+  // Sin votaciones abiertas la sección solo tendría un aviso vacío: se oculta del menú del Aficionado.
+  const nav = document.querySelector('.navegacion button[data-vista="votaciones"]');
+  if (nav && puedeVer('votaciones')) nav.hidden = cuantas === 0 && vistaActual() !== 'votaciones';
 }
 
 function tarjetaVotacionHtml({ partido: p, calificaciones: c }) {
