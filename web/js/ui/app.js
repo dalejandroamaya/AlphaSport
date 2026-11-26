@@ -2571,6 +2571,10 @@ function conectarEventos() {
   editorReglas = editorCriterios($('criteriosReglas'));
   editorNuevo = editorCriterios($('criteriosNuevo'));
   $('formLogin').addEventListener('submit', entrar);
+  // Al salir del correo se explica qué regla no cumple (el mismo texto que da el servicio al crear la cuenta).
+  $('regCorreo').addEventListener('blur', () => {
+    if ($('regCorreo').value.trim()) mostrarErrorAcceso('registroError', Cuentas.problemaCorreo(Cuentas.normalizar($('regCorreo').value)));
+  });
   $('formRegistro').addEventListener('submit', registrarse);
   // Mis campeonatos (Organizador): crear, gestionar, terminar, eliminar o tomar; y cambiar desde la cabecera.
   $('btnNuevoCampeonato').addEventListener('click', () => abrirNuevo(false));

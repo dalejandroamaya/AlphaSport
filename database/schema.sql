@@ -11,7 +11,7 @@ CREATE TABLE esquema_version (
     version      INTEGER PRIMARY KEY,
     aplicada_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO esquema_version (version) VALUES (7);
+INSERT INTO esquema_version (version) VALUES (8);
 
 -- ---------------------------------------------------------------- usuarios
 -- Cuentas creadas con «Registrarse»: usuario y correo en minusculas (unicos sin importar mayusculas).
@@ -19,7 +19,7 @@ CREATE TABLE usuarios (
     id              SERIAL PRIMARY KEY,
     nombre          VARCHAR(80)  NOT NULL,
     username        VARCHAR(40)  NOT NULL UNIQUE,
-    email           VARCHAR(120) UNIQUE,
+    email           VARCHAR(254) UNIQUE,
     password_hash   VARCHAR(255) NOT NULL,
     rol             VARCHAR(12)  NOT NULL DEFAULT 'AFICIONADO' CONSTRAINT usuarios_rol_check CHECK (rol IN ('ORGANIZADOR', 'AFICIONADO')),
     fecha_registro  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,

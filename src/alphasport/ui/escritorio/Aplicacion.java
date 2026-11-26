@@ -472,6 +472,14 @@ public class Aplicacion extends Application {
         PasswordField confirmacion = new PasswordField();
         confirmacion.setPromptText("Repita la contraseña");
         Label errorRegistro = errorAcceso();
+        // Al salir del correo se explica qué regla no cumple (el mismo texto que da el servicio al crear la cuenta).
+        correo.focusedProperty().addListener((o, antes, ahora) -> {
+            if (!ahora && !correo.getText().isBlank()) {
+                String problema = alphasport.service.AutenticacionService.problemaCorreo(correo.getText());
+                errorRegistro.setText(problema == null ? "" : problema);
+                errorRegistro.setVisible(problema != null);
+            }
+        });
         Button crear = boton("Crear cuenta", "primario", "ancho");
         crear.setMaxWidth(Double.MAX_VALUE);
         // El tipo elegido viaja tal cual: el servicio solo acepta ORGANIZADOR o AFICIONADO y valida todo lo demás.

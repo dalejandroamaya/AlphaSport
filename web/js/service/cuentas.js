@@ -8,17 +8,59 @@
  * otro navegador ni en el programa Java.
  */
 const Cuentas = (() => {
-  const USUARIO_MINIMO = 3, USUARIO_MAXIMO = 30, NOMBRE_MINIMO = 2, NOMBRE_MAXIMO = 80, CORREO_MAXIMO = 120;
+  const USUARIO_MINIMO = 3, USUARIO_MAXIMO = 30, NOMBRE_MINIMO = 2, NOMBRE_MAXIMO = 80;
+  const CORREO_MAXIMO = 254, CORREO_LOCAL_MAXIMO = 64, CORREO_ETIQUETA_MAXIMA = 63;
   const CLAVE_MINIMA = 8, CLAVE_MAXIMA = 128;
   /** Letras sin tilde, números, punto, guion y guion bajo; empieza con letra o número (igual que Java). */
   const USUARIO = /^[a-z0-9][a-z0-9._-]{2,29}$/;
-  const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const ROLES_REGISTRO = ['ORGANIZADOR', 'AFICIONADO'];
   /** Menos que en Java (600 000) para que el navegador no se congele; el número va dentro del hash. */
   const ITERACIONES = 100000;
 
   /** Usuario o correo como se guardan: sin espacios alrededor y en minúsculas. */
   const normalizar = texto => String(texto == null ? '' : texto).trim().toLowerCase();
+
+  const letraONumero = c => (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+
+  /**
+   * Por qué no sirve el correo (ya normalizado), o null si sirve. Las mismas reglas y textos que
+   * AutenticacionService.problemaCorreo en Java: una sola @ y hasta 254 caracteres; antes de la @, de 1 a 64
+   * letras, números y . _ % + - sin punto al inicio, al final ni dos seguidos; después, partes de 1 a 63
+   * letras, números o guion (sin guion al inicio ni al final) y una extensión de al menos 2 letras.
+   */
+  function problemaCorreo(correo) {
+    if (!correo) return 'Escriba su correo.';
+    if (correo.length > CORREO_MAXIMO) return `El correo no puede tener más de ${CORREO_MAXIMO} caracteres.`;
+    const arroba = correo.indexOf('@');
+    if (arroba < 0) return 'Al correo le falta la @, por ejemplo nombre@correo.com.';
+    if (correo.indexOf('@', arroba + 1) >= 0) return 'El correo solo puede tener una @.';
+    const local = correo.slice(0, arroba), dominio = correo.slice(arroba + 1);
+    if (!local) return 'Falta el nombre antes de la @.';
+    if (local.length > CORREO_LOCAL_MAXIMO) return `El nombre antes de la @ no puede tener más de ${CORREO_LOCAL_MAXIMO} caracteres.`;
+    for (const c of local) {
+      if (!letraONumero(c) && !'._%+-'.includes(c)) return 'Antes de la @ solo se permiten letras sin tilde, números y los signos . _ % + -';
+    }
+    if (local.startsWith('.') || local.endsWith('.')) return 'El nombre antes de la @ no puede empezar ni terminar en punto.';
+    if (local.includes('..')) return 'El nombre antes de la @ no puede tener puntos seguidos.';
+    if (!dominio) return 'Falta el dominio después de la @, por ejemplo correo.com.';
+    if (dominio.startsWith('.')) return 'El dominio no puede empezar con punto.';
+    if (dominio.endsWith('.')) return 'El dominio no puede terminar en punto.';
+    if (dominio.includes('..')) return 'El dominio no puede tener puntos seguidos.';
+    const etiquetas = dominio.split('.');
+    if (etiquetas.length < 2) return 'Al dominio le falta la extensión, por ejemplo .com.';
+    for (const etiqueta of etiquetas) {
+      if (etiqueta.length > CORREO_ETIQUETA_MAXIMA) return `Cada parte del dominio puede tener como máximo ${CORREO_ETIQUETA_MAXIMA} caracteres.`;
+      for (const c of etiqueta) {
+        if (!letraONumero(c) && c !== '-') return 'El dominio solo puede tener letras sin tilde, números, guiones y puntos.';
+      }
+      if (etiqueta.startsWith('-') || etiqueta.endsWith('-')) return 'Las partes del dominio no pueden empezar ni terminar en guion.';
+    }
+    const extension = etiquetas[etiquetas.length - 1];
+    if (extension.length < 2 || !/^[a-z]+$/.test(extension)) {
+      return 'La extensión del dominio (después del último punto) debe tener solo letras y al menos 2, por ejemplo .com.';
+    }
+    return null;
+  }
 
   /**
    * Valida lo que envía la pantalla «Registrarse» y devuelve los datos limpios. Lanza un Error con el mismo
@@ -39,8 +81,8 @@ const Cuentas = (() => {
       throw new Error(`Escriba su nombre (entre ${NOMBRE_MINIMO} y ${NOMBRE_MAXIMO} caracteres).`);
     }
     const correo = normalizar(d.correo);
-    if (!correo) throw new Error('Escriba su correo.');
-    if (correo.length > CORREO_MAXIMO || !CORREO.test(correo)) throw new Error('Escriba un correo válido, por ejemplo nombre@correo.com.');
+    const problema = problemaCorreo(correo);
+    if (problema) throw new Error(problema);
     const clave = typeof d.clave === 'string' ? d.clave : '';
     if (clave.length < CLAVE_MINIMA || clave.length > CLAVE_MAXIMA) {
       throw new Error(`La contraseña debe tener entre ${CLAVE_MINIMA} y ${CLAVE_MAXIMA} caracteres.`);
@@ -97,5 +139,5 @@ const Cuentas = (() => {
     return diferencia === 0;
   }
 
-  return { normalizar, validarRegistro, hash, coincide, ROLES_REGISTRO };
+  return { normalizar, problemaCorreo, validarRegistro, hash, coincide, ROLES_REGISTRO };
 })();

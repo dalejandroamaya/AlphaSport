@@ -49,6 +49,7 @@ Si falta alguna, el programa lo avisa al abrir y no toca los datos.
 | `005_registro_usuarios.sql` | 5 | Registro de cuentas: roles `ORGANIZADOR` y `AFICIONADO`, usuario y correo en minúsculas |
 | `006_varios_campeonatos.sql` | 6 | Varios campeonatos en curso: dueño de cada torneo y noticias por campeonato |
 | `007_imagenes.sql` | 7 | Fotos, escudos y fotos de noticias en la tabla `imagenes` (las ven todos los computadores) |
+| `008_correo_254.sql` | 8 | La columna `email` admite correos de hasta 254 caracteres (opcional: el programa funciona sin ella) |
 
 **Migración 006.** Permite varios campeonatos en curso a la vez. Solo usa SQL básico (`ALTER TABLE`, `UPDATE`, `INSERT … SELECT`):
 
