@@ -76,6 +76,7 @@ public final class PruebaPostgres {
         probar("Imágenes en la base: fotos, escudos y noticias", PruebaPostgres::probarImagenes);
         probar("Cuentas: registro e inicio de sesión en la tabla usuarios", PruebaPostgres::probarCuentas);
         probar("Varios campeonatos en curso: dueños, sin mezclar datos y terminar uno", PruebaPostgres::probarVariosCampeonatos);
+        probar("Aficionado: elige, cambia y sigue un campeonato", PruebaPostgres::probarAficionadoElige);
         System.out.println(fallos == 0 ? "TODO BIEN" : "FALLOS: " + fallos);
         System.exit(fallos == 0 ? 0 : 1);
     }
@@ -958,6 +959,89 @@ public final class PruebaPostgres {
                     + " terminar=" + terminar + " tomar=" + tomar);
         }
         return filas && listado && separados && permisos && deAna && terminar && tomar;
+    }
+
+    /**
+     * Lo que hace la pantalla «Campeonatos» del Aficionado, por la API y sobre la base: ve todos los campeonatos en
+     * curso con su organizador, elige uno, cambia a otro, no puede gestionar ninguno y, si el que sigue termina,
+     * vuelve a tener que elegir.
+     */
+    private static boolean probarAficionadoElige(ConexionDB db) throws Exception {
+        alphasport.service.ClavesPbkdf2 rapido = new alphasport.service.ClavesPbkdf2(1000);
+        alphasport.service.AutenticacionService auth = new alphasport.service.AutenticacionService(
+                new alphasport.persistence.postgres.PostgresRepositorioUsuarios(db), rapido);
+        for (String[] cuenta : new String[][] {{"ana", "ORGANIZADOR"}, {"beto", "ORGANIZADOR"}, {"luis", "AFICIONADO"}, {"maria", "AFICIONADO"}}) {
+            auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro(cuenta[0], cuenta[0].toUpperCase(), cuenta[0] + "@x.co",
+                    "clave1234", "clave1234", cuenta[1]));
+        }
+        PostgresRepositorioHistorial historial = new PostgresRepositorioHistorial(db);
+        alphasport.service.GestorCampeonatos gestor = new alphasport.service.GestorCampeonatos(
+                new alphasport.persistence.postgres.PostgresRepositorioCampeonatos(db), historial, r -> new CampeonatoService(r, historial, db));
+        alphasport.ui.ApiControlador base = new alphasport.ui.ApiControlador(gestor, new alphasport.service.SesionService(auth),
+                new alphasport.service.NoticiasService(new PostgresRepositorioNoticias(db)),
+                new alphasport.service.FotosService(new alphasport.persistence.RepositorioFotosEnMemoria()));
+        java.util.function.Function<String, alphasport.ui.ApiControlador> entrar = usuario -> {
+            alphasport.ui.ApiControlador api = base.cliente(null);
+            try {
+                api.ejecutar("login", java.util.Map.of("usuario", usuario, "clave", "clave1234"));
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+            return api;
+        };
+        ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+        alphasport.model.Usuario ana = entrar.apply("ana").getUsuarioActual(), beto = entrar.apply("beto").getUsuarioActual();
+        CampeonatoService ligaAna = gestor.crear(ana, "Liga Ana", TipoFormato.LIGA, cfg, null).servicio();
+        CampeonatoService copaAna = gestor.crear(ana, "Copa Ana", TipoFormato.ELIMINACION_DIRECTA, cfg, null).servicio();
+        CampeonatoService ligaBeto = gestor.crear(beto, "Liga Beto", TipoFormato.LIGA, cfg, null).servicio();
+        ligaAna.equipos().cargarDatosPrueba(11, 4, true);
+        copaAna.equipos().cargarDatosPrueba(22, 2, true);
+        ligaBeto.equipos().cargarDatosPrueba(33, 4, true);
+        copaAna.avanzar();
+        jugarCompleto(copaAna, copaAna.getCampeonato().getPartidos().get(0));
+        String a = ligaAna.getCampeonato().getCodigo(), c = copaAna.getCampeonato().getCodigo(), b = ligaBeto.getCampeonato().getCodigo();
+        java.util.function.Function<java.util.Map<String, Object>, String> nombreDe = estado -> Boolean.TRUE.equals(estado.get("hay"))
+                ? String.valueOf(((java.util.Map<?, ?>) estado.get("campeonato")).get("nombre")) : "(ninguno)";
+
+        // La lista: los tres en curso, con su organizador; sin elegir, hay que elegir.
+        alphasport.ui.ApiControlador luis = entrar.apply("luis");
+        List<?> lista = (List<?>) luis.consultar("campeonatos").get("campeonatos");
+        List<String> vistos = lista.stream().map(x -> ((java.util.Map<?, ?>) x).get("nombre") + "/" + ((java.util.Map<?, ?>) x).get("organizador")).toList();
+        boolean listado = vistos.equals(List.of("Liga Ana/ANA", "Copa Ana/ANA", "Liga Beto/BETO"))
+                && ((List<?>) luis.consultar("campeonatos").get("sinOrganizador")).isEmpty()
+                && "(ninguno)".equals(nombreDe.apply(luis.consultar("estado"))) && Boolean.TRUE.equals(luis.consultar("estado").get("elegir"));
+        // Elige la liga de Beto y la ve (con sus equipos); cambia a la copa de Ana.
+        luis.ejecutar("campeonato/elegir", java.util.Map.of("codigo", b));
+        boolean elige = nombreDe.apply(luis.consultar("estado")).equals("Liga Beto")
+                && ((List<?>) luis.consultar("estado").get("equipos")).size() == 4
+                && b.equals(luis.consultar("campeonatos").get("elegido"));
+        luis.ejecutar("campeonato/elegir", java.util.Map.of("codigo", c));
+        boolean cambia = nombreDe.apply(luis.consultar("estado")).equals("Copa Ana") && ((List<?>) luis.consultar("estado").get("equipos")).size() == 2;
+        // Solo lectura: no gestiona ni el que sigue ni otro.
+        boolean soloLectura = "PERMISO".equals(codigoDe(() -> luis.ejecutar("equipo/rapido", java.util.Map.of("nombre", "Intruso"))))
+                && "PERMISO".equals(codigoDe(() -> luis.ejecutar("campeonato/terminar", java.util.Map.of("codigo", c))))
+                && copaAna.getCampeonato().getEquipos().size() == 2;
+        // Cada Aficionado elige el suyo: lo que eligió Luis no cambia lo de Maria.
+        alphasport.ui.ApiControlador maria = entrar.apply("maria");
+        maria.ejecutar("campeonato/elegir", java.util.Map.of("codigo", a));
+        boolean independientes = nombreDe.apply(maria.consultar("estado")).equals("Liga Ana") && nombreDe.apply(luis.consultar("estado")).equals("Copa Ana");
+        // Una sesión nueva no recuerda la elección (por eso la pantalla guarda el último seguido en el equipo).
+        alphasport.ui.ApiControlador luisOtraVez = entrar.apply("luis");
+        boolean sesionNueva = "(ninguno)".equals(nombreDe.apply(luisOtraVez.consultar("estado")));
+        luisOtraVez.ejecutar("campeonato/elegir", java.util.Map.of("codigo", c));
+        // Ana termina la copa: quien la seguía vuelve a la lista, y ya no se puede elegir.
+        gestor.terminar(c, ana);
+        java.util.Map<String, Object> despues = luisOtraVez.consultar("estado");
+        boolean termina = "(ninguno)".equals(nombreDe.apply(despues)) && Boolean.TRUE.equals(despues.get("elegir"))
+                && "CAMPEONATO".equals(codigoDe(() -> luisOtraVez.ejecutar("campeonato/elegir", java.util.Map.of("codigo", c))))
+                && ((List<?>) luisOtraVez.consultar("campeonatos").get("campeonatos")).size() == 2
+                && nombreDe.apply(maria.consultar("estado")).equals("Liga Ana");
+        boolean todo = listado && elige && cambia && soloLectura && independientes && sesionNueva && termina;
+        if (!todo) {
+            System.out.println("  listado=" + listado + " " + vistos + " elige=" + elige + " cambia=" + cambia + " soloLectura=" + soloLectura
+                    + " independientes=" + independientes + " sesionNueva=" + sesionNueva + " termina=" + termina);
+        }
+        return todo;
     }
 
     /** Codigo de la ReglaNegocioException que lanza la accion (null si no lanza ninguna). */
