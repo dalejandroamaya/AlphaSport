@@ -136,9 +136,6 @@ async function iniciar() {
   $('jgPosicion').innerHTML = catalogo.gruposPosiciones
     ? catalogo.gruposPosiciones.map(g => `<optgroup label="${esc(g.grupo)}">${g.posiciones.map(p => `<option>${esc(p)}</option>`).join('')}</optgroup>`).join('')
     : catalogo.posiciones.map(p => `<option>${esc(p)}</option>`).join('');
-  // El chip solo informa cuando la web la sirve el programa Java; en la versión web sola es ruido.
-  $('chipModo').textContent = '☕ Programa Java';
-  $('chipModo').hidden = servicio.modo !== 'java';
   const formaciones = catalogo.formaciones || [];
   const opciones = '<option value="">Sin definir</option>' + formaciones.map(f => `<option>${esc(f)}</option>`).join('');
   $('fmLocal').innerHTML = opciones;

@@ -668,14 +668,11 @@ public class Aplicacion extends Application {
         historial.setOnAction(e -> dialogos.historial());
         Button tema = botonTema("Modo claro / oscuro");
         tema.setMaxWidth(Double.MAX_VALUE);
-        Label modo = etiqueta("Escritorio Java", "chip", "chip-modo");
-        modo.setMaxWidth(Double.MAX_VALUE);
-        modo.setAlignment(Pos.CENTER);
         Usuario usuario = api.getUsuarioActual();
         Label chipRol = etiqueta(usuario.getRol().getNombre() + (usuario.puedeEditar() ? "" : " · solo lectura"), "chip");
         chipRol.setMaxWidth(Double.MAX_VALUE);
         chipRol.setAlignment(Pos.CENTER);
-        VBox lateral = new VBox(22, marca, nav, espacio(), new VBox(8, chipRol, historial, tema, modo));
+        VBox lateral = new VBox(22, marca, nav, espacio(), new VBox(8, chipRol, historial, tema));
         lateral.getStyleClass().addAll("vidrio", "barra-lateral");
         lateral.setPrefWidth(248);
         lateral.setMinWidth(248);

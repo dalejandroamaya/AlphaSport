@@ -255,7 +255,6 @@
 .raiz.claro .chip { -fx-background-color: rgba(255, 255, 255, 0.7); }
 .chip-estado { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(46, 229, 152, 0.36); -fx-font-family: "Inter SemiBold"; }
 .marcador-principal.terminado .chip-estado { -fx-text-fill: -oro-texto; -fx-background-color: rgba(247, 199, 90, 0.17); -fx-border-color: rgba(247, 199, 90, 0.55); }
-.chip-modo { -fx-text-fill: -cian; }
 .marcador-principal { -fx-padding: 26 30; }
 .marcador-principal.terminado {
     -fx-background-color: rgba(247, 199, 90, 0.6), linear-gradient(to right, rgba(247, 199, 90, 0.2), -vidrio 55%);
