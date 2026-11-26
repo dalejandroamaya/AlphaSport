@@ -174,11 +174,24 @@ Si no queda ninguno, `estado` responde `hay: false` y `elegir: true` (si hay cam
 | Cambiar de campeonato | Con dos o más, un selector en la cabecera, junto al nombre del elegido (que siempre se ve) |
 | Menú Archivo | **Nuevo campeonato** crea uno más (no reemplaza al actual); se agrega **Terminar campeonato**; «Cancelar» pasa a **Eliminar campeonato** |
 
-Sin campeonato elegido, el menú lateral solo muestra Mis campeonatos, Partidos y Noticias.
+Sin campeonato elegido, el menú lateral solo muestra la lista de campeonatos y Noticias.
+
+**Pantalla «Campeonatos activos» (Aficionado)**, con las mismas funciones (`renderCampeonatos`, `vistaCampeonatos`) según el rol. No usa rutas nuevas: `campeonatos` ya devuelve al Aficionado todos los que están en curso y `campeonato/elegir` (permiso VER) los deja elegidos en su sesión.
+
+| Qué | Cómo |
+|---|---|
+| Tarjetas | Todos los campeonatos en curso: nombre, organizador, formato, estado, en qué va y número de equipos. El que ve va resaltado («Viendo»). Sin iniciar dice «Todavía no empieza» (la indicación de registrar equipos es para el Organizador) |
+| Entrar | **Entrar** (`campeonato/elegir`) abre sus Partidos; ve en solo lectura las vistas que ya existían (partidos, votaciones, posiciones, llaves, estadísticas y noticias) de ESE campeonato |
+| Cambiar | Con dos o más, el mismo selector de la cabecera; y la sección «Campeonatos» del menú |
+| Al entrar | Sin campeonato recordado, empieza en esta lista para elegir, aunque haya uno solo. La sesión del servidor no sobrevive a salir y entrar: el último seguido se guarda en el equipo (web: `localStorage` `alphasport.seguidos`, usuario → código; escritorio: `CampeonatoSeguido`, en `java.util.prefs`) y, si sigue en curso, se vuelve a elegir y se abren sus Partidos |
+| Si termina | Si el que sigue termina o se elimina (lo detecta la revisión de cada 5 s), se olvida, se avisa y se vuelve a la lista; si quedaba uno solo, el servidor lo elige y se avisa «Ahora ve …» |
+| Vacío | Sin campeonatos en curso: «Todavía no hay campeonatos en curso. Cuando un organizador cree uno, aparecerá aquí.» |
+
+En la web sola funciona igual (`servicioLocal.js` ya respondía `campeonatos` y `campeonato/elegir` al Aficionado).
 
 **Web sola (varios campeonatos en el navegador).** `Almacen.campeonatos` guarda cada campeonato por su código (`alphasport.campeonatos`), con `propietario` = usuario local, y `Almacen.elegido` recuerda el último que eligió cada usuario. La primera vez, el campeonato del formato anterior (`alphasport.actual`) y sus noticias pasan al nuevo formato **sin dueño**, para que un Organizador lo tome. `servicioLocal.js` responde las mismas rutas que Java y aplica las mismas reglas (solo el dueño cambia un campeonato; las noticias son de su campeonato). Las cuentas y los campeonatos son de ese navegador; el límite de espacio del navegador es para todos juntos.
 
-**Fuera de esta fase:** la pantalla «Campeonatos» para que el Aficionado elija cuál seguir (fase 3). Coorganizadores, traspasar un campeonato, buscar o paginar y ver campeonatos sin sesión quedan fuera.
+**Fuera de alcance:** coorganizadores, traspasar un campeonato, buscar o paginar y ver campeonatos sin sesión.
 
 ## Detalle de partido
 
