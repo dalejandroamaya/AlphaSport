@@ -191,6 +191,8 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .perfil-texto small { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--sutil); }
 .perfil-texto strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pista-campo { color: var(--sutil); font-size: .78rem; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.pista-campo.mal { color: var(--rojo); }
+.pista-campo.bien { color: var(--cesped); }
 .reglas-clave { list-style: none; margin: .35rem 0 0; padding: 0; display: grid; gap: .15rem; font-size: .78rem; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--sutil); }
 .reglas-clave li::before { content: "○"; display: inline-block; width: 1.2em; }
 .reglas-clave li.cumplida { color: var(--cesped); }

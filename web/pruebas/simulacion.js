@@ -236,7 +236,7 @@ async function probarCuentas() {
     && clave('Aa1#' + 'x'.repeat(130)) === 'La contraseña no puede tener más de 128 caracteres.'
     && Cuentas.problemaClave('Ñandú#2026') === null && Cuentas.reglasClave('').length === 5
     && error({ confirmacion: 'Clave#12345' }).includes('no coinciden')
-    && error({ usuario: 'lu' }).includes('entre 3 y 30') && error({ usuario: 'josé' }).includes('sin tilde')
+    && error({ usuario: 'lu' }).includes('de 4 a 20 caracteres') && error({ usuario: 'josé' }).includes('letras a-z sin tilde')
     && error({ usuario: '.ana' }).includes('empezar con una letra') && error({ nombre: 'A' }).includes('Escriba su nombre')
     && error({ correo: 'ana@correo' }) === 'Al dominio le falta la extensión, por ejemplo .com.' && error({ correo: '' }).includes('Escriba su correo');
   // Correo: cada regla con su mensaje concreto.

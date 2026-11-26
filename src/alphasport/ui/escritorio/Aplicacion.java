@@ -472,31 +472,26 @@ public class Aplicacion extends Application {
         PasswordField confirmacion = new PasswordField();
         confirmacion.setPromptText("Repita la contraseña");
         Label errorRegistro = errorAcceso();
-        // Al salir del correo se explica qué regla no cumple (el mismo texto que da el servicio al crear la cuenta).
-        correo.focusedProperty().addListener((o, antes, ahora) -> {
-            if (!ahora && !correo.getText().isBlank()) {
-                String problema = alphasport.service.AutenticacionService.problemaCorreo(correo.getText());
-                errorRegistro.setText(problema == null ? "" : problema);
-                errorRegistro.setVisible(problema != null);
-            }
-        });
         Button crear = boton("Crear cuenta", "primario", "ancho");
         crear.setMaxWidth(Double.MAX_VALUE);
-        // Las 5 reglas de la contraseña se marcan mientras se escribe; «Crear cuenta» espera a que se cumplan todas.
-        // Solo en el registro: el inicio de sesión no revisa la fuerza (las cuentas antiguas siguen entrando).
-        VBox reglasClave = new VBox(2);
-        reglasClave.getStyleClass().add("reglas-clave");
+        // Usuario, correo, contraseña y confirmación se revisan mientras se escribe, con las mismas reglas y textos
+        // que el servicio; «Crear cuenta» espera a que todo cumpla. El inicio de sesión no revisa nada de esto.
+        VBox reglasUsuario = listaReglas();
+        VBox reglasClave = listaReglas();
+        Label estadoCorreo = pistaEstado();
+        Label estadoConfirmacion = pistaEstado();
         Runnable marcarReglas = () -> {
-            List<alphasport.service.AutenticacionService.ReglaClave> reglas = alphasport.service.AutenticacionService.reglasClave(nuevaClave.getText());
-            reglasClave.getChildren().clear();
-            for (alphasport.service.AutenticacionService.ReglaClave r : reglas) {
-                Label regla = etiqueta((r.cumple() ? "✓  " : "○  ") + r.texto(), "regla-clave", r.cumple() ? "cumplida" : "pendiente");
-                regla.setAccessibleText(r.texto() + (r.cumple() ? ": cumplida" : ": pendiente"));
-                reglasClave.getChildren().add(regla);
-            }
-            crear.setDisable(!reglas.stream().allMatch(alphasport.service.AutenticacionService.ReglaClave::cumple));
+            boolean usuarioBien = marcarReglas(reglasUsuario, alphasport.service.AutenticacionService.reglasUsuario(nuevoUsuario.getText()));
+            boolean correoBien = estadoCampo(estadoCorreo, !correo.getText().isBlank(),
+                    alphasport.service.AutenticacionService.problemaCorreo(correo.getText()), "Correo válido.");
+            boolean claveBien = marcarReglas(reglasClave, alphasport.service.AutenticacionService.reglasClave(nuevaClave.getText()));
+            boolean igual = estadoCampo(estadoConfirmacion, !confirmacion.getText().isEmpty(),
+                    nuevaClave.getText().equals(confirmacion.getText()) ? null : "Las contraseñas no coinciden.", "Las contraseñas coinciden.");
+            crear.setDisable(!(usuarioBien && correoBien && claveBien && igual));
         };
-        nuevaClave.textProperty().addListener((o, antes, ahora) -> marcarReglas.run());
+        for (TextField campo : List.of(nuevoUsuario, correo, nuevaClave, confirmacion)) {
+            campo.textProperty().addListener((o, antes, ahora) -> marcarReglas.run());
+        }
         marcarReglas.run();
         // El tipo elegido viaja tal cual: el servicio solo acepta ORGANIZADOR o AFICIONADO y valida todo lo demás.
         crear.setOnAction(e -> entrarConCuenta(errorRegistro, "registro", mapa(
@@ -504,9 +499,9 @@ public class Aplicacion extends Application {
                 "nombre", nombre.getText(), "usuario", nuevoUsuario.getText(), "correo", correo.getText(),
                 "clave", nuevaClave.getText(), "confirmacion", confirmacion.getText()), nuevaClave, confirmacion));
         VBox formRegistro = formularioAcceso(campoAcceso("Tipo de cuenta", opcionesTipo), campoAcceso("Nombre", nombre),
-                campoAcceso("Usuario", nuevoUsuario, "De 3 a 30 caracteres: letras sin tilde, números, punto, guion o guion bajo."),
-                campoAcceso("Correo", correo), campoAcceso("Contraseña", nuevaClave), reglasClave, campoAcceso("Confirmar contraseña", confirmacion),
-                errorRegistro, crear);
+                campoAcceso("Usuario", nuevoUsuario, alphasport.service.AutenticacionService.AYUDA_USUARIO), reglasUsuario,
+                campoAcceso("Correo", correo), estadoCorreo, campoAcceso("Contraseña", nuevaClave), reglasClave,
+                campoAcceso("Confirmar contraseña", confirmacion), estadoConfirmacion, errorRegistro, crear);
 
         javafx.scene.control.Tab tabEntrar = new javafx.scene.control.Tab("Iniciar sesión", formEntrar);
         javafx.scene.control.Tab tabRegistro = new javafx.scene.control.Tab("Registrarse");
@@ -571,6 +566,43 @@ public class Aplicacion extends Application {
         error.managedProperty().bind(error.visibleProperty());
         error.setMaxWidth(Double.MAX_VALUE);
         return error;
+    }
+
+    /** Caja para una lista de reglas (usuario o contraseña) que se marca mientras se escribe. */
+    static VBox listaReglas() {
+        VBox lista = new VBox(2);
+        lista.getStyleClass().add("reglas-clave");
+        return lista;
+    }
+
+    /** Dibuja las reglas como cumplida (✓) o pendiente (○) y dice si se cumplen todas. */
+    static boolean marcarReglas(VBox lista, List<alphasport.service.AutenticacionService.Regla> reglas) {
+        lista.getChildren().clear();
+        for (alphasport.service.AutenticacionService.Regla r : reglas) {
+            Label regla = etiqueta((r.cumple() ? "✓  " : "○  ") + r.texto(), "regla-clave", r.cumple() ? "cumplida" : "pendiente");
+            regla.setAccessibleText(r.texto() + (r.cumple() ? ": cumplida" : ": pendiente"));
+            lista.getChildren().add(regla);
+        }
+        return reglas.stream().allMatch(alphasport.service.AutenticacionService.Regla::cumple);
+    }
+
+    /** Pista bajo un campo que dice en vivo si el dato sirve. */
+    static Label pistaEstado() {
+        Label pista = etiqueta("", "regla-clave");
+        pista.setWrapText(true);
+        pista.setMaxWidth(Double.MAX_VALUE);
+        pista.managedProperty().bind(pista.visibleProperty());
+        pista.setVisible(false);
+        return pista;
+    }
+
+    /** El problema en rojo o el texto de «bien» en verde; oculta la pista si no se ha escrito nada. */
+    static boolean estadoCampo(Label pista, boolean escrito, String problema, String bien) {
+        pista.setVisible(escrito);
+        pista.setText(problema != null ? problema : bien);
+        pista.getStyleClass().removeAll("cumplida", "error-campo");
+        pista.getStyleClass().add(problema != null ? "error-campo" : "cumplida");
+        return escrito && problema == null;
     }
 
     private static VBox formularioAcceso(Node... nodos) {

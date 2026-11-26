@@ -212,6 +212,7 @@
 .reglas-clave { -fx-padding: -4 0 0 0; }
 .regla-clave { -fx-font-size: 12px; -fx-text-fill: -sutil; }
 .regla-clave.cumplida { -fx-text-fill: -cesped; }
+.regla-clave.error-campo { -fx-text-fill: -rojo; }
 .pestanas-acceso .tarjeta-formato .formato-nombre { -fx-font-size: 15px; }
 
 /* ------------------------------------------------------------------ estructura */

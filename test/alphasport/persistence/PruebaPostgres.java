@@ -888,7 +888,7 @@ public final class PruebaPostgres {
                 throw new IllegalStateException(e);
             }
         };
-        alphasport.model.Usuario ana = registrar.apply("ana", "ORGANIZADOR"), beto = registrar.apply("beto", "ORGANIZADOR"),
+        alphasport.model.Usuario ana = registrar.apply("anabel", "ORGANIZADOR"), beto = registrar.apply("beto", "ORGANIZADOR"),
                 luis = registrar.apply("luis", "AFICIONADO");
         java.util.function.Supplier<alphasport.service.GestorCampeonatos> programa = () -> {
             PostgresRepositorioHistorial historial = new PostgresRepositorioHistorial(db);

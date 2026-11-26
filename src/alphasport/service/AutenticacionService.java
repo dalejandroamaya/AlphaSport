@@ -9,7 +9,6 @@ import alphasport.persistence.RepositorioUsuariosEnMemoria;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.regex.Pattern;
 
 /**
  * Registro de cuentas e inicio de sesion. Las cuentas las da un {@link RepositorioUsuarios} (el servicio no
@@ -18,8 +17,12 @@ import java.util.regex.Pattern;
  */
 public class AutenticacionService {
 
-    public static final int USUARIO_MINIMO = 3;
-    public static final int USUARIO_MAXIMO = 30;
+    public static final int USUARIO_MINIMO = 4;
+    public static final int USUARIO_MAXIMO = 20;
+    /** La ayuda bajo el campo «Usuario» (web y escritorio): exactamente estas reglas. */
+    public static final String AYUDA_USUARIO = "De 4 a 20 caracteres: letras a-z sin tilde, números y . _ -. Empieza con letra, "
+            + "no termina en . _ -, sin dos signos seguidos, no solo números. No se permiten: admin, administrador, root, "
+            + "organizador, aficionado, visitante ni soporte.";
     public static final int NOMBRE_MINIMO = 2;
     public static final int NOMBRE_MAXIMO = 80;
     public static final int CORREO_MAXIMO = 254;
@@ -28,8 +31,20 @@ public class AutenticacionService {
     public static final int CLAVE_MINIMA = 8;
     public static final int CLAVE_MAXIMA = 128;
 
-    /** Letras sin tilde, numeros, punto, guion y guion bajo; empieza con letra o numero. */
-    private static final Pattern USUARIO = Pattern.compile("[a-z0-9][a-z0-9._-]{" + (USUARIO_MINIMO - 1) + "," + (USUARIO_MAXIMO - 1) + "}");
+    /** Signos permitidos en el usuario, ademas de letras a-z y numeros. */
+    private static final String SIGNOS_USUARIO = "._-";
+    /** Nombres que nadie puede tomar (se comparan ya en minusculas). */
+    public static final java.util.Set<String> USUARIOS_RESERVADOS =
+            java.util.Set.of("admin", "administrador", "root", "organizador", "aficionado", "visitante", "soporte");
+
+    /**
+     * Una regla de la cuenta (usuario o contraseña) para la lista que se marca mientras se escribe.
+     *
+     * @param texto lo que muestra la lista (por ejemplo «Una letra mayúscula»)
+     * @param falta como se nombra cuando no se cumple (en la contraseña, dentro de «Falta: …»)
+     */
+    public record Regla(String texto, String falta, boolean cumple) {
+    }
 
     /**
      * Lo que envia la pantalla «Registrarse».
@@ -102,17 +117,54 @@ public class AutenticacionService {
 
     static String validarUsuario(String texto) {
         String usuario = RepositorioUsuarios.normalizar(texto);
-        if (usuario.isEmpty()) {
-            throw new ReglaNegocioException("Escriba un nombre de usuario.");
-        }
-        if (usuario.length() < USUARIO_MINIMO || usuario.length() > USUARIO_MAXIMO) {
-            throw new ReglaNegocioException("El nombre de usuario debe tener entre " + USUARIO_MINIMO + " y " + USUARIO_MAXIMO + " caracteres.");
-        }
-        if (!USUARIO.matcher(usuario).matches()) {
-            throw new ReglaNegocioException("El nombre de usuario solo puede tener letras sin tilde, números, punto, guion y guion bajo, "
-                    + "y debe empezar con una letra o un número.");
+        String problema = problemaUsuario(usuario);
+        if (problema != null) {
+            throw new ReglaNegocioException(problema);
         }
         return usuario;
+    }
+
+    /**
+     * Las 7 reglas del nombre de usuario (ya en minusculas) y si las cumple, para la lista en vivo del registro.
+     * El mismo orden y los mismos textos que cuentas.js.
+     */
+    public static List<Regla> reglasUsuario(String texto) {
+        String u = RepositorioUsuarios.normalizar(texto);
+        boolean caracteres = !u.isEmpty(), seguidos = false, soloNumeros = !u.isEmpty();
+        for (int i = 0; i < u.length(); i++) {
+            char c = u.charAt(i);
+            boolean signo = SIGNOS_USUARIO.indexOf(c) >= 0;
+            caracteres &= letraONumero(c) || signo;
+            seguidos |= signo && i > 0 && SIGNOS_USUARIO.indexOf(u.charAt(i - 1)) >= 0;
+            soloNumeros &= c >= '0' && c <= '9';
+        }
+        return List.of(
+                new Regla("De " + USUARIO_MINIMO + " a " + USUARIO_MAXIMO + " caracteres",
+                        "El usuario debe tener de " + USUARIO_MINIMO + " a " + USUARIO_MAXIMO + " caracteres.",
+                        u.length() >= USUARIO_MINIMO && u.length() <= USUARIO_MAXIMO),
+                new Regla("Solo letras a-z sin tilde, números y . _ -",
+                        "El usuario solo puede tener letras a-z sin tilde, números y los signos . _ -", caracteres),
+                new Regla("Empieza con una letra", "El usuario debe empezar con una letra.",
+                        !u.isEmpty() && u.charAt(0) >= 'a' && u.charAt(0) <= 'z'),
+                new Regla("No termina en . _ -", "El usuario no puede terminar en punto, guion bajo ni guion.",
+                        !u.isEmpty() && SIGNOS_USUARIO.indexOf(u.charAt(u.length() - 1)) < 0),
+                new Regla("Sin dos signos seguidos", "El usuario no puede tener dos signos seguidos (por ejemplo «..» o «_-»).", !seguidos),
+                new Regla("No es solo números", "El usuario no puede ser solo números.", !soloNumeros),
+                new Regla("No es un nombre reservado", "Ese nombre de usuario está reservado. Elija otro.", !USUARIOS_RESERVADOS.contains(u)));
+    }
+
+    /** Por que no sirve el usuario, nombrando cada regla que no cumple, o null si sirve. */
+    public static String problemaUsuario(String texto) {
+        if (RepositorioUsuarios.normalizar(texto).isEmpty()) {
+            return "Escriba un nombre de usuario.";
+        }
+        return problemas(reglasUsuario(texto));
+    }
+
+    /** Los mensajes de las reglas que no se cumplen, uno tras otro, o null si se cumplen todas. */
+    private static String problemas(List<Regla> reglas) {
+        List<String> mensajes = reglas.stream().filter(r -> !r.cumple()).map(Regla::falta).toList();
+        return mensajes.isEmpty() ? null : String.join(" ", mensajes);
     }
 
     static String validarNombre(String texto) {
@@ -227,17 +279,8 @@ public class AutenticacionService {
         return clave;
     }
 
-    /**
-     * Una regla de la contraseña para la lista que se marca mientras se escribe.
-     *
-     * @param texto lo que muestra la lista (por ejemplo «Una letra mayúscula»)
-     * @param falta como se nombra en el mensaje «Falta: …» (por ejemplo «una mayúscula»)
-     */
-    public record ReglaClave(String texto, String falta, boolean cumple) {
-    }
-
     /** Lo que se encontro al recorrer la clave carácter por carácter. */
-    private record RevisionClave(List<ReglaClave> reglas, boolean espacios, boolean control, boolean larga) {
+    private record RevisionClave(List<Regla> reglas, boolean espacios, boolean control, boolean larga) {
     }
 
     /**
@@ -265,18 +308,18 @@ public class AutenticacionService {
                 especial = true;
             }
         }
-        List<ReglaClave> reglas = List.of(
-                new ReglaClave("Entre " + CLAVE_MINIMA + " y " + CLAVE_MAXIMA + " caracteres", "al menos " + CLAVE_MINIMA + " caracteres",
+        List<Regla> reglas = List.of(
+                new Regla("Entre " + CLAVE_MINIMA + " y " + CLAVE_MAXIMA + " caracteres", "al menos " + CLAVE_MINIMA + " caracteres",
                         c.length() >= CLAVE_MINIMA && c.length() <= CLAVE_MAXIMA),
-                new ReglaClave("Una letra mayúscula", "una mayúscula", mayuscula),
-                new ReglaClave("Una letra minúscula", "una minúscula", minuscula),
-                new ReglaClave("Un número", "un número", numero),
-                new ReglaClave("Un carácter especial (por ejemplo ! # $ % *)", "un carácter especial", especial));
+                new Regla("Una letra mayúscula", "una mayúscula", mayuscula),
+                new Regla("Una letra minúscula", "una minúscula", minuscula),
+                new Regla("Un número", "un número", numero),
+                new Regla("Un carácter especial (por ejemplo ! # $ % *)", "un carácter especial", especial));
         return new RevisionClave(reglas, espacios, control, c.length() > CLAVE_MAXIMA);
     }
 
     /** Las 5 reglas de la contraseña y si esta clave las cumple, para marcarlas en la pantalla de registro. */
-    public static List<ReglaClave> reglasClave(String clave) {
+    public static List<Regla> reglasClave(String clave) {
         return revisarClave(clave).reglas();
     }
 
@@ -297,7 +340,7 @@ public class AutenticacionService {
             partes.add("La contraseña no puede tener caracteres de control.");
         }
         List<String> faltan = new ArrayList<>();
-        for (ReglaClave regla : r.reglas()) {
+        for (Regla regla : r.reglas()) {
             if (!regla.cumple() && !(r.larga() && regla == r.reglas().get(0))) {
                 faltan.add(regla.falta());
             }

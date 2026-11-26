@@ -172,15 +172,38 @@ async function registrarse(e) {
   await iniciarSesion('registro', cuerpo, 'registroError');
 }
 
+/** Dibuja una lista de reglas (cumplida / pendiente) y dice si se cumplen todas. */
+function listaReglas(ul, reglas) {
+  ul.innerHTML = reglas.map(r =>
+    `<li class="${r.cumple ? 'cumplida' : 'pendiente'}">${esc(r.texto)}<span class="sr-only">: ${r.cumple ? 'cumplida' : 'pendiente'}</span></li>`).join('');
+  return reglas.every(r => r.cumple);
+}
+
+/** Pista bajo un campo: el problema en rojo, o el texto de «bien» en verde (vacío si no se ha escrito nada). */
+function estadoCampo(el, escrito, problema, bien) {
+  el.textContent = !escrito ? '' : problema || bien;
+  el.classList.toggle('mal', escrito && !!problema);
+  el.classList.toggle('bien', escrito && !problema);
+  return escrito && !problema;
+}
+
+/** Lo que valida en vivo la confirmación de la contraseña. */
+function estadoConfirmacion(el, clave, confirmacion) {
+  return estadoCampo(el, confirmacion !== '', clave === confirmacion ? null : 'Las contraseñas no coinciden.', 'Las contraseñas coinciden.');
+}
+
 /**
- * Marca en vivo las 5 reglas de la contraseña (cumplida / pendiente) y deja «Crear cuenta» desactivado hasta
- * cumplirlas todas. Solo en el registro: el inicio de sesión no revisa la fuerza (las cuentas antiguas entran).
+ * Registro: marca en vivo las reglas del usuario y de la contraseña, el correo y la confirmación (las mismas
+ * reglas y textos que el servicio), y deja «Crear cuenta» desactivado hasta que todo cumpla. El inicio de
+ * sesión no revisa nada de esto: las cuentas antiguas siguen entrando.
  */
 function actualizarReglasClave() {
-  const reglas = Cuentas.reglasClave($('regClave').value);
-  $('reglasClave').innerHTML = reglas.map(r =>
-    `<li class="${r.cumple ? 'cumplida' : 'pendiente'}">${esc(r.texto)}<span class="sr-only">: ${r.cumple ? 'cumplida' : 'pendiente'}</span></li>`).join('');
-  document.querySelector('#formRegistro button[type=submit]').disabled = !reglas.every(r => r.cumple);
+  const usuario = listaReglas($('reglasUsuario'), Cuentas.reglasUsuario($('regUsuario').value));
+  const correo = estadoCampo($('estadoCorreo'), $('regCorreo').value.trim() !== '',
+    Cuentas.problemaCorreo(Cuentas.normalizar($('regCorreo').value)), 'Correo válido.');
+  const clave = listaReglas($('reglasClave'), Cuentas.reglasClave($('regClave').value));
+  const igual = estadoConfirmacion($('estadoConfirmacion'), $('regClave').value, $('regConfirmacion').value);
+  document.querySelector('#formRegistro button[type=submit]').disabled = !(usuario && correo && clave && igual);
 }
 
 async function iniciarSesion(ruta, cuerpo, idError = 'loginError') {
@@ -2582,12 +2605,10 @@ function conectarEventos() {
   editorReglas = editorCriterios($('criteriosReglas'));
   editorNuevo = editorCriterios($('criteriosNuevo'));
   $('formLogin').addEventListener('submit', entrar);
-  // Al salir del correo se explica qué regla no cumple (el mismo texto que da el servicio al crear la cuenta).
-  $('regCorreo').addEventListener('blur', () => {
-    if ($('regCorreo').value.trim()) mostrarErrorAcceso('registroError', Cuentas.problemaCorreo(Cuentas.normalizar($('regCorreo').value)));
-  });
   $('formRegistro').addEventListener('submit', registrarse);
-  $('regClave').addEventListener('input', actualizarReglasClave);
+  // Usuario, correo, contraseña y confirmación se revisan mientras se escribe (las mismas reglas que el servicio).
+  $('ayudaUsuario').textContent = Cuentas.AYUDA_USUARIO;
+  ['regUsuario', 'regCorreo', 'regClave', 'regConfirmacion'].forEach(id => $(id).addEventListener('input', actualizarReglasClave));
   // Mis campeonatos (Organizador): crear, gestionar, terminar, eliminar o tomar; y cambiar desde la cabecera.
   $('btnNuevoCampeonato').addEventListener('click', () => abrirNuevo(false));
   $('listaCampeonatos').addEventListener('click', clicCampeonatos);

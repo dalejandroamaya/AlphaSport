@@ -794,12 +794,12 @@ public class SimulacionFormatos {
                     && clave.apply("Clave#12\u00073").equals("La contraseña no puede tener caracteres de control.")
                     && clave.apply("Aa1#" + "x".repeat(130)).equals("La contraseña no puede tener más de 128 caracteres.")
                     && AutenticacionService.problemaClave("Ñandú#2026") == null // letras con tilde y Ñ cuentan como mayúscula y minúscula
-                    && AutenticacionService.reglasClave("clave#1234").stream().filter(r -> !r.cumple()).map(AutenticacionService.ReglaClave::texto)
+                    && AutenticacionService.reglasClave("clave#1234").stream().filter(r -> !r.cumple()).map(AutenticacionService.Regla::texto)
                             .toList().equals(List.of("Una letra mayúscula"))
                     && AutenticacionService.reglasClave("").size() == 5
                     && error.apply(new String[]{"luis", "Luis", "luis@x.co", "Clave#1234", "Clave#12345"}).contains("no coinciden")
-                    && error.apply(new String[]{"lu", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("entre 3 y 30")
-                    && error.apply(new String[]{"josé", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("sin tilde")
+                    && error.apply(new String[]{"lu", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("de 4 a 20 caracteres")
+                    && error.apply(new String[]{"josé", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("letras a-z sin tilde")
                     && error.apply(new String[]{".luis", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("empezar con una letra")
                     && error.apply(new String[]{"luis", "L", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("Escriba su nombre")
                     && error.apply(new String[]{"luis", "Luis", "luis@x", "Clave#1234", "Clave#1234"}).equals("Al dominio le falta la extensión, por ejemplo .com.")
@@ -841,7 +841,37 @@ public class SimulacionFormatos {
             organizador &= servicio.hayCampeonato();
             // Correo: cada regla con su mensaje concreto (el mismo texto que cuentas.js).
             java.util.function.Function<String, String> correo = AutenticacionService::problemaCorreo;
-            boolean correos = "El dominio no puede empezar con punto.".equals(correo.apply("a@.com"))
+            // Usuario: cada regla con su mensaje; varias a la vez se nombran todas.
+            java.util.function.Function<String, String> usuarioMal = AutenticacionService::problemaUsuario;
+            boolean usuarios = "El usuario debe tener de 4 a 20 caracteres.".equals(usuarioMal.apply("ana"))
+                    && "El usuario debe tener de 4 a 20 caracteres.".equals(usuarioMal.apply("a".repeat(21)))
+                    && "El usuario solo puede tener letras a-z sin tilde, números y los signos . _ -".equals(usuarioMal.apply("josé1"))
+                    && "El usuario debe empezar con una letra.".equals(usuarioMal.apply("1ana"))
+                    && "El usuario debe empezar con una letra.".equals(usuarioMal.apply("_ana"))
+                    && "El usuario no puede terminar en punto, guion bajo ni guion.".equals(usuarioMal.apply("ana."))
+                    && "El usuario no puede tener dos signos seguidos (por ejemplo «..» o «_-»).".equals(usuarioMal.apply("ana._b"))
+                    && "El usuario debe empezar con una letra. El usuario no puede ser solo números.".equals(usuarioMal.apply("12345"))
+                    && "Ese nombre de usuario está reservado. Elija otro.".equals(usuarioMal.apply(" ADMIN "))
+                    && "Ese nombre de usuario está reservado. Elija otro.".equals(usuarioMal.apply("soporte"))
+                    && "Escriba un nombre de usuario.".equals(usuarioMal.apply("  "))
+                    && usuarioMal.apply("Ana.Torres-9") == null && usuarioMal.apply("a_b.c-d1") == null
+                    && AutenticacionService.reglasUsuario("").size() == 7;
+            // Reproduce lo que vio el profesor: con el tipo Aficionado (y Organizador) una clave debil daba el error
+            // generico «letras y números» o se aceptaba. Ahora ambos tipos reciben el nombre de lo que falta.
+            boolean ambosRoles = true;
+            for (String tipo : new String[]{"AFICIONADO", "ORGANIZADOR"}) {
+                java.util.function.Function<String, String> conTipo = c -> mensaje(() -> auth.registrar(
+                        solicitud.apply(tipo, new String[]{"pedro.p", "Pedro", "pedro@x.co", c, c})));
+                ambosRoles &= conTipo.apply("solamenteletras").equals("Falta: una mayúscula, un número y un carácter especial.")
+                        && conTipo.apply("clave#1234").equals("Falta: una mayúscula.")
+                        && conTipo.apply("Clave12345").equals("Falta: un carácter especial.")
+                        && mensaje(() -> auth.registrar(solicitud.apply(tipo, new String[]{"admin", "Pedro", "pedro@x.co", "Clave#1234", "Clave#1234"})))
+                        .equals("Ese nombre de usuario está reservado. Elija otro.")
+                        && mensaje(() -> auth.registrar(solicitud.apply(tipo, new String[]{"pedro.p", "Pedro", "a@.com", "Clave#1234", "Clave#1234"})))
+                        .equals("El dominio no puede empezar con punto.");
+            }
+            ambosRoles &= !cuentas.existeUsuario("pedro.p");
+            boolean correos = usuarios && ambosRoles && "El dominio no puede empezar con punto.".equals(correo.apply("a@.com"))
                     && "El dominio no puede empezar con punto.".equals(correo.apply("a@..com"))
                     && "El dominio no puede terminar en punto.".equals(correo.apply("a@com."))
                     && "El dominio no puede tener puntos seguidos.".equals(correo.apply("a@x..com"))

@@ -8,11 +8,16 @@
  * otro navegador ni en el programa Java.
  */
 const Cuentas = (() => {
-  const USUARIO_MINIMO = 3, USUARIO_MAXIMO = 30, NOMBRE_MINIMO = 2, NOMBRE_MAXIMO = 80;
+  const USUARIO_MINIMO = 4, USUARIO_MAXIMO = 20, NOMBRE_MINIMO = 2, NOMBRE_MAXIMO = 80;
   const CORREO_MAXIMO = 254, CORREO_LOCAL_MAXIMO = 64, CORREO_ETIQUETA_MAXIMA = 63;
   const CLAVE_MINIMA = 8, CLAVE_MAXIMA = 128;
-  /** Letras sin tilde, números, punto, guion y guion bajo; empieza con letra o número (igual que Java). */
-  const USUARIO = /^[a-z0-9][a-z0-9._-]{2,29}$/;
+  /** Signos permitidos en el usuario y nombres que nadie puede tomar (igual que Java). */
+  const SIGNOS_USUARIO = '._-';
+  const USUARIOS_RESERVADOS = ['admin', 'administrador', 'root', 'organizador', 'aficionado', 'visitante', 'soporte'];
+  /** La ayuda bajo el campo «Usuario»: el mismo texto que AutenticacionService.AYUDA_USUARIO. */
+  const AYUDA_USUARIO = 'De 4 a 20 caracteres: letras a-z sin tilde, números y . _ -. Empieza con letra, '
+    + 'no termina en . _ -, sin dos signos seguidos, no solo números. No se permiten: admin, administrador, root, '
+    + 'organizador, aficionado, visitante ni soporte.';
   const ROLES_REGISTRO = ['ORGANIZADOR', 'AFICIONADO'];
   /** Menos que en Java (600 000) para que el navegador no se congele; el número va dentro del hash. */
   const ITERACIONES = 100000;
@@ -68,7 +73,36 @@ const Cuentas = (() => {
     return partes.length ? partes.join(' ') : null;
   }
 
-  const letraONumero = c =>(c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+  const letraONumero = c => (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+
+  /** Las 7 reglas del nombre de usuario y si las cumple (mismo orden y textos que Java). */
+  function reglasUsuario(texto) {
+    const u = normalizar(texto);
+    const chars = [...u];
+    const signo = c => SIGNOS_USUARIO.includes(c);
+    const caracteres = chars.length > 0 && chars.every(c => letraONumero(c) || signo(c));
+    const seguidos = chars.some((c, i) => i > 0 && signo(c) && signo(chars[i - 1]));
+    const soloNumeros = chars.length > 0 && chars.every(c => c >= '0' && c <= '9');
+    return [
+      { id: 'largo', texto: `De ${USUARIO_MINIMO} a ${USUARIO_MAXIMO} caracteres`,
+        falta: `El usuario debe tener de ${USUARIO_MINIMO} a ${USUARIO_MAXIMO} caracteres.`, cumple: u.length >= USUARIO_MINIMO && u.length <= USUARIO_MAXIMO },
+      { id: 'caracteres', texto: 'Solo letras a-z sin tilde, números y . _ -',
+        falta: 'El usuario solo puede tener letras a-z sin tilde, números y los signos . _ -', cumple: caracteres },
+      { id: 'inicio', texto: 'Empieza con una letra', falta: 'El usuario debe empezar con una letra.', cumple: /^[a-z]/.test(u) },
+      { id: 'final', texto: 'No termina en . _ -', falta: 'El usuario no puede terminar en punto, guion bajo ni guion.',
+        cumple: u.length > 0 && !signo(u[u.length - 1]) },
+      { id: 'seguidos', texto: 'Sin dos signos seguidos', falta: 'El usuario no puede tener dos signos seguidos (por ejemplo «..» o «_-»).', cumple: !seguidos },
+      { id: 'numeros', texto: 'No es solo números', falta: 'El usuario no puede ser solo números.', cumple: !soloNumeros },
+      { id: 'reservado', texto: 'No es un nombre reservado', falta: 'Ese nombre de usuario está reservado. Elija otro.', cumple: !USUARIOS_RESERVADOS.includes(u) }
+    ];
+  }
+
+  /** Por qué no sirve el usuario, nombrando cada regla que no cumple, o null si sirve. */
+  function problemaUsuario(texto) {
+    if (!normalizar(texto)) return 'Escriba un nombre de usuario.';
+    const mensajes = reglasUsuario(texto).filter(r => !r.cumple).map(r => r.falta);
+    return mensajes.length ? mensajes.join(' ') : null;
+  }
 
   /**
    * Por qué no sirve el correo (ya normalizado), o null si sirve. Las mismas reglas y textos que
@@ -116,14 +150,8 @@ const Cuentas = (() => {
    */
   function validarRegistro(d) {
     const usuario = normalizar(d.usuario);
-    if (!usuario) throw new Error('Escriba un nombre de usuario.');
-    if (usuario.length < USUARIO_MINIMO || usuario.length > USUARIO_MAXIMO) {
-      throw new Error(`El nombre de usuario debe tener entre ${USUARIO_MINIMO} y ${USUARIO_MAXIMO} caracteres.`);
-    }
-    if (!USUARIO.test(usuario)) {
-      throw new Error('El nombre de usuario solo puede tener letras sin tilde, números, punto, guion y guion bajo, '
-        + 'y debe empezar con una letra o un número.');
-    }
+    const problemaDeUsuario = problemaUsuario(usuario);
+    if (problemaDeUsuario) throw new Error(problemaDeUsuario);
     const nombre = String(d.nombre == null ? '' : d.nombre).trim().replace(/\s+/g, ' ');
     if (nombre.length < NOMBRE_MINIMO || nombre.length > NOMBRE_MAXIMO) {
       throw new Error(`Escriba su nombre (entre ${NOMBRE_MINIMO} y ${NOMBRE_MAXIMO} caracteres).`);
@@ -185,5 +213,5 @@ const Cuentas = (() => {
     return diferencia === 0;
   }
 
-  return { normalizar, problemaCorreo, problemaClave, reglasClave, validarRegistro, hash, coincide, ROLES_REGISTRO };
+  return { normalizar, problemaUsuario, reglasUsuario, AYUDA_USUARIO, problemaCorreo, problemaClave, reglasClave, validarRegistro, hash, coincide, ROLES_REGISTRO };
 })();
