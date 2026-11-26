@@ -60,7 +60,7 @@
     <aside class="barra-lateral vidrio">
       <div class="marca-lateral"><img src="img/logo.png" alt=""><span>Alpha<b>Sport</b></span><small>Gestor de campeonatos</small></div>
       <nav class="navegacion" id="navegacionSecciones" aria-label="Secciones">
-        <button data-vista="campeonatos" hidden><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z"/></svg><span>Mis campeonatos</span></button>
+        <button data-vista="campeonatos" hidden><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z"/></svg><span id="navCampeonatos">Mis campeonatos</span></button>
         <button data-vista="equipos" class="activa"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg><span>Equipos</span></button>
         <button data-vista="partidos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span id="navPartidos">Partidos</span></button>
         <button data-vista="votaciones" hidden><svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.8 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3.1 1.2-6.2L3 9.6l6.3-.8Z"/></svg><span>Votaciones <b id="cuentaVotaciones" class="contador" hidden></b></span></button>
@@ -85,7 +85,7 @@
         <div class="marcador-info">
           <h1 id="titulo">AlphaSport</h1>
           <label id="filaSelector" class="selector-campeonato" hidden>Campeonato <select id="selCampeonato" aria-label="Campeonato que gestiona"></select></label>
-          <div class="chips"><span id="sobreEstado" class="chip chip-estado">En curso</span><span id="chipFormato" class="chip"></span><span id="chipEquipos" class="chip"></span><span id="chipLectura" class="chip chip-lectura" hidden>Visitante · solo lectura</span></div>
+          <div class="chips"><span id="sobreEstado" class="chip chip-estado">En curso</span><span id="chipFormato" class="chip"></span><span id="chipEquipos" class="chip"></span><span id="chipLectura" class="chip chip-lectura" hidden>Aficionado · solo lectura</span></div>
           <p id="estado" class="estado-vivo"></p>
         </div>
         <div class="marcador-acciones">
@@ -116,7 +116,7 @@
 
       <section id="vista-campeonatos" class="vista" hidden>
         <div class="cabecera-vista">
-          <div><h2>Mis campeonatos</h2><p id="ayudaCampeonatos" class="sutil">Cada campeonato tiene sus propios equipos, partidos y resultados. Elija cuál gestionar.</p></div>
+          <div><h2 id="tituloCampeonatos">Mis campeonatos</h2><p id="ayudaCampeonatos" class="sutil">Cada campeonato tiene sus propios equipos, partidos y resultados. Elija cuál gestionar.</p></div>
           <button type="button" id="btnNuevoCampeonato" class="btn">+ Nuevo campeonato</button>
         </div>
         <div id="listaCampeonatos" class="grid-campeonatos"></div>

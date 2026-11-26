@@ -4,8 +4,13 @@
 
 const CLAVE_PESTANA = 'alphasport.pestana';
 const ESTADOS_TEXTO = { PENDIENTE: 'Pendiente', EN_JUEGO: 'En juego', JUGADO: 'Jugado', APLAZADO: 'Aplazado', SUSPENDIDO: 'Suspendido' };
-/** Vistas que el visitante no ve (son de gestión), la que solo ve el visitante [REQ-07] y vista con la que entra. */
-const VISTAS_SOLO_ADMIN = ['campeonatos', 'equipos', 'reglas'];
+/**
+ * Vistas que el visitante no ve (son de gestión), la que solo ve el visitante [REQ-07] y vista con la que entra.
+ * «Campeonatos» la ven los dos: el Organizador gestiona los suyos y el Aficionado elige cuál seguir.
+ */
+const VISTAS_SOLO_ADMIN = ['equipos', 'reglas'];
+/** Último campeonato que siguió cada Aficionado en este navegador (usuario -> código). */
+const CLAVE_SEGUIDOS = 'alphasport.seguidos';
 const VISTAS_SOLO_VISITANTE = ['votaciones'];
 const VISTA_INICIAL_VISITANTE = 'partidos';
 
@@ -45,6 +50,27 @@ function guardarPreferencia(clave, valor) {
 
 function leerPreferencia(clave) {
   try { return localStorage.getItem(clave); } catch (e) { return null; }
+}
+
+/** Código del campeonato que seguía este Aficionado en este navegador; null si ninguno. */
+function campeonatoSeguido() {
+  if (!S) return null;
+  try {
+    const todos = JSON.parse(leerPreferencia(CLAVE_SEGUIDOS) || '{}');
+    return (todos && typeof todos === 'object' && typeof todos[S.usuario] === 'string') ? todos[S.usuario] : null;
+  } catch (e) {
+    return null; // preferencia dañada: como si no hubiera ninguno
+  }
+}
+
+/** Recuerda (o, con null, olvida) el campeonato que sigue este Aficionado. */
+function recordarSeguido(codigo) {
+  if (!S || puedeEditar()) return;
+  let todos = {};
+  try { todos = JSON.parse(leerPreferencia(CLAVE_SEGUIDOS) || '{}') || {}; } catch (e) { /* se empieza de cero */ }
+  if (todos[S.usuario] === (codigo || undefined)) return;
+  if (codigo) todos[S.usuario] = codigo; else delete todos[S.usuario];
+  guardarPreferencia(CLAVE_SEGUIDOS, JSON.stringify(todos));
 }
 
 /* ---------------------------------------------------------------- avisos y dialogos */
@@ -240,11 +266,12 @@ async function cerrarSesion() {
 function aplicarPermisos() {
   const admin = puedeEditar();
   document.querySelectorAll('[data-solo-admin]').forEach(el => { el.hidden = !admin; });
-  // Sin campeonato no hay nada que ver fuera de Partidos (que muestra el aviso).
+  // Sin campeonato elegido solo quedan la lista de campeonatos y las noticias (las generales no dependen de uno).
   document.querySelectorAll('.navegacion button[data-vista]').forEach(b => {
-    // (las noticias no dependen del campeonato: siguen disponibles)
-    b.hidden = !puedeVer(b.dataset.vista) || (!E.hay && !['campeonatos', 'partidos', 'noticias'].includes(b.dataset.vista));
+    b.hidden = !puedeVer(b.dataset.vista) || (!E.hay && !['campeonatos', 'noticias'].includes(b.dataset.vista));
   });
+  // El Organizador ve «Mis campeonatos»; el Aficionado, todos los campeonatos en curso.
+  $('navCampeonatos').textContent = admin ? 'Mis campeonatos' : 'Campeonatos';
   $('chipRol').textContent = S ? S.rolNombre + (admin ? '' : ' · solo lectura') : '';
   $('chipRol').hidden = !S;
   $('chipLectura').hidden = !S || admin;
@@ -273,9 +300,12 @@ async function revisarCambios() {
   try {
     const nuevo = await servicio.estado();
     if (nuevo && nuevo.ok !== false && JSON.stringify(nuevo) !== JSON.stringify(E)) {
+      const antes = E.hay ? E.campeonato.codigo : null;
       E = nuevo;
       render();
-      aviso('Actualizado con los cambios de otro equipo.');
+      // El Aficionado no eligió cambiar: si ahora ve otro campeonato (el suyo terminó y quedaba uno solo), se le dice.
+      const otro = !puedeEditar() && antes && E.hay && E.campeonato.codigo !== antes;
+      aviso(otro ? `El campeonato que seguía ya no está en curso. Ahora ve «${E.campeonato.nombre}».` : 'Actualizado con los cambios de otro equipo.');
     }
   } catch (e) {
     // sin conexión por un momento: se intenta de nuevo en la próxima vuelta
@@ -291,6 +321,7 @@ async function mostrarApp() {
   aplicarPermisos();
   E = await servicio.estado();
   if (E.ok === false) { volverAlLogin(E.codigo === 'LOGIN' ? '' : E.error); return; }
+  await volverAlSeguido();
   if (!E.hay) {
     renderSinCampeonato();
     return;
@@ -300,36 +331,48 @@ async function mostrarApp() {
 }
 
 /**
- * Sin campeonato elegido. El Organizador va a «Mis campeonatos» (elegir uno o crear el primero); el Aficionado,
- * que no crea campeonatos, solo ve el aviso.
+ * Aficionado: al entrar vuelve al campeonato que seguía en este navegador. Si ya no está en curso lo olvida y
+ * avisa; queda la lista para elegir otro.
+ */
+async function volverAlSeguido() {
+  const codigo = puedeEditar() ? null : campeonatoSeguido();
+  if (!codigo || (E.hay && E.campeonato.codigo === codigo)) return;
+  const lista = (await cargarCampeonatos()).campeonatos || [];
+  if (!lista.some(x => x.codigo === codigo)) {
+    recordarSeguido(null);
+    aviso('El campeonato que seguía ya no está en curso. Elija otro.');
+    return;
+  }
+  const r = await servicio.ejecutar('campeonato/elegir', { codigo });
+  if (r.ok) E = r.estado;
+}
+
+/**
+ * Sin campeonato elegido, los dos roles van a la lista de campeonatos: el Organizador elige cuál gestionar o crea
+ * uno; el Aficionado elige cuál seguir (o ve que no hay ninguno en curso).
  */
 function renderSinCampeonato() {
   const organizador = puedeEditar();
-  $('titulo').textContent = organizador ? 'Mis campeonatos' : 'Sin campeonato activo';
+  // El campeonato que seguía el Aficionado terminó o se eliminó mientras lo veía: se olvida y se avisa.
+  if (!organizador && campeonatoSeguido()) {
+    recordarSeguido(null);
+    // Después del aviso general de «actualizado» (que se muestra al terminar de dibujar), para que no lo tape.
+    setTimeout(() => aviso('El campeonato que seguía ya no está en curso. Elija otro.'), 0);
+  }
+  $('titulo').textContent = organizador ? 'Mis campeonatos' : 'Campeonatos';
   document.title = 'AlphaSport · Gestor de campeonatos';
   ['sobreEstado', 'chipFormato', 'chipEquipos'].forEach(id => { $(id).hidden = true; });
   $('filaSelector').hidden = true;
-  $('estado').textContent = organizador ? 'Elija el campeonato que quiere gestionar o cree uno nuevo.' : '';
+  $('estado').textContent = organizador ? 'Elija el campeonato que quiere gestionar o cree uno nuevo.' : 'Elija el campeonato que quiere seguir.';
   $('btnCampeon').hidden = true;
-  // Si estaba en Noticias se queda ahí (las generales se siguen viendo); si no, a su vista de inicio.
-  const enNoticias = !$('vista-noticias').hidden;
-  if (organizador) {
-    aplicarPermisos();
-    mostrarVista(enNoticias ? 'noticias' : 'campeonatos');
-    return;
-  }
-  document.querySelector('#vista-partidos .filtros').hidden = true;
-  $('ayudaPartidos').textContent = 'Calendario y resultados del campeonato en curso.';
-  $('pestanasPartidos').hidden = true;
-  $('ayudaPestanaPartidos').hidden = true;
-  $('listaPartidos').innerHTML = vacioHtml('Todavía no hay un campeonato en curso. Vuelva más tarde.');
   aplicarPermisos();
-  mostrarVista(enNoticias ? 'noticias' : 'partidos');
+  // Si estaba en Noticias se queda ahí (las generales se siguen viendo); si no, a la lista de campeonatos.
+  mostrarVista(!$('vista-noticias').hidden ? 'noticias' : 'campeonatos');
 }
 
-/* ---------------------------------------------------------------- mis campeonatos (Organizador) */
+/* ---------------------------------------------------------------- campeonatos (Organizador y Aficionado) */
 
-/** Lo último que respondió la consulta «campeonatos»: los del usuario y los que no tienen organizador. */
+/** Lo último que respondió la consulta «campeonatos»: los que ve el usuario y los que no tienen organizador. */
 let misCampeonatos = { campeonatos: [], sinOrganizador: [] };
 
 async function cargarCampeonatos() {
@@ -338,43 +381,67 @@ async function cargarCampeonatos() {
   return misCampeonatos;
 }
 
-/** Tarjetas de «Mis campeonatos»: los suyos (el que gestiona ahora, resaltado) y los que puede tomar. */
+/**
+ * Tarjetas de campeonatos. Organizador: los suyos (el que gestiona ahora, resaltado) y los que puede tomar.
+ * Aficionado: todos los que están en curso, con su organizador, para elegir cuál seguir.
+ */
 async function renderCampeonatos() {
   await cargarCampeonatos();
+  const organizador = puedeEditar();
   const actual = E.hay ? E.campeonato.codigo : null, lista = misCampeonatos.campeonatos || [], sin = misCampeonatos.sinOrganizador || [];
+  $('tituloCampeonatos').textContent = organizador ? 'Mis campeonatos' : 'Campeonatos';
+  $('ayudaCampeonatos').textContent = 'Cada campeonato tiene sus propios equipos, partidos y resultados. '
+    + (organizador ? 'Elija cuál gestionar.' : 'Elija cuál seguir: verá sus partidos, posiciones, votaciones y noticias.');
   $('ayudaCampeonatos').hidden = !lista.length;
+  $('btnNuevoCampeonato').hidden = !organizador;
   // Con campeonatos, lo principal es gestionarlos (la cabecera); crear otro es secundario. Sin ninguno, crear es lo principal.
   $('btnNuevoCampeonato').classList.toggle('primario', !lista.length);
-  $('listaCampeonatos').innerHTML = lista.length ? lista.map(x => tarjetaCampeonatoHtml(x, x.codigo === actual)).join('')
-    : `<div class="vacio vidrio"><img src="img/balon.svg" alt=""><span>Todavía no tiene campeonatos. Cree el primero: después registra sus equipos y lo inicia.</span>
-       <button type="button" class="btn primario" data-crear-campeonato>Crear mi primer campeonato</button></div>`;
-  $('bloqueSinOrganizador').hidden = !sin.length;
-  $('listaSinOrganizador').innerHTML = sin.map(x => tarjetaCampeonatoHtml(x, false, true)).join('');
+  const vacio = organizador
+    ? `<div class="vacio vidrio"><img src="img/balon.svg" alt=""><span>Todavía no tiene campeonatos. Cree el primero: después registra sus equipos y lo inicia.</span>
+       <button type="button" class="btn primario" data-crear-campeonato>Crear mi primer campeonato</button></div>`
+    : vacioHtml('Todavía no hay campeonatos en curso. Cuando un organizador cree uno, aparecerá aquí.');
+  $('listaCampeonatos').innerHTML = lista.length ? lista.map(x => tarjetaCampeonatoHtml(x, x.codigo === actual)).join('') : vacio;
+  if (!organizador && !lista.length && !E.hay) $('estado').textContent = ''; // no hay nada que elegir
+  $('bloqueSinOrganizador').hidden = !organizador || !sin.length;
+  $('listaSinOrganizador').innerHTML = organizador ? sin.map(x => tarjetaCampeonatoHtml(x, false, true)).join('') : '';
 }
 
 function tarjetaCampeonatoHtml(x, actual, paraTomar = false) {
   const pct = x.partidos ? Math.round(100 * x.partidosJugados / x.partidos) : 0, codigo = esc(x.codigo);
-  const acciones = paraTomar
+  const organizador = puedeEditar();
+  const acciones = !organizador
+    ? `<button type="button" class="btn${actual ? '' : ' primario'}" data-seguir="${codigo}">${actual ? 'Ver campeonato' : 'Seguir'}</button>`
+    : paraTomar
     ? `<button type="button" class="btn primario" data-tomar="${codigo}">Tomar y gestionar</button>`
     : `<button type="button" class="btn" data-gestionar="${codigo}">${actual ? 'Seguir gestionando' : 'Gestionar'}</button>
        <span class="acciones-tarjeta">
          <button type="button" class="btn mini fantasma" data-terminar="${codigo}"${x.partidosJugados ? '' : ' disabled title="Se puede terminar cuando tenga partidos jugados"'}>Terminar…</button>
          <button type="button" class="btn mini peligro" data-eliminar="${codigo}">Eliminar…</button>
        </span>`;
+  const marca = actual ? `<span class="chip chip-actual">${organizador ? 'Gestionando' : 'Siguiendo'}</span>` : '';
+  // El Aficionado ve quién organiza cada campeonato (el Organizador ya sabe que son suyos).
+  const quien = organizador ? '' : `<p class="sutil pequeno">Organiza: ${esc(x.organizador || 'sin organizador')}</p>`;
+  // «Registre los equipos y pulse Iniciar…» es una indicación para el Organizador: el Aficionado solo ve que no empezó.
+  const fase = !organizador && x.estado === 'Por iniciar' ? 'Todavía no empieza.' : x.fase;
   return `<article class="tarjeta-campeonato vidrio${actual ? ' actual' : ''}" aria-label="${esc(x.nombre)}">
-    <header><h3>${esc(x.nombre)}</h3>${actual ? '<span class="chip chip-actual">Gestionando</span>' : ''}</header>
+    <header><h3>${esc(x.nombre)}</h3>${marca}</header>
+    ${quien}
     <div class="chips"><span class="chip">${esc(x.formatoNombre)}</span><span class="chip">${esc(x.estado)}</span><span class="chip">${x.equipos} equipos</span></div>
-    <p class="sutil">${esc(x.fase)}</p>
+    <p class="sutil">${esc(fase)}</p>
     <div class="progreso" role="progressbar" aria-label="Partidos jugados" aria-valuemin="0" aria-valuemax="${x.partidos}" aria-valuenow="${x.partidosJugados}"><span style="width:${pct}%"></span></div>
     <p class="sutil pequeno">${x.partidos ? `${x.partidosJugados} de ${x.partidos} partidos jugados` : 'Todavía sin fixture'}</p>
     <footer>${acciones}</footer>
   </article>`;
 }
 
-/** Pasa a gestionar ese campeonato (o a seguirlo, en la fase del Aficionado). */
+/** Pasa a gestionar ese campeonato (el Organizador) o a seguirlo (el Aficionado) y abre esa sección. */
 async function gestionarCampeonato(codigo, vista = 'equipos') {
   const r = await accion('campeonato/elegir', { codigo }, { silencioso: true });
-  if (!r.ok) { mensaje('Error', r.error); return; }
+  if (!r.ok) {
+    await mensaje('Error', r.error);
+    if (r.codigo === 'CAMPEONATO') renderCampeonatos(); // ya no está en curso: la lista se actualiza
+    return;
+  }
   mostrarVista(vista);
 }
 
@@ -383,6 +450,7 @@ async function clicCampeonatos(e) {
   if (!b) return;
   if (b.hasAttribute('data-crear-campeonato')) { abrirNuevo(false); return; }
   if (b.dataset.gestionar) { gestionarCampeonato(b.dataset.gestionar); return; }
+  if (b.dataset.seguir) { gestionarCampeonato(b.dataset.seguir, VISTA_INICIAL_VISITANTE); return; }
   const x = [...misCampeonatos.campeonatos, ...(misCampeonatos.sinOrganizador || [])].find(y => y.codigo === (b.dataset.tomar || b.dataset.terminar || b.dataset.eliminar));
   if (!x) return;
   if (b.dataset.tomar) {
@@ -421,9 +489,13 @@ async function eliminarCampeonato(x) {
   mostrarVista('campeonatos');
 }
 
-/** Selector de la cabecera: solo para el Organizador y solo si tiene más de un campeonato. */
+/**
+ * Selector de la cabecera para cambiar de campeonato sin volver a la lista: el Organizador entre los suyos y el
+ * Aficionado entre todos los que están en curso. Solo aparece si hay más de uno.
+ */
 async function actualizarSelector() {
-  if (!puedeEditar() || !E.hay) { $('filaSelector').hidden = true; return; }
+  if (!E.hay) { $('filaSelector').hidden = true; return; }
+  $('selCampeonato').setAttribute('aria-label', puedeEditar() ? 'Campeonato que gestiona' : 'Campeonato que sigue');
   const lista = (await cargarCampeonatos()).campeonatos || [];
   $('selCampeonato').innerHTML = lista.map(x => `<option value="${esc(x.codigo)}"${E.hay && x.codigo === E.campeonato.codigo ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
   $('filaSelector').hidden = lista.length < 2 || !E.hay;
@@ -435,7 +507,8 @@ function render() {
   if (!E.hay) { renderSinCampeonato(); return; } // se termino, se elimino o hay que elegir uno
   const c = E.campeonato;
   aplicarPermisos();
-  actualizarSelector(); // el Organizador con varios campeonatos cambia de uno a otro desde la cabecera
+  actualizarSelector(); // con varios campeonatos se cambia de uno a otro desde la cabecera
+  recordarSeguido(c.codigo); // el Aficionado vuelve a este campeonato la próxima vez que entre
   ['sobreEstado', 'chipFormato', 'chipEquipos'].forEach(id => { $(id).hidden = false; });
   document.querySelector('#vista-partidos .filtros').hidden = false;
   // El administrador gestiona los partidos (previa y resultados); el visitante solo los consulta.
@@ -520,7 +593,7 @@ function cerrarNavMas() {
 function mostrarVista(nombre) {
   if (!$('vista-' + nombre)) nombre = 'equipos';
   if (!puedeVer(nombre)) nombre = VISTA_INICIAL_VISITANTE; // el visitante no ve Equipos ni Reglas
-  // Sin campeonato elegido las demás vistas tendrían datos viejos: el Organizador va a «Mis campeonatos».
+  // Sin campeonato elegido las demás vistas tendrían datos viejos: se va a la lista de campeonatos.
   if (!E.hay && !['noticias', 'campeonatos'].includes(nombre)) nombre = puedeVer('campeonatos') ? 'campeonatos' : 'partidos';
   document.querySelectorAll('.vista').forEach(v => { v.hidden = v.id !== 'vista-' + nombre; });
   document.querySelectorAll('.navegacion button[data-vista]').forEach(b => {
@@ -2513,7 +2586,7 @@ function conectarEventos() {
   editorNuevo = editorCriterios($('criteriosNuevo'));
   $('formLogin').addEventListener('submit', entrar);
   $('formRegistro').addEventListener('submit', registrarse);
-  // Mis campeonatos (Organizador): crear, gestionar, terminar, eliminar o tomar; y cambiar desde la cabecera.
+  // Campeonatos: el Organizador crea, gestiona, termina, elimina o toma; el Aficionado elige cuál seguir. Los dos cambian desde la cabecera.
   $('btnNuevoCampeonato').addEventListener('click', () => abrirNuevo(false));
   $('listaCampeonatos').addEventListener('click', clicCampeonatos);
   $('listaSinOrganizador').addEventListener('click', clicCampeonatos);
