@@ -6,8 +6,10 @@ const CLAVE_PESTANA = 'alphasport.pestana';
 const ESTADOS_TEXTO = { PENDIENTE: 'Pendiente', EN_JUEGO: 'En juego', JUGADO: 'Jugado', APLAZADO: 'Aplazado', SUSPENDIDO: 'Suspendido' };
 /** Vistas que el visitante no ve (son de gestión), la que solo ve el visitante [REQ-07] y vista con la que entra. */
 const VISTAS_SOLO_ADMIN = ['equipos', 'reglas']; // «campeonatos»: Mis campeonatos (Organizador) o Campeonatos activos (Aficionado)
-const VISTAS_SOLO_VISITANTE = ['votaciones'];
-const VISTA_INICIAL_VISITANTE = 'partidos';
+const VISTAS_SOLO_VISITANTE = ['votaciones', 'inicio'];
+const VISTA_INICIAL_VISITANTE = 'inicio'; // el Aficionado entra a su «Inicio»: hoy, próximos, resultados, líder y noticias
+/** Vistas que tienen sentido sin un campeonato elegido (las demás se ocultan del menú). */
+const VISTAS_SIN_CAMPEONATO = ['campeonatos', 'noticias', 'inicio'];
 
 let servicio = null;
 let catalogo = null;
@@ -292,6 +294,7 @@ function mostrarAcceso(cual) {
 function volverAlLogin(motivo) {
   S = null;
   document.querySelectorAll('dialog[open]').forEach(d => d.close());
+  history.replaceState(null, '', location.pathname + location.search); // sin sesión no hay ruta de vista
   $('app').hidden = true;
   $('login').hidden = false;
   limpiarAcceso();
@@ -310,10 +313,9 @@ async function cerrarSesion() {
 function aplicarPermisos() {
   const admin = puedeEditar();
   document.querySelectorAll('[data-solo-admin]').forEach(el => { el.hidden = !admin; });
-  // Sin campeonato no hay nada que ver fuera de Partidos (que muestra el aviso).
+  // Sin campeonato, las vistas que solo mostrarían un aviso vacío se ocultan (las noticias no dependen de él).
   document.querySelectorAll('.navegacion button[data-vista]').forEach(b => {
-    // (las noticias no dependen del campeonato: siguen disponibles)
-    b.hidden = !puedeVer(b.dataset.vista) || (!E.hay && !['campeonatos', 'partidos', 'noticias'].includes(b.dataset.vista));
+    b.hidden = !puedeVer(b.dataset.vista) || (!E.hay && !VISTAS_SIN_CAMPEONATO.includes(b.dataset.vista));
   });
   // El Aficionado elige qué campeonato seguir entre los activos; el Organizador gestiona los suyos.
   $('navCampeonatos').textContent = admin ? 'Mis campeonatos' : 'Campeonatos activos';
@@ -376,8 +378,134 @@ async function mostrarApp() {
     return;
   }
   render();
-  // El Aficionado empieza en «Campeonatos activos» para elegir cuál seguir, aunque haya uno solo.
-  mostrarVista(puedeEditar() ? leerPreferencia(CLAVE_PESTANA) || 'equipos' : 'campeonatos');
+  // Si la dirección ya trae una vista de este campeonato (recargar la página), se abre esa; si no, la de inicio:
+  // el Organizador, la última que usó; el Aficionado, su «Inicio».
+  const ruta = leerRuta(location.hash);
+  const deLaRuta = ruta && ruta.vista && (!ruta.campeonato || ruta.campeonato === E.campeonato.codigo) ? ruta.vista : null;
+  conHistorial('replace', () => mostrarVista(deLaRuta || (puedeEditar() ? leerPreferencia(CLAVE_PESTANA) || 'equipos' : VISTA_INICIAL_VISITANTE)));
+}
+
+/* ---------------------------------------------------------------- botón atrás (historial del navegador) */
+
+/** Cómo anota la siguiente vista en el historial: «push» (nueva entrada), «replace» o «none» (al volver). */
+let modoHistorial = 'push';
+
+/** Ejecuta fn anotando las vistas con otro modo (por ejemplo al entrar o al volver con el botón atrás). */
+function conHistorial(modo, fn) {
+  const antes = modoHistorial;
+  modoHistorial = modo;
+  try { return fn(); } finally { modoHistorial = antes; }
+}
+
+/** Dirección de una vista o de un partido: #/partidos, #/campeonato/{código}/posiciones, …/partido/{id}. */
+function rutaDe(vista, partido) {
+  const base = E && E.hay && E.campeonato ? `#/campeonato/${encodeURIComponent(E.campeonato.codigo)}` : '#';
+  return partido != null ? `${base}/partido/${partido}` : `${base}/${vista}`;
+}
+
+/** Lee #/campeonato/{código}/{vista} o …/partido/{id}; null si la dirección no es una ruta de la app. */
+function leerRuta(hash) {
+  const m = /^#\/(?:campeonato\/([^/]+)\/?)?(?:partido\/(\d+)|([a-z]+))?$/.exec(hash || '');
+  return m ? { campeonato: m[1] ? decodeURIComponent(m[1]) : null, partido: m[2] ? Number(m[2]) : null, vista: m[3] || null } : null;
+}
+
+/** Anota la ruta según el modo: así «atrás» vuelve a la vista anterior y solo sale en la primera pantalla. */
+function anotarRuta(estado, ruta) {
+  if (modoHistorial === 'none' || !S || location.hash === ruta) return;
+  if (modoHistorial === 'replace' || !history.state) history.replaceState(estado, '', ruta);
+  else history.pushState(estado, '', ruta);
+}
+
+const vistaActual = () => ((document.querySelector('.vista:not([hidden])') || { id: 'vista-' }).id).replace('vista-', '');
+
+/** Botón atrás o adelante: abre la vista (o el partido) de esa entrada sin anotar otra. */
+async function alNavegarHistorial() {
+  if (!S || $('app').hidden) return; // sin sesión no hay vistas: el login no se toca
+  const ruta = leerRuta(location.hash) || {};
+  modoHistorial = 'none';
+  try {
+    if (ruta.campeonato && E.hay && ruta.campeonato !== E.campeonato.codigo) {
+      await gestionarCampeonato(ruta.campeonato, ruta.vista || vistaActual()); // otro campeonato que puede ver
+    }
+    if (ruta.partido != null) {
+      await abrirDetalle(ruta.partido);
+    } else {
+      if ($('dlgDetalle').open) $('dlgDetalle').close();
+      mostrarVista(ruta.vista || (puedeEditar() ? 'equipos' : VISTA_INICIAL_VISITANTE));
+    }
+  } finally {
+    modoHistorial = 'push';
+  }
+  // Si la vista no se podía ver (rol o sin campeonato), la dirección queda en la que de verdad se muestra.
+  if (ruta.partido == null && location.hash !== rutaDe(vistaActual())) history.replaceState({ vista: vistaActual() }, '', rutaDe(vistaActual()));
+}
+
+/* ---------------------------------------------------------------- inicio del Aficionado */
+
+/** Fecha de hoy como AAAA-MM-DD (hora local), igual que las fechas de los partidos. */
+function hoyIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Un partido en una línea, con su marcador si ya empezó; abre el detalle. */
+function filaInicioHtml(p) {
+  const centro = conMarcador(p) ? `<b>${p.gl} : ${p.gv}</b>` : '<span class="sutil">vs</span>';
+  const meta = p.estado === 'EN_JUEGO' ? 'En juego' : [fechaDefinida(p) ? fechaTexto(p) : 'Fecha por definir', p.hora].filter(Boolean).join(' · ');
+  return `<li><button type="button" class="inicio-fila" data-detalle-inicio="${p.id}">
+    <span class="inicio-equipos">${esc(p.localNombre)} ${centro} ${esc(p.visitanteNombre)}</span><small class="sutil">${esc(meta)}</small></button></li>`;
+}
+
+function bloqueInicio(titulo, vista, enlace, contenido) {
+  return `<section class="inicio-bloque vidrio"><header><h3>${titulo}</h3>${vista ? `<button type="button" class="btn mini fantasma" data-ir="${vista}">${enlace} →</button>` : ''}</header>${contenido}</section>`;
+}
+
+/**
+ * «Inicio» del Aficionado, armado con lo que ya se cargó (sin rutas nuevas del servidor): partidos de hoy y
+ * próximos, últimos resultados, líder de la tabla y últimas noticias, con enlace a cada vista.
+ */
+async function renderInicio() {
+  const panel = $('panelInicio');
+  if (!E.hay) {
+    $('ayudaInicio').textContent = '';
+    panel.innerHTML = `<div class="inicio-vacio vidrio">${vacioHtml('Todavía no sigue ningún campeonato.')}
+      <button type="button" class="btn primario" data-ir="campeonatos">Elegir un campeonato</button></div>`;
+    return;
+  }
+  $('ayudaInicio').textContent = `Lo más reciente de «${E.campeonato.nombre}».`;
+  const hoy = hoyIso();
+  const porFecha = (a, b) => (fechaDefinida(a) ? a.fecha + (a.hora || '') : '9') .localeCompare(fechaDefinida(b) ? b.fecha + (b.hora || '') : '9') || a.id - b.id;
+  const enJuego = E.partidos.filter(p => p.estado === 'EN_JUEGO');
+  const deHoy = E.partidos.filter(p => !p.jugado && p.estado !== 'EN_JUEGO' && p.fecha === hoy);
+  const proximos = E.partidos.filter(p => !p.jugado && p.estado === 'PENDIENTE' && (!fechaDefinida(p) || p.fecha > hoy)).sort(porFecha).slice(0, 4);
+  const resultados = E.partidos.filter(p => p.jugado).sort((a, b) => porFecha(b, a)).slice(0, 4);
+  const lista = ps => `<ul class="inicio-lista">${ps.map(filaInicioHtml).join('')}</ul>`;
+  const bloques = [];
+  if (enJuego.length || deHoy.length) bloques.push(bloqueInicio('Hoy', 'partidos', 'Partidos', lista([...enJuego, ...deHoy])));
+  bloques.push(bloqueInicio('Próximos partidos', 'partidos', 'Calendario',
+    proximos.length ? lista(proximos) : '<p class="sutil">No hay partidos pendientes.</p>'));
+  bloques.push(bloqueInicio('Últimos resultados', 'partidos', 'Resultados',
+    resultados.length ? lista(resultados) : '<p class="sutil">Todavía no se juega ningún partido.</p>'));
+  const tabla = (E.tablas || [])[0], lider = tabla && tabla.filas[0];
+  if (lider && lider.pj > 0) {
+    bloques.push(bloqueInicio('Líder', 'posiciones', 'Posiciones',
+      `<p class="inicio-lider"><b>${esc(lider.nombre)}</b> <span class="sutil">${lider.pts} pts · ${lider.pj} PJ${E.tablas.length > 1 ? ' · ' + esc(tabla.texto) : ''}</span></p>`));
+  }
+  panel.innerHTML = bloques.join('') + bloqueInicio('Últimas noticias', 'noticias', 'Noticias', '<p class="sutil">Cargando…</p>');
+  const r = await servicio.noticias();
+  const ultimo = panel.lastElementChild;
+  if (!ultimo || vistaActual() !== 'inicio') return;
+  const noticias = r.ok ? r.noticias.publicadas.slice(0, 3) : [];
+  ultimo.outerHTML = bloqueInicio('Últimas noticias', 'noticias', 'Noticias', noticias.length
+    ? `<ul class="inicio-lista">${noticias.map(n => `<li><button type="button" class="inicio-fila" data-ir="noticias"><span>${esc(n.titulo)}</span><small class="sutil">${esc(n.fecha || '')}</small></button></li>`).join('')}</ul>`
+    : '<p class="sutil">No hay noticias publicadas.</p>');
+}
+
+function clicInicio(e) {
+  const ir = e.target.closest('[data-ir]');
+  if (ir) { mostrarVista(ir.dataset.ir); return; }
+  const partido = e.target.closest('[data-detalle-inicio]');
+  if (partido) abrirDetalle(Number(partido.dataset.detalleInicio));
 }
 
 /**
@@ -399,13 +527,9 @@ function renderSinCampeonato() {
     mostrarVista(enNoticias ? 'noticias' : 'campeonatos');
     return;
   }
-  document.querySelector('#vista-partidos .filtros').hidden = true;
-  $('ayudaPartidos').textContent = 'Calendario y resultados del campeonato en curso.';
-  $('pestanasPartidos').hidden = true;
-  $('ayudaPestanaPartidos').hidden = true;
-  $('listaPartidos').innerHTML = vacioHtml('Elija un campeonato en «Campeonatos activos».');
+  // El Aficionado va a su «Inicio», que lo lleva a elegir un campeonato.
   aplicarPermisos();
-  mostrarVista(enNoticias ? 'noticias' : 'campeonatos');
+  mostrarVista(enNoticias ? 'noticias' : VISTA_INICIAL_VISITANTE);
 }
 
 /* ---------------------------------------------------------------- mis campeonatos (Organizador) */
@@ -612,9 +736,10 @@ function cerrarNavMas() {
 
 function mostrarVista(nombre) {
   if (!$('vista-' + nombre)) nombre = 'equipos';
-  if (!puedeVer(nombre)) nombre = VISTA_INICIAL_VISITANTE; // el visitante no ve Equipos ni Reglas
-  // Sin campeonato elegido las demás vistas tendrían datos viejos: el Organizador va a «Mis campeonatos».
-  if (!E.hay && !['noticias', 'campeonatos'].includes(nombre)) nombre = puedeVer('campeonatos') ? 'campeonatos' : 'partidos';
+  if (!puedeVer(nombre)) nombre = puedeEditar() ? 'equipos' : VISTA_INICIAL_VISITANTE; // cada rol, solo lo que puede ver
+  // Sin campeonato elegido las demás vistas tendrían datos viejos: el Organizador va a «Mis campeonatos» y el
+  // Aficionado a su «Inicio», que lo lleva a elegir uno.
+  if (!E.hay && !VISTAS_SIN_CAMPEONATO.includes(nombre)) nombre = puedeEditar() ? 'campeonatos' : VISTA_INICIAL_VISITANTE;
   document.querySelectorAll('.vista').forEach(v => { v.hidden = v.id !== 'vista-' + nombre; });
   document.querySelectorAll('.navegacion button[data-vista]').forEach(b => {
     b.classList.toggle('activa', b.dataset.vista === nombre);
@@ -622,6 +747,8 @@ function mostrarVista(nombre) {
   });
   guardarPreferencia(CLAVE_PESTANA, nombre);
   marcarNavMas(nombre);
+  anotarRuta({ vista: nombre }, rutaDe(nombre)); // «atrás» vuelve aquí
+  if (nombre === 'inicio') renderInicio();
   if (nombre === 'votaciones') renderVotaciones();
   if (nombre === 'noticias') renderNoticias(); // las noticias se piden al servicio al abrir la sección
   if (nombre === 'campeonatos') renderCampeonatos();
@@ -1876,7 +2003,8 @@ async function abrirDetalle(id, pestana = 'resumen') {
   $('dpCabecera').innerHTML = cabeceraDetalle(p);
   dibujarDetalle();
   if (!$('dlgDetalle').open) $('dlgDetalle').showModal();
-  $('dpCerrar').focus();
+  anotarRuta({ partido: id }, rutaDe(null, id)); // «atrás» cierra el detalle y vuelve a la vista
+  $('dpVolver').focus();
 }
 
 /** Escudo de la cabecera del detalle: el administrador lo toca para cambiarlo o quitarlo. */
@@ -2651,7 +2779,14 @@ function conectarEventos() {
     destino.focus();
   });
   $('dpCerrar').addEventListener('click', () => $('dlgDetalle').close());
-  $('dpX').addEventListener('click', () => $('dlgDetalle').close());
+  $('dpVolver').addEventListener('click', () => $('dlgDetalle').close());
+  // Cerrar el detalle (Volver, Escape o el botón de abajo) es como «atrás»: la dirección vuelve a la vista.
+  $('dlgDetalle').addEventListener('close', () => {
+    const ruta = leerRuta(location.hash);
+    if (modoHistorial !== 'none' && ruta && ruta.partido != null) history.back();
+  });
+  window.addEventListener('popstate', alNavegarHistorial);
+  $('panelInicio').addEventListener('click', clicInicio);
   $('dpEditar').addEventListener('click', () => {
     const id = detalleActual && detalleActual.partido.id;
     $('dlgDetalle').close();

@@ -69,6 +69,7 @@
       <div class="marca-lateral"><img src="img/logo.png" alt=""><span>Alpha<b>Sport</b></span><small>Gestor de campeonatos</small>
         <div id="perfil" class="perfil" hidden><span id="perfilInicial" class="perfil-avatar" aria-hidden="true"></span><span class="perfil-texto"><small>Bienvenido</small><strong id="perfilUsuario"></strong></span></div></div>
       <nav class="navegacion" id="navegacionSecciones" aria-label="Secciones">
+        <button data-vista="inicio" hidden><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7M5 10v10h5v-6h4v6h5V10"/></svg><span>Inicio</span></button>
         <button data-vista="campeonatos" hidden><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z"/></svg><span id="navCampeonatos">Mis campeonatos</span></button>
         <button data-vista="equipos" class="activa"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg><span>Equipos</span></button>
         <button data-vista="partidos"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span id="navPartidos">Partidos</span></button>
@@ -121,6 +122,12 @@
         </div>
         <input id="archivoImportar" type="file" hidden>
       </header>
+
+      <!-- Aficionado: lo más reciente del campeonato que sigue (hoy, próximos, resultados, líder y noticias) -->
+      <section id="vista-inicio" class="vista" hidden>
+        <div class="cabecera-vista"><div><h2>Inicio</h2><p id="ayudaInicio" class="sutil"></p></div></div>
+        <div id="panelInicio" class="inicio-grid"></div>
+      </section>
 
       <section id="vista-campeonatos" class="vista" hidden>
         <div class="cabecera-vista">
@@ -467,7 +474,7 @@
   <dialog id="dlgDetalle" class="dialogo ancho-dlg dlg-detalle" aria-labelledby="dpContexto">
     <div class="cabecera-dlg">
       <h3 id="dpContexto"></h3>
-      <button type="button" id="dpX" class="btn fantasma mini" aria-label="Cerrar">✕</button>
+      <button type="button" id="dpVolver" class="btn fantasma mini boton-volver">← Volver</button>
     </div>
     <div id="dpCabecera"></div>
     <div class="pestanas-mini detalle-pestanas" role="tablist" aria-label="Detalle del partido">
@@ -478,7 +485,7 @@
       <button type="button" role="tab" data-dp="alineaciones" aria-selected="false">Alineaciones</button>
     </div>
     <div id="dpPanel" class="detalle-panel" role="tabpanel"></div>
-    <div class="acciones"><button type="button" id="dpEditar" class="btn fantasma" data-solo-admin>Editar partido</button><button type="button" id="dpCerrar" class="btn primario">Cerrar</button></div>
+    <div class="acciones"><button type="button" id="dpEditar" class="btn fantasma" data-solo-admin>Editar partido</button><button type="button" id="dpCerrar" class="btn primario">Volver</button></div>
   </dialog>
 
   <dialog id="dlgNoticia" class="dialogo" aria-labelledby="ntTitulo">
@@ -558,7 +565,7 @@
     <div class="cabecera-dlg">
       <h3>Historial de campeonatos</h3>
       <div class="pestanas-mini"><button data-hs="campeonatos" class="activa">Campeonatos</button><button data-hs="palmares">Palmarés histórico</button></div>
-      <button id="hsCerrar" class="btn fantasma mini" aria-label="Cerrar">✕</button>
+      <button id="hsCerrar" class="btn fantasma mini boton-volver">← Volver</button>
     </div>
     <div id="hs-campeonatos" class="historial">
       <div class="historial-lista">

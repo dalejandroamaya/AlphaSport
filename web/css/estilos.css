@@ -1332,3 +1332,16 @@ button.partido:hover { background: var(--fila-hover); transform: none; }
   .nav-mas.activa svg, .nav-mas[aria-expanded="true"] svg { stroke: var(--cesped); }
   .nav-mas:focus-visible { outline: 2px solid var(--cian); outline-offset: 2px; }
 }
+
+/* Inicio del Aficionado: bloques con lo más reciente del campeonato que sigue */
+.inicio-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
+.inicio-bloque { padding: 1rem; border-radius: var(--radio, 16px); display: grid; gap: .6rem; align-content: start; }
+.inicio-bloque header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.inicio-bloque h3 { margin: 0; font-size: 1rem; }
+.inicio-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
+.inicio-fila { width: 100%; display: grid; gap: .1rem; text-align: left; border: 1px solid var(--borde, rgba(255,255,255,.12)); background: transparent; color: inherit; font: inherit; padding: .5rem .7rem; border-radius: 10px; cursor: pointer; }
+.inicio-fila:hover, .inicio-fila:focus-visible { border-color: var(--cesped); }
+.inicio-equipos b { color: var(--cesped); margin: 0 .3rem; }
+.inicio-lider { margin: 0; font-size: 1.05rem; }
+.inicio-vacio { padding: 1.5rem; border-radius: var(--radio, 16px); display: grid; justify-items: center; gap: .8rem; text-align: center; }
+.boton-volver { white-space: nowrap; }
