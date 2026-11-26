@@ -764,36 +764,49 @@ public class SimulacionFormatos {
             AutenticacionService auth = new AutenticacionService(cuentas, rapido);
             java.util.function.BiFunction<String, String[], AutenticacionService.SolicitudRegistro> solicitud = (tipo, d) ->
                     new AutenticacionService.SolicitudRegistro(d[0], d[1], d[2], d[3], d[4], tipo);
-            String[] ana = {"  Ana.Torres ", "  Ana   Torres ", " Ana@Correo.COM ", "clave1234", "clave1234"};
+            String[] ana = {"  Ana.Torres ", "  Ana   Torres ", " Ana@Correo.COM ", "Clave#1234", "Clave#1234"};
             // Registro valido: usuario y correo en minusculas, nombre sin espacios de mas, la clave solo como hash.
             alphasport.model.Usuario u = auth.registrar(solicitud.apply("ORGANIZADOR", ana));
             alphasport.model.CuentaUsuario guardada = cuentas.buscar("ANA.TORRES").orElseThrow();
             boolean valido = u.getNombre().equals("ana.torres") && u.getRol() == alphasport.model.Rol.ORGANIZADOR && u.puedeEditar()
                     && u.getId() > 0 && u.getId() == cuentas.buscar("ana.torres").orElseThrow().id() // su id, para ser duena de sus campeonatos
                     && guardada.correo().equals("ana@correo.com") && guardada.nombre().equals("Ana Torres")
-                    && !guardada.claveHash().contains("clave1234") && rapido.coincide("clave1234", guardada.claveHash())
-                    && !guardada.toString().contains(guardada.claveHash()) && !solicitud.apply("AFICIONADO", ana).toString().contains("clave1234");
+                    && !guardada.claveHash().contains("Clave#1234") && rapido.coincide("Clave#1234", guardada.claveHash())
+                    && !guardada.toString().contains(guardada.claveHash()) && !solicitud.apply("AFICIONADO", ana).toString().contains("Clave#1234");
             // Usuario o correo repetidos, sin importar mayusculas ni espacios.
             boolean repetidos = mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO",
-                    new String[]{"ANA.TORRES", "Otra", "otra@correo.com", "clave1234", "clave1234"}))).contains("usuario ya está en uso")
+                    new String[]{"ANA.TORRES", "Otra", "otra@correo.com", "Clave#1234", "Clave#1234"}))).contains("usuario ya está en uso")
                     && mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO",
-                    new String[]{"otra", "Otra", " ANA@correo.com", "clave1234", "clave1234"}))).contains("correo ya está registrado")
+                    new String[]{"otra", "Otra", " ANA@correo.com", "Clave#1234", "Clave#1234"}))).contains("correo ya está registrado")
                     && cuentas.existeUsuario("Ana.Torres") && cuentas.existeCorreo("ANA@CORREO.COM") && !cuentas.existeCorreo("");
             // Contraseña debil o mal confirmada, y datos que no sirven.
             java.util.function.Function<String[], String> error = d -> mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO", d)));
-            boolean debil = error.apply(new String[]{"luis", "Luis", "luis@x.co", "abc123", "abc123"}).contains("entre 8 y 128")
-                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "solamenteletras", "solamenteletras"}).contains("letras y números")
-                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "1234567890", "1234567890"}).contains("letras y números")
-                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "clave1234", "clave12345"}).contains("no coinciden")
-                    && error.apply(new String[]{"lu", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("entre 3 y 30")
-                    && error.apply(new String[]{"josé", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("sin tilde")
-                    && error.apply(new String[]{".luis", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("empezar con una letra")
-                    && error.apply(new String[]{"luis", "L", "luis@x.co", "clave1234", "clave1234"}).contains("Escriba su nombre")
-                    && error.apply(new String[]{"luis", "Luis", "luis@x", "clave1234", "clave1234"}).contains("correo válido")
-                    && error.apply(new String[]{"luis", "Luis", "", "clave1234", "clave1234"}).contains("Escriba su correo")
+            java.util.function.Function<String, String> clave = c -> error.apply(new String[]{"luis", "Luis", "luis@x.co", c, c});
+            // Cada regla de la contraseña por separado, y el mensaje nombra todo lo que falta (no solo lo primero).
+            boolean debil = clave.apply("abc123").equals("Falta: al menos 8 caracteres, una mayúscula y un carácter especial.")
+                    && clave.apply("Cl#1a").equals("Falta: al menos 8 caracteres.")
+                    && clave.apply("clave#1234").equals("Falta: una mayúscula.")
+                    && clave.apply("CLAVE#1234").equals("Falta: una minúscula.")
+                    && clave.apply("Clave#abcd").equals("Falta: un número.")
+                    && clave.apply("Clave12345").equals("Falta: un carácter especial.")
+                    && clave.apply("solamenteletras").equals("Falta: una mayúscula, un número y un carácter especial.")
+                    && clave.apply("Clave #1234").equals("La contraseña no puede tener espacios.")
+                    && clave.apply("Clave#12\u00073").equals("La contraseña no puede tener caracteres de control.")
+                    && clave.apply("Aa1#" + "x".repeat(130)).equals("La contraseña no puede tener más de 128 caracteres.")
+                    && AutenticacionService.problemaClave("Ñandú#2026") == null // letras con tilde y Ñ cuentan como mayúscula y minúscula
+                    && AutenticacionService.reglasClave("clave#1234").stream().filter(r -> !r.cumple()).map(AutenticacionService.ReglaClave::texto)
+                            .toList().equals(List.of("Una letra mayúscula"))
+                    && AutenticacionService.reglasClave("").size() == 5
+                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "Clave#1234", "Clave#12345"}).contains("no coinciden")
+                    && error.apply(new String[]{"lu", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("entre 3 y 30")
+                    && error.apply(new String[]{"josé", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("sin tilde")
+                    && error.apply(new String[]{".luis", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("empezar con una letra")
+                    && error.apply(new String[]{"luis", "L", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("Escriba su nombre")
+                    && error.apply(new String[]{"luis", "Luis", "luis@x", "Clave#1234", "Clave#1234"}).equals("Al dominio le falta la extensión, por ejemplo .com.")
+                    && error.apply(new String[]{"luis", "Luis", "", "Clave#1234", "Clave#1234"}).contains("Escriba su correo")
                     && !cuentas.existeUsuario("luis");
             // El rol solo puede ser ORGANIZADOR o AFICIONADO: nunca otro valor enviado por el cliente.
-            String[] luis = {"luis", "Luis", "luis@x.co", "futbol2026", "futbol2026"};
+            String[] luis = {"luis", "Luis", "luis@x.co", "Futbol#2026", "Futbol#2026"};
             boolean rolInvalido = true;
             for (String tipo : new String[]{"ADMINISTRADOR", "ADMIN", "VISITANTE", "organizador", "", null, "ORGANIZADOR "}) {
                 rolInvalido &= mensaje(() -> auth.registrar(solicitud.apply(tipo, luis))).contains("tipo de cuenta");
@@ -801,7 +814,7 @@ public class SimulacionFormatos {
             rolInvalido &= !cuentas.existeUsuario("luis");
             // Inicio de sesion: correcto, y el mismo mensaje con clave mala o usuario inexistente.
             String malaClave = mensaje(() -> auth.iniciarSesion("ana.torres", "otra1234"));
-            boolean login = auth.iniciarSesion(" ANA.torres ", "clave1234").getRol() == alphasport.model.Rol.ORGANIZADOR
+            boolean login = auth.iniciarSesion(" ANA.torres ", "Clave#1234").getRol() == alphasport.model.Rol.ORGANIZADOR
                     && malaClave.equals("Usuario o contraseña incorrectos.") && malaClave.equals(mensaje(() -> auth.iniciarSesion("nadie", "otra1234")))
                     && mensaje(() -> auth.iniciarSesion("ana.torres", null)).equals(malaClave);
             // Por la ruta «registro»: abre la sesion, la respuesta no trae claves ni hash, y un Aficionado no gestiona torneos.
@@ -810,26 +823,46 @@ public class SimulacionFormatos {
                     java.nio.file.Files.createTempDirectory("alphasport-registro")));
             alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, auth);
             java.util.Map<String, Object> r = api.ejecutar("registro", java.util.Map.of("tipo", "AFICIONADO", "nombre", "Luis Pérez",
-                    "usuario", "Luis", "correo", "luis@x.co", "clave", "futbol2026", "confirmacion", "futbol2026"));
+                    "usuario", "Luis", "correo", "luis@x.co", "clave", "Futbol#2026", "confirmacion", "Futbol#2026"));
             String json = alphasport.ui.Json.escribir(r);
-            boolean ruta = r.get("sesion").toString().contains("rol=AFICIONADO") && !json.contains("futbol2026") && !json.contains("pbkdf2")
+            boolean ruta = r.get("sesion").toString().contains("rol=AFICIONADO") && !json.contains("Futbol#2026") && !json.contains("pbkdf2")
                     && api.getUsuarioActual().getNombre().equals("luis")
                     && "PERMISO".equals(codigoDe(() -> api.ejecutar("nuevo", java.util.Map.of("nombre", "Copa", "formato", "LIGA"))))
                     && !servicio.hayCampeonato();
             api.ejecutar("logout", java.util.Map.of());
             boolean forzado = mensaje(() -> api.ejecutar("registro", java.util.Map.of("tipo", "ADMINISTRADOR", "nombre", "Hack",
-                    "usuario", "hack", "correo", "h@x.co", "clave", "clave1234", "confirmacion", "clave1234"))).contains("tipo de cuenta")
+                    "usuario", "hack", "correo", "h@x.co", "clave", "Clave#1234", "confirmacion", "Clave#1234"))).contains("tipo de cuenta")
                     && api.getUsuarioActual() == null && !cuentas.existeUsuario("hack");
-            api.ejecutar("login", java.util.Map.of("usuario", "ana.torres", "clave", "clave1234"));
+            api.ejecutar("login", java.util.Map.of("usuario", "ana.torres", "clave", "Clave#1234"));
             // El Organizador sí pasa el permiso de gestionar (la ruta lo deja seguir) y puede crear el torneo.
             boolean organizador = !"PERMISO".equals(codigoDe(() -> api.ejecutar("nuevo", java.util.Map.of("nombre", "Copa", "formato", "LIGA"))))
                     && api.getUsuarioActual().puede(alphasport.model.Permiso.GESTIONAR_CAMPEONATO);
             servicio.crear("Copa de Ana", TipoFormato.LIGA, new ConfiguracionTorneo(), false);
             organizador &= servicio.hayCampeonato();
-            correcto = valido && repetidos && debil && rolInvalido && login && ruta && forzado && organizador;
+            // Correo: cada regla con su mensaje concreto (el mismo texto que cuentas.js).
+            java.util.function.Function<String, String> correo = AutenticacionService::problemaCorreo;
+            boolean correos = "El dominio no puede empezar con punto.".equals(correo.apply("a@.com"))
+                    && "El dominio no puede empezar con punto.".equals(correo.apply("a@..com"))
+                    && "El dominio no puede terminar en punto.".equals(correo.apply("a@com."))
+                    && "El dominio no puede tener puntos seguidos.".equals(correo.apply("a@x..com"))
+                    && "El nombre antes de la @ no puede tener puntos seguidos.".equals(correo.apply("a..b@x.com"))
+                    && "El nombre antes de la @ no puede empezar ni terminar en punto.".equals(correo.apply(".a@x.com"))
+                    && "Las partes del dominio no pueden empezar ni terminar en guion.".equals(correo.apply("a@-x.com"))
+                    && "El correo solo puede tener una @.".equals(correo.apply("a@b@x.com"))
+                    && "Al correo le falta la @, por ejemplo nombre@correo.com.".equals(correo.apply("ax.com"))
+                    && "Falta el nombre antes de la @.".equals(correo.apply("@x.com"))
+                    && correo.apply("a@x.c1") != null && correo.apply("a@x.c") != null && correo.apply("a b@x.com") != null
+                    && correo.apply("a".repeat(65) + "@x.com") != null && correo.apply("a@" + "x".repeat(64) + ".com") != null
+                    && correo.apply("a@" + "x".repeat(250) + ".com") != null
+                    && correo.apply("ana.perez+1@mail.example.co") == null && correo.apply(" Ana_P%9-x@Sub-1.Dominio.ORG ") == null
+                    && correo.apply("a@" + "x".repeat(63) + ".com") == null;
+            // Una cuenta antigua con una contraseña que hoy no cumple las reglas sigue entrando: el login no mide la fuerza.
+            cuentas.crear(new alphasport.model.CuentaUsuario("viejo", "Viejo", "viejo@x.co", alphasport.model.Rol.AFICIONADO, rapido.hash("abc123")));
+            boolean antigua = auth.iniciarSesion("viejo", "abc123").getRol() == alphasport.model.Rol.AFICIONADO;
+            correcto = valido && repetidos && debil && correos && antigua && rolInvalido && login && ruta && forzado && organizador;
             if (!correcto) {
-                System.out.println("  valido=" + valido + " repetidos=" + repetidos + " debil=" + debil + " rolInvalido=" + rolInvalido
-                        + " login=" + login + " ruta=" + ruta + " forzado=" + forzado + " organizador=" + organizador);
+                System.out.println("  valido=" + valido + " repetidos=" + repetidos + " debil=" + debil + " correos=" + correos + " antigua=" + antigua
+                        + " rolInvalido=" + rolInvalido + " login=" + login + " ruta=" + ruta + " forzado=" + forzado + " organizador=" + organizador);
             }
         } catch (Exception e) {
             e.printStackTrace(System.out);

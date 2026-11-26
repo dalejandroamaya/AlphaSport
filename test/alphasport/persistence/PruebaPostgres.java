@@ -784,7 +784,10 @@ public final class PruebaPostgres {
                 && contar(db, "SELECT COUNT(*) FROM noticias n JOIN torneos t ON t.id = n.torneo_id WHERE t.situacion = 'ACTUAL'") == 1
                 && contar(db, "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'torneos_un_actual'") == 0
                 // 007: la tabla de imagenes
-                && contar(db, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'imagenes'") == 1;
+                && contar(db, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'imagenes'") == 1
+                // 008: correos de hasta 254 caracteres
+                && contar(db, "SELECT character_maximum_length FROM information_schema.columns WHERE table_schema = current_schema()"
+                        + " AND table_name = 'usuarios' AND column_name = 'email'") == 254;
         boolean igual = cuentas && foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 2; // el campeonato y su copia
         // Una persona por jugador, compartida por el campeonato en curso y su copia del historial.
         int jugadores = contar(db, "SELECT COUNT(*) FROM jugadores j JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ACTUAL'");
@@ -818,13 +821,13 @@ public final class PruebaPostgres {
         alphasport.persistence.postgres.PostgresRepositorioUsuarios repo = new alphasport.persistence.postgres.PostgresRepositorioUsuarios(db);
         alphasport.service.AutenticacionService auth = new alphasport.service.AutenticacionService(repo, rapido);
         alphasport.model.Usuario ana = auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro(
-                " Ana.Torres ", "Ana Torres", "Ana@Correo.COM", "clave1234", "clave1234", "ORGANIZADOR"));
-        auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro("luis", "Luis", "luis@x.co", "futbol2026", "futbol2026", "AFICIONADO"));
+                " Ana.Torres ", "Ana Torres", "Ana@Correo.COM", "Clave#1234", "Clave#1234", "ORGANIZADOR"));
+        auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro("luis", "Luis", "luis@x.co", "Futbol#2026", "Futbol#2026", "AFICIONADO"));
         // La fila: usuario y correo en minusculas, rol nuevo y la clave solo como hash.
         boolean fila = ana.getNombre().equals("ana.torres") && contar(db, "SELECT COUNT(*) FROM usuarios") == 2
                 && ana.getId() == contar(db, "SELECT id FROM usuarios WHERE username = 'ana.torres'") // la sesion lleva el id de la cuenta
                 && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'ana.torres' AND email = 'ana@correo.com' AND rol = 'ORGANIZADOR'"
-                        + " AND nombre = 'Ana Torres' AND password_hash LIKE 'pbkdf2_sha256$%' AND password_hash NOT LIKE '%clave1234%'") == 1
+                        + " AND nombre = 'Ana Torres' AND password_hash LIKE 'pbkdf2_sha256$%' AND password_hash NOT LIKE '%Clave#1234%'") == 1
                 && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'luis' AND rol = 'AFICIONADO'") == 1;
         // Lectura y consultas sin importar mayusculas ni espacios.
         alphasport.model.CuentaUsuario leida = repo.buscar("  ANA.TORRES ").orElseThrow();
@@ -840,7 +843,7 @@ public final class PruebaPostgres {
         boolean unico = falla(PersistenciaException.class, () -> sql(db,
                 "INSERT INTO usuarios (nombre, username, email, password_hash, rol) VALUES ('X', 'luis', 'z@x.co', 'h', 'AFICIONADO')"));
         // Inicio de sesion contra la tabla.
-        boolean login = auth.iniciarSesion("ANA.TORRES", "clave1234").puedeEditar() && !auth.iniciarSesion("luis", "futbol2026").puedeEditar()
+        boolean login = auth.iniciarSesion("ANA.TORRES", "Clave#1234").puedeEditar() && !auth.iniciarSesion("luis", "Futbol#2026").puedeEditar()
                 && falla(alphasport.service.ReglaNegocioException.class, () -> auth.iniciarSesion("luis", "otra1234"))
                 && falla(alphasport.service.ReglaNegocioException.class, () -> auth.iniciarSesion("nadie", "otra1234"));
         // Un rol desconocido en la tabla no deja entrar (no se adivina un rol).
@@ -854,11 +857,18 @@ public final class PruebaPostgres {
                 && memoria.buscar("nadie").isEmpty() == repo.buscar("nadie").isEmpty()
                 && memoria.crear(new alphasport.model.CuentaUsuario("ana.torres", "x", "q@x.co", alphasport.model.Rol.AFICIONADO, "h"))
                 == RepositorioUsuarios.Alta.USUARIO_EN_USO;
-        if (!(fila && lectura && repetidos && unico && login && rolRaro && contratos)) {
+        // Una cuenta antigua con una clave que hoy no cumple las reglas sigue entrando (el login no mide la fuerza),
+        // y un correo valido de mas de 120 caracteres cabe en la columna (hasta 254).
+        repo.crear(new alphasport.model.CuentaUsuario("viejo", "Viejo", "viejo@x.co", alphasport.model.Rol.AFICIONADO, rapido.hash("abc123")));
+        String correoLargo = "a".repeat(60) + "@" + "b".repeat(60) + "." + "c".repeat(60) + ".com";
+        auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro("largo", "Largo", correoLargo, "Clave#1234", "Clave#1234", "AFICIONADO"));
+        boolean nuevasReglas = auth.iniciarSesion("viejo", "abc123").getRol() == alphasport.model.Rol.AFICIONADO
+                && repo.existeCorreo(correoLargo) && correoLargo.length() > 120;
+        if (!(fila && lectura && repetidos && unico && login && rolRaro && contratos && nuevasReglas)) {
             System.out.println("  fila=" + fila + " lectura=" + lectura + " repetidos=" + repetidos + " unico=" + unico + " login=" + login
-                    + " rolRaro=" + rolRaro + " contratos=" + contratos);
+                    + " rolRaro=" + rolRaro + " contratos=" + contratos + " nuevasReglas=" + nuevasReglas);
         }
-        return fila && lectura && repetidos && unico && login && rolRaro && contratos;
+        return fila && lectura && repetidos && unico && login && rolRaro && contratos && nuevasReglas;
     }
 
     /**
@@ -873,7 +883,7 @@ public final class PruebaPostgres {
         java.util.function.BiFunction<String, String, alphasport.model.Usuario> registrar = (usuario, tipo) -> {
             try {
                 return auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro(usuario, usuario.toUpperCase(),
-                        usuario + "@x.co", "clave1234", "clave1234", tipo));
+                        usuario + "@x.co", "Clave#1234", "Clave#1234", tipo));
             } catch (PersistenciaException e) {
                 throw new IllegalStateException(e);
             }
