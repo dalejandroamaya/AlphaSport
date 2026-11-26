@@ -66,6 +66,7 @@ public class SimulacionFormatos {
         probarClaves();
         probarRegistro();
         probarVariosCampeonatos();
+        probarPerfil();
         probarOrdenPorLinea();
         probarDocumentoUnico();
         probarCalificaciones();
@@ -899,6 +900,118 @@ public class SimulacionFormatos {
             correcto = false;
         }
         System.out.println("Registro de cuentas Organizador y Aficionado: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * Mi perfil: editar datos (el usuario no cambia y la cuenta sale de la sesion), cambiar la clave con la
+     * actual correcta e incorrecta, y el codigo de verificacion correcto, incorrecto, vencido y con los 5
+     * intentos agotados; cambiar el correo lo deja sin verificar.
+     */
+    private static void probarPerfil() {
+        boolean correcto;
+        try {
+            ClavesPbkdf2 rapido = new ClavesPbkdf2(1000);
+            alphasport.persistence.RepositorioUsuariosEnMemoria cuentas = new alphasport.persistence.RepositorioUsuariosEnMemoria();
+            AutenticacionService auth = new AutenticacionService(cuentas, rapido);
+            auth.registrar(new AutenticacionService.SolicitudRegistro("ana.torres", "Ana", "ana@x.co", "Clave#1234", "Clave#1234", "AFICIONADO"));
+            auth.registrar(new AutenticacionService.SolicitudRegistro("beto.org", "Beto", "beto@x.co", "Clave#1234", "Clave#1234", "ORGANIZADOR"));
+            java.util.concurrent.atomic.AtomicLong ahora = new java.util.concurrent.atomic.AtomicLong(1_000_000L);
+            java.time.Clock reloj = new java.time.Clock() {
+                @Override
+                public java.time.ZoneId getZone() {
+                    return java.time.ZoneOffset.UTC;
+                }
+
+                @Override
+                public java.time.Clock withZone(java.time.ZoneId z) {
+                    return this;
+                }
+
+                @Override
+                public java.time.Instant instant() {
+                    return java.time.Instant.ofEpochMilli(ahora.get());
+                }
+            };
+            List<String> enviados = new ArrayList<>();
+            PerfilService perfil = new PerfilService(cuentas, rapido, new EnviadorCorreo() {
+                @Override
+                public void enviarCodigo(String correo, String codigo) {
+                    enviados.add(codigo);
+                }
+
+                @Override
+                public boolean esDemostracion() {
+                    return true;
+                }
+            }, reloj);
+            // Datos: el nombre cambia; el correo nuevo pide la clave actual y queda sin verificar.
+            boolean datos = perfil.actualizarDatos("ana.torres", "  Ana   María ", "ana@x.co", null).equals("Datos guardados.")
+                    && cuentas.buscar("ana.torres").orElseThrow().nombre().equals("Ana María")
+                    && mensaje(() -> perfil.actualizarDatos("ana.torres", "Ana", "nueva@x.co", "")).equals("Para cambiar el correo escriba su contraseña actual.")
+                    && mensaje(() -> perfil.actualizarDatos("ana.torres", "Ana", "nueva@x.co", "Mala#1234")).equals("La contraseña actual no es correcta.")
+                    && mensaje(() -> perfil.actualizarDatos("ana.torres", "Ana", "beto@x.co", "Clave#1234")).equals("Ese correo ya está registrado en otra cuenta.")
+                    && mensaje(() -> perfil.actualizarDatos("ana.torres", "Ana", "a@.com", "Clave#1234")).equals("El dominio no puede empezar con punto.")
+                    && mensaje(() -> perfil.actualizarDatos("ana.torres", "A", "ana@x.co", null)).startsWith("Escriba su nombre")
+                    && Boolean.FALSE.equals(perfil.ver("ana.torres").get("correoVerificado"))
+                    && perfil.ver("ana.torres").get("usuario").equals("ana.torres");
+            // Clave: actual incorrecta, nueva debil, confirmacion distinta y bien; la nueva sirve para entrar y la vieja ya no.
+            boolean clave = mensaje(() -> perfil.cambiarClave("ana.torres", "Mala#1234", "Nueva#5678", "Nueva#5678")).equals("La contraseña actual no es correcta.")
+                    && mensaje(() -> perfil.cambiarClave("ana.torres", "Clave#1234", "nueva5678", "nueva5678")).equals("Falta: una mayúscula y un carácter especial.")
+                    && mensaje(() -> perfil.cambiarClave("ana.torres", "Clave#1234", "Nueva#5678", "Nueva#5679")).equals("Las contraseñas no coinciden.")
+                    && mensaje(() -> perfil.cambiarClave("ana.torres", "Clave#1234", "Nueva#5678", "Nueva#5678")).isEmpty()
+                    && auth.iniciarSesion("ana.torres", "Nueva#5678") != null
+                    && mensaje(() -> auth.iniciarSesion("ana.torres", "Clave#1234")).equals("Usuario o contraseña incorrectos.");
+            // Codigo: sin pedir, incorrecto (cuenta intentos) y correcto; se guarda solo su hash.
+            boolean codigo = mensaje(() -> perfil.verificarCodigo("ana.torres", "123456")).equals("Primero pida un código.")
+                    && perfil.enviarCodigo("ana.torres").startsWith("Modo demostración") && enviados.size() == 1
+                    && !cuentas.verificacion("ana.torres").codigoHash().contains(enviados.get(0));
+            String bueno = enviados.get(0), malo = bueno.equals("000000") ? "111111" : "000000";
+            codigo &= mensaje(() -> perfil.verificarCodigo("ana.torres", malo)).equals("Código incorrecto. Le quedan 4 intentos.")
+                    && mensaje(() -> perfil.verificarCodigo("ana.torres", bueno)).isEmpty()
+                    && Boolean.TRUE.equals(perfil.ver("ana.torres").get("correoVerificado"))
+                    && mensaje(() -> perfil.enviarCodigo("ana.torres")).equals("Su correo ya está verificado.");
+            // Vencido: pasan 15 minutos y un segundo.
+            perfil.enviarCodigo("beto.org");
+            String deBeto = enviados.get(enviados.size() - 1);
+            ahora.addAndGet(PerfilService.VIGENCIA_CODIGO.toMillis() + 1000);
+            boolean vencido = mensaje(() -> perfil.verificarCodigo("beto.org", deBeto)).equals("El código venció. Pida uno nuevo.")
+                    && mensaje(() -> perfil.verificarCodigo("beto.org", deBeto)).equals("Primero pida un código.");
+            // Intentos agotados: 5 errores y despues ni el codigo correcto sirve.
+            perfil.enviarCodigo("beto.org");
+            String otro = enviados.get(enviados.size() - 1), mal = otro.equals("000000") ? "111111" : "000000";
+            for (int i = 0; i < 4; i++) {
+                mensaje(() -> perfil.verificarCodigo("beto.org", mal));
+            }
+            boolean agotado = mensaje(() -> perfil.verificarCodigo("beto.org", mal)).equals("Código incorrecto. Agotó los 5 intentos: pida un código nuevo.")
+                    && mensaje(() -> perfil.verificarCodigo("beto.org", otro)).equals("Primero pida un código.")
+                    && Boolean.FALSE.equals(perfil.ver("beto.org").get("correoVerificado"));
+            // Cambiar el correo vuelve a «sin verificar».
+            boolean vuelve = perfil.actualizarDatos("ana.torres", "Ana", "ana.nueva@x.co", "Nueva#5678").contains("sin verificar")
+                    && Boolean.FALSE.equals(perfil.ver("ana.torres").get("correoVerificado"));
+            // Por la ruta: la cuenta es la de la sesion aunque el cuerpo diga otro usuario.
+            CampeonatoService servicio = new CampeonatoService(new alphasport.persistence.ArchivoRepositorioCampeonato(
+                    java.nio.file.Files.createTempDirectory("alphasport-perfil")), new alphasport.persistence.ArchivoRepositorioHistorial(
+                    java.nio.file.Files.createTempDirectory("alphasport-perfil")));
+            alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, auth);
+            boolean sinSesion = "LOGIN".equals(codigoDe(() -> api.consultar("perfil")));
+            api.ejecutar("login", java.util.Map.of("usuario", "beto.org", "clave", "Clave#1234"));
+            api.ejecutar("perfil/datos", java.util.Map.of("usuario", "ana.torres", "nombre", "Beto Ruiz", "correo", "beto@x.co"));
+            boolean ruta = sinSesion && cuentas.buscar("beto.org").orElseThrow().nombre().equals("Beto Ruiz")
+                    && cuentas.buscar("ana.torres").orElseThrow().nombre().equals("Ana")
+                    && ((java.util.Map<?, ?>) api.consultar("perfil").get("perfil")).get("usuario").equals("beto.org");
+            correcto = datos && clave && codigo && vencido && agotado && vuelve && ruta;
+            if (!correcto) {
+                System.out.println("  datos=" + datos + " clave=" + clave + " codigo=" + codigo + " vencido=" + vencido + " agotado=" + agotado
+                        + " vuelve=" + vuelve + " ruta=" + ruta);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Mi perfil: datos, contraseña y verificación del correo: " + (correcto ? "correcto" : "MAL"));
         if (!correcto) {
             fallos++;
         }

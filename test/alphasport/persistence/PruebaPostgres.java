@@ -787,7 +787,10 @@ public final class PruebaPostgres {
                 && contar(db, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'imagenes'") == 1
                 // 008: correos de hasta 254 caracteres
                 && contar(db, "SELECT character_maximum_length FROM information_schema.columns WHERE table_schema = current_schema()"
-                        + " AND table_name = 'usuarios' AND column_name = 'email'") == 254;
+                        + " AND table_name = 'usuarios' AND column_name = 'email'") == 254
+                // 009: verificar el correo
+                && contar(db, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'usuarios'"
+                        + " AND column_name IN ('correo_verificado', 'codigo_verificacion', 'codigo_vence', 'codigo_intentos')") == 4;
         boolean igual = cuentas && foto(servicio(db)).equals(antes) && contar(db, "SELECT COUNT(*) FROM partidos WHERE walkover") == 2; // el campeonato y su copia
         // Una persona por jugador, compartida por el campeonato en curso y su copia del historial.
         int jugadores = contar(db, "SELECT COUNT(*) FROM jugadores j JOIN torneos t ON t.id = j.torneo_id WHERE t.situacion = 'ACTUAL'");
@@ -864,9 +867,33 @@ public final class PruebaPostgres {
         auth.registrar(new alphasport.service.AutenticacionService.SolicitudRegistro("largo", "Largo", correoLargo, "Clave#1234", "Clave#1234", "AFICIONADO"));
         boolean nuevasReglas = auth.iniciarSesion("viejo", "abc123").getRol() == alphasport.model.Rol.AFICIONADO
                 && repo.existeCorreo(correoLargo) && correoLargo.length() > 120;
+        // Mi perfil en la tabla: datos, clave y codigo de verificacion con SELECT / UPDATE (la cuenta «largo»).
+        List<String> enviados = new ArrayList<>();
+        alphasport.service.PerfilService perfil = new alphasport.service.PerfilService(repo, rapido, (correo, codigo) -> enviados.add(codigo),
+                java.time.Clock.systemUTC());
+        perfil.actualizarDatos("largo", "Largo Nuevo", "largo@x.co", "Clave#1234");
+        boolean perfilDatos = contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'largo' AND nombre = 'Largo Nuevo' AND email = 'largo@x.co'"
+                + " AND correo_verificado = FALSE") == 1
+                && falla(alphasport.service.ReglaNegocioException.class, () -> perfil.actualizarDatos("largo", "Largo", "viejo@x.co", "Clave#1234"));
+        perfil.cambiarClave("largo", "Clave#1234", "Otra#9876", "Otra#9876");
+        perfil.enviarCodigo("largo");
+        RepositorioUsuarios.Verificacion pendiente = repo.verificacion("largo");
+        boolean perfilCodigo = auth.iniciarSesion("largo", "Otra#9876") != null && enviados.size() == 1
+                && pendiente.codigoHash() != null && !pendiente.codigoHash().contains(enviados.get(0)) && pendiente.intentos() == 0
+                && pendiente.venceEn() > System.currentTimeMillis() + 14 * 60_000L && pendiente.venceEn() <= System.currentTimeMillis() + 15 * 60_000L
+                && falla(alphasport.service.ReglaNegocioException.class, () -> perfil.verificarCodigo("largo", enviados.get(0).equals("000000") ? "111111" : "000000"))
+                && repo.verificacion("largo").intentos() == 1;
+        perfil.verificarCodigo("largo", enviados.get(0));
+        perfilCodigo &= repo.verificacion("largo").correoVerificado() && repo.verificacion("largo").codigoHash() == null
+                && contar(db, "SELECT COUNT(*) FROM usuarios WHERE username = 'largo' AND correo_verificado AND codigo_verificacion IS NULL") == 1;
+        // Otro correo: vuelve a «sin verificar».
+        perfil.actualizarDatos("largo", "Largo Nuevo", "largo2@x.co", "Otra#9876");
+        perfilCodigo &= !repo.verificacion("largo").correoVerificado();
+        nuevasReglas &= perfilDatos && perfilCodigo;
         if (!(fila && lectura && repetidos && unico && login && rolRaro && contratos && nuevasReglas)) {
             System.out.println("  fila=" + fila + " lectura=" + lectura + " repetidos=" + repetidos + " unico=" + unico + " login=" + login
-                    + " rolRaro=" + rolRaro + " contratos=" + contratos + " nuevasReglas=" + nuevasReglas);
+                    + " rolRaro=" + rolRaro + " contratos=" + contratos + " nuevasReglas=" + nuevasReglas + " perfilDatos=" + perfilDatos
+                    + " perfilCodigo=" + perfilCodigo);
         }
         return fila && lectura && repetidos && unico && login && rolRaro && contratos && nuevasReglas;
     }

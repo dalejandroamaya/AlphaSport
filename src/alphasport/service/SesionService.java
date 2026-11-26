@@ -49,17 +49,17 @@ public class SesionService {
         return abrir(autenticacion.iniciarSesion(nombre, clave));
     }
 
+    /** «Mi perfil» de las cuentas de este servicio. */
+    public PerfilService perfil() {
+        return autenticacion.perfil();
+    }
+
     /**
      * Crea la cuenta y abre su sesion: tras registrarse se entra directo.
      *
      * @return el token de la sesion
      * @throws ReglaNegocioException si algun dato no sirve o el usuario o el correo ya estan en uso.
      */
-    /** «Mi perfil» de las cuentas de este servicio. */
-    public PerfilService perfil() {
-        return autenticacion.perfil();
-    }
-
     public String registrar(AutenticacionService.SolicitudRegistro datos) throws alphasport.persistence.PersistenciaException {
         return abrir(autenticacion.registrar(datos));
     }
