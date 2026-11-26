@@ -26,6 +26,53 @@ public final class ReglasPlantilla {
         return documento == null ? "" : documento.trim().replaceAll("\\s+", " ");
     }
 
+    /** Jugadores que necesita cada equipo para iniciar el campeonato: los del XI titular. */
+    public static final int MINIMO_JUGADORES = 11;
+
+    /**
+     * Problema del documento, o null si sirve: vacío (la persona no lo tiene) o solo números, de 5 a 12 dígitos.
+     * Los espacios y puntos que se escriban para separar («1.234.567») no cuentan.
+     */
+    public static String problemaDocumento(String documento) {
+        String d = documento == null ? "" : documento.replaceAll("[\\s.]", "");
+        if (d.isEmpty() || d.matches("\\d{5,12}")) {
+            return null;
+        }
+        return d.matches(".*\\D.*") ? "debe tener solo números, sin letras ni signos" : "debe tener de 5 a 12 dígitos";
+    }
+
+    /** Documento como se guarda cuando es válido: solo los dígitos. */
+    public static String soloDigitos(String documento) {
+        return documento == null ? "" : documento.replaceAll("[\\s.]", "");
+    }
+
+    /** Revisa que los documentos del DT y de cada jugador sean números (los repetidos los revisa validarDocumentos). */
+    public static void validarFormatoDocumentos(alphasport.model.DirectorTecnico dt, List<Jugador> plantilla) {
+        if (dt != null) {
+            String p = problemaDocumento(dt.getDocumento());
+            if (p != null) {
+                throw new ReglaNegocioException("El documento del director técnico " + p + ".");
+            }
+        }
+        for (Jugador j : plantilla) {
+            String p = problemaDocumento(j.getDocumento());
+            if (p != null) {
+                throw new ReglaNegocioException("El documento de " + describir(j) + " " + p + ".");
+            }
+        }
+    }
+
+    /** Para iniciar: cada equipo con al menos {@link #MINIMO_JUGADORES} jugadores (si no, no puede armar su XI). */
+    public static void validarParaIniciar(Campeonato c) {
+        for (Equipo e : c.getEquiposActivos()) {
+            int n = e.getJugadores().size();
+            if (n < MINIMO_JUGADORES) {
+                throw new ReglaNegocioException("«" + e.getNombreEquipo() + "» tiene " + (n == 0 ? "0 jugadores" : n == 1 ? "1 jugador" : n + " jugadores")
+                        + ". Cada equipo necesita al menos " + MINIMO_JUGADORES + " para iniciar el campeonato (su XI titular). Complete la plantilla en «Equipos».");
+            }
+        }
+    }
+
     /**
      * Documento para comparar: sin ningun espacio y en mayusculas, asi «12 345», «12345» y « 12345 » son el mismo.
      * Vacio si el jugador no tiene documento (varios jugadores pueden no tenerlo).

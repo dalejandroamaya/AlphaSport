@@ -125,14 +125,25 @@ Registrarse ─► RutasSesion «registro» ─► SesionService.registrar ─�
                                           RepositorioUsuarios.crear ─► PostgresRepositorioUsuarios (tabla usuarios)
 ```
 
-- **Registro** (`AutenticacionService.registrar`): usuario de 3 a 30 caracteres (letras sin tilde, números, `.`, `-`, `_`; empieza con letra o número), nombre de 2 a 80, correo con formato `algo@dominio.ext`, contraseña de 8 a 128 caracteres con letras y números, y su confirmación. Usuario y correo se guardan en minúsculas: son únicos sin importar mayúsculas. El tipo de cuenta solo puede ser `ORGANIZADOR` o `AFICIONADO`: cualquier otro valor enviado por el cliente se rechaza. Al crear la cuenta se abre su sesión.
+- **Registro** (`AutenticacionService.registrar`): usuario, nombre de 2 a 80 caracteres, correo, contraseña y su confirmación. Usuario y correo se guardan en minúsculas: son únicos sin importar mayúsculas. El tipo de cuenta solo puede ser `ORGANIZADOR` o `AFICIONADO`: cualquier otro valor enviado por el cliente se rechaza. Al crear la cuenta se abre su sesión.
+- **Una sola tabla de reglas** para las tres rutas (servicio Java, web sola con `cuentas.js` y las pantallas web y de escritorio) y para los dos tipos de cuenta: `AutenticacionService.Regla(texto, falta, cumple)` y su gemelo en `cuentas.js`, con los mismos textos. Cada regla que no se cumple se nombra; nunca hay un mensaje genérico. En el registro, usuario y contraseña muestran su lista en vivo (cumplida / pendiente), el correo y la confirmación dicen si sirven, y «Crear cuenta» se activa cuando todo cumple. En `develop` el Aficionado (y el Organizador) recibía «La contraseña debe tener letras y números.»; la prueba de `SimulacionFormatos` lo cubre con los dos tipos.
+- **Usuario** (`reglasUsuario` / `problemaUsuario`): de 4 a 20 caracteres; solo letras a-z sin tilde, números y `. _ -`; empieza con letra; no termina en `. _ -`; sin dos signos seguidos; no puede ser solo números; no puede ser un nombre reservado (`admin`, `administrador`, `root`, `organizador`, `aficionado`, `visitante`, `soporte`). La ayuda bajo el campo (`AYUDA_USUARIO`) dice exactamente eso.
+- **Correo** (`AutenticacionService.problemaCorreo` y `Cuentas.problemaCorreo` en `cuentas.js`, con los mismos textos): una sola `@` y como máximo 254 caracteres. Antes de la `@`, de 1 a 64 caracteres entre letras sin tilde, números y `. _ % + -`, sin punto al inicio, al final ni dos seguidos. Después de la `@`, partes separadas por punto: cada una de 1 a 63 letras, números o guion, sin guion al inicio ni al final y ninguna vacía (sin `..` ni punto al inicio o al final). La última parte (la extensión) tiene solo letras y al menos 2. Cada regla tiene su propio mensaje, por ejemplo «El dominio no puede tener puntos seguidos.», y la pantalla lo muestra al salir del campo. La columna `email` admite 254 caracteres (migración 008).
+- **Contraseña** (`problemaClave` y `reglasClave`, iguales en Java y en `cuentas.js`): se recorre carácter por carácter y debe cumplir 5 reglas: (1) entre 8 y 128 caracteres, (2) una mayúscula, (3) una minúscula, (4) un número y (5) un carácter especial (ni letra, ni número, ni espacio). Tampoco puede tener espacios ni caracteres de control, y la confirmación debe ser igual. El mensaje nombra todo lo que falta, por ejemplo «Falta: un número y un carácter especial.». En «Registrarse» (web y escritorio), la lista de las 5 reglas se marca mientras se escribe y «Crear cuenta» se activa solo cuando se cumplen todas. **El inicio de sesión no mide la fuerza:** solo compara el hash, así que las cuentas creadas con las reglas anteriores siguen entrando.
 - **Mensajes:** si el inicio de sesión falla, siempre «Usuario o contraseña incorrectos.», exista o no el usuario, y con el mismo trabajo (se compara contra un hash ficticio). En el registro sí se dice si el usuario o el correo ya están en uso.
 - **Claves:** solo se guarda el hash PBKDF2-SHA256 (`pbkdf2_sha256$iteraciones$sal$hash`). `CuentaUsuario` y `SolicitudRegistro` no muestran claves ni hash en `toString()`, y ninguna respuesta JSON las incluye.
 - **Persistencia:** `PostgresRepositorioUsuarios` usa SQL básico con `PreparedStatement`: `SELECT` para buscar o saber si un usuario o correo existe, y luego `INSERT`, todo en una transacción. Si dos personas registran el mismo usuario al mismo tiempo, la llave `UNIQUE` rechaza la segunda. `RepositorioUsuariosEnMemoria` queda para las pruebas (con las cuentas de prueba `admin` / `123` y `visitante` / `321`).
 - **Web sola:** `cuentas.js` tiene las mismas reglas y hace el hash con WebCrypto (PBKDF2-SHA256, 100 000 iteraciones, mismo formato que Java). Las cuentas se guardan en el navegador (`Almacen.cuentas`) y solo sirven ahí.
 - **La regla real está en el servicio**: cada ruta de los módulos `Rutas*` declara el `Permiso` que exige y `ApiControlador` lo revisa antes de ejecutarla; cada `Rol` es un conjunto de permisos. Solo `registro`, `login` y `logout` son públicas. Cada navegador tiene su sesión (`SesionService`, cookie `HttpOnly` y `SameSite`); el respaldo y la exportación también pasan por el controlador.
 - Las interfaces solo **ocultan**: escritorio con `Aplicacion.puedeEditar()`, `soloAdmin(...)` y `puedeVer(vista)`; web con el atributo `data-solo-admin` y `puedeVer()` en `app.js`.
-- **Fuera de alcance:** recuperar contraseña, verificar correo y cambiar de rol.
+- **Respaldo** («Descargar respaldo» y «Abrir respaldo…»): solo el Organizador **dueño** del campeonato. `ApiControlador.respaldo` exige `GESTIONAR_CAMPEONATO` y pasa por `GestorCampeonatos.paraGestionar`; la web sola usa `exigirDueno`. Un Aficionado u otro Organizador que llame `/api/respaldo` directamente recibe `PERMISO`, y el botón se oculta al Aficionado en web y escritorio. El archivo es el campeonato (equipos, partidos y votos anónimos por dispositivo): no lleva cuentas, correos ni contraseñas, y el de la web sola tampoco el usuario dueño. «Exportar historial» sigue para quien ve el campeonato: es el texto de resultados que ya muestra la pantalla.
+- **Mi perfil** (`PerfilService`, rutas `perfil`, `perfil/datos`, `perfil/clave`, `perfil/codigo` y `perfil/verificar` en `RutasPerfil`): para los dos tipos de cuenta. La cuenta es **siempre la de la sesión**; un `usuario` en el cuerpo se ignora.
+  - Datos: nombre y correo con las mismas reglas del registro; el usuario no cambia. Cambiar el correo pide la contraseña actual y deja el correo sin verificar.
+  - Contraseña: pide la actual, y la nueva cumple las 5 reglas y coincide con la confirmación.
+  - Verificar correo: código de 6 dígitos (se guarda su hash, nunca el código) que vence en 15 minutos, con máximo 5 intentos; al agotarlos o vencer hay que pedir otro. El envío va por la interfaz `EnviadorCorreo`. La única implementación es `EnviadorCorreoDemostracion` (**modo demostración**, sin librería de correo): escribe el código en la consola del servidor y el escritorio lo muestra en una ventana. La web sola lo escribe en la consola del navegador. La pantalla dice «Modo demostración» y muestra la insignia «Correo verificado / sin verificar».
+  - Persistencia: `RepositorioUsuarios` suma `actualizarDatos`, `cambiarClave`, `guardarCodigo`, `verificacion` y `marcarVerificado`, en memoria y en PostgreSQL (solo `SELECT` / `UPDATE` con `PreparedStatement`). Las columnas vienen de la migración 009.
+  - Web sola: `cuentas.js` hace lo mismo (`actualizarDatos`, `cambiarClave`, `crearCodigo`, `verificarCodigo`) sobre las cuentas del navegador.
+- **Fuera de alcance:** recuperar contraseña, enviar correos reales (solo modo demostración) y cambiar de rol.
 
 ## Varios campeonatos en curso
 
@@ -174,11 +185,24 @@ Si no queda ninguno, `estado` responde `hay: false` y `elegir: true` (si hay cam
 | Cambiar de campeonato | Con dos o más, un selector en la cabecera, junto al nombre del elegido (que siempre se ve) |
 | Menú Archivo | **Nuevo campeonato** crea uno más (no reemplaza al actual); se agrega **Terminar campeonato**; «Cancelar» pasa a **Eliminar campeonato** |
 
-Sin campeonato elegido, el menú lateral solo muestra Mis campeonatos, Partidos y Noticias.
+Sin campeonato elegido, el menú lateral solo muestra la lista de campeonatos y Noticias.
+
+**Pantalla «Campeonatos activos» (Aficionado)**, con las mismas funciones (`renderCampeonatos`, `vistaCampeonatos`) según el rol. No usa rutas nuevas: `campeonatos` ya devuelve al Aficionado todos los que están en curso y `campeonato/elegir` (permiso VER) los deja elegidos en su sesión.
+
+| Qué | Cómo |
+|---|---|
+| Tarjetas | Todos los campeonatos en curso: nombre, organizador, formato, estado, en qué va y número de equipos. El que ve va resaltado («Viendo»). Sin iniciar dice «Todavía no empieza» (la indicación de registrar equipos es para el Organizador) |
+| Entrar | **Entrar** (`campeonato/elegir`) abre sus Partidos; ve en solo lectura las vistas que ya existían (partidos, votaciones, posiciones, llaves, estadísticas y noticias) de ESE campeonato |
+| Cambiar | Con dos o más, el mismo selector de la cabecera; y la sección «Campeonatos» del menú |
+| Al entrar | Sin campeonato recordado, empieza en esta lista para elegir, aunque haya uno solo. La sesión del servidor no sobrevive a salir y entrar: el último seguido se guarda en el equipo (web: `localStorage` `alphasport.seguidos`, usuario → código; escritorio: `CampeonatoSeguido`, en `java.util.prefs`) y, si sigue en curso, se vuelve a elegir y se abren sus Partidos |
+| Si termina | Si el que sigue termina o se elimina (lo detecta la revisión de cada 5 s), se olvida, se avisa y se vuelve a la lista; si quedaba uno solo, el servidor lo elige y se avisa «Ahora ve …» |
+| Vacío | Sin campeonatos en curso: «Todavía no hay campeonatos en curso. Cuando un organizador cree uno, aparecerá aquí.» |
+
+En la web sola funciona igual (`servicioLocal.js` ya respondía `campeonatos` y `campeonato/elegir` al Aficionado).
 
 **Web sola (varios campeonatos en el navegador).** `Almacen.campeonatos` guarda cada campeonato por su código (`alphasport.campeonatos`), con `propietario` = usuario local, y `Almacen.elegido` recuerda el último que eligió cada usuario. La primera vez, el campeonato del formato anterior (`alphasport.actual`) y sus noticias pasan al nuevo formato **sin dueño**, para que un Organizador lo tome. `servicioLocal.js` responde las mismas rutas que Java y aplica las mismas reglas (solo el dueño cambia un campeonato; las noticias son de su campeonato). Las cuentas y los campeonatos son de ese navegador; el límite de espacio del navegador es para todos juntos.
 
-**Fuera de esta fase:** la pantalla «Campeonatos» para que el Aficionado elija cuál seguir (fase 3). Coorganizadores, traspasar un campeonato, buscar o paginar y ver campeonatos sin sesión quedan fuera.
+**Fuera de alcance:** coorganizadores, traspasar un campeonato, buscar o paginar y ver campeonatos sin sesión.
 
 ## Detalle de partido
 

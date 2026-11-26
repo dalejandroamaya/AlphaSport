@@ -62,7 +62,7 @@ public class ApiControlador {
             this.noticias = noticias;
             this.fotos = fotos;
             this.plantilla = crearEspacio(new CampeonatoService(new RepositorioCampeonatosEnMemoria().nuevo(), HISTORIAL_VACIO));
-            for (ModuloRutas modulo : List.of(new RutasSesion(sesion), new RutasCampeonatos(gestor, plantilla.presentador()), new RutasNoticias())) {
+            for (ModuloRutas modulo : List.of(new RutasSesion(sesion), new RutasPerfil(sesion), new RutasCampeonatos(gestor, plantilla.presentador()), new RutasNoticias())) {
                 modulo.registrar(consultas, acciones);
             }
         }
@@ -428,10 +428,20 @@ public class ApiControlador {
     public record Descarga(byte[] datos, String tipo, String nombre) {
     }
 
-    /** Respaldo del campeonato elegido (.dat). Lo puede descargar cualquiera que lo vea. */
+    /**
+     * Respaldo del campeonato elegido (.dat): solo el Organizador dueño (GestorCampeonatos.paraGestionar). Un
+     * Aficionado u otro Organizador recibe PERMISO aunque llame la ruta directamente. El archivo es el campeonato
+     * (equipos, partidos y votos anónimos por dispositivo): no lleva cuentas, correos ni contraseñas.
+     */
     public Descarga respaldo() throws Exception {
-        exigir(Permiso.VER);
-        CampeonatoService servicio = espacio(Permiso.VER, true).servicio();
+        if (getUsuarioActual() != null && !getUsuarioActual().puede(Permiso.GESTIONAR_CAMPEONATO)) {
+            throw new ReglaNegocioException("PERMISO", "Solo el organizador del campeonato puede guardar o restaurar su copia de seguridad.");
+        }
+        exigir(Permiso.GESTIONAR_CAMPEONATO);
+        CampeonatoService servicio = espacio(Permiso.GESTIONAR_CAMPEONATO, true).servicio();
+        if (servicio.getCampeonato().getEquipos().isEmpty()) {
+            throw new ReglaNegocioException("El campeonato todavía no tiene equipos: no hay nada que guardar en la copia de seguridad.");
+        }
         return new Descarga(servicio.historial().respaldo(), "application/octet-stream", nombreArchivo(servicio) + ".dat");
     }
 
@@ -439,6 +449,9 @@ public class ApiControlador {
     public Descarga historialEnTexto() {
         exigir(Permiso.VER);
         CampeonatoService servicio = espacio(Permiso.VER, true).servicio();
+        if (servicio.getCampeonato().getPartidos().stream().noneMatch(alphasport.model.Partido::isJugado)) {
+            throw new ReglaNegocioException("Todavía no se ha jugado ningún partido: el historial está vacío y no hay nada que exportar.");
+        }
         return new Descarga(servicio.historial().textoHistorial().getBytes(java.nio.charset.StandardCharsets.UTF_8), "text/plain; charset=utf-8",
                 nombreArchivo(servicio) + ".txt");
     }

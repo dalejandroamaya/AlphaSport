@@ -188,6 +188,7 @@ function crearServicioLocal() {
         formatoDescripcion: FORMATOS[c.formato].descripcion, iniciado: m.iniciado(), terminado: m.terminado(),
         estado: m.describirEstado(), campeon: c.campeon, campeonNombre: m.terminado() ? m.nombre(c.campeon) : null,
         reglas: resumenReglas(c), criterios: c.config.criterios.slice(), equiposActivos: m.activos().length,
+        fechaMinima: Cronograma.minimo(c), hoy: Cronograma.hoy(),
         puedeSiguiente: c.formato === 'TORNEO_CORTO' || c.formato === 'LIGA',
         textoSiguiente: c.formato === 'LIGA' ? 'Nueva temporada' + (tieneDivisiones(c) ? ' (ascensos y descensos)…' : '…') : 'Siguiente torneo corto (Clausura)…',
         // Sin llaves (formato Liga) la interfaz oculta la sección «Llaves».
@@ -304,6 +305,15 @@ function crearServicioLocal() {
       if (usados.has(j.dorsal)) throw new ErrorRegla(`El dorsal ${j.dorsal} ya está en uso.`);
       usados.add(j.dorsal);
     }
+    // Solo números, de 5 a 12 dígitos (como ReglasPlantilla.validarFormatoDocumentos en Java).
+    const malDt = d.dt && Plantilla.problemaDocumento(d.dt.documento);
+    if (malDt) throw new ErrorRegla(`El documento del director técnico ${malDt}.`);
+    for (const j of d.jugadores) {
+      const mal = Plantilla.problemaDocumento(j.documento);
+      if (mal) throw new ErrorRegla(`El documento de ${describir(j)} ${mal}.`);
+      j.documento = Plantilla.soloDigitos(j.documento);
+    }
+    if (d.dt) d.dt.documento = Plantilla.soloDigitos(d.dt.documento);
     validarDocumentos(existente, d.jugadores); // un documento, un jugador (como ReglasPlantilla en Java)
     let equipo = existente;
     if (!equipo) { exigirNoIniciado(); const division = divisionConMenosEquipos(c); equipo = m.agregarEquipo(nombre); equipo.division = division; }
@@ -576,6 +586,7 @@ function crearServicioLocal() {
       datos.formacionVisitante = leerFormacion(d.formacionVisitante);
     }
     datos.fecha = d.fecha || 'Por definir';
+    Cronograma.validarFecha(c, Object.assign({}, datos, { estado: d.estado }), ErrorRegla);
     datos.hora = d.hora || '';
     datos.sede = String(d.sede || '').trim();
     datos.obs = String(d.obs || '').trim();
@@ -626,6 +637,53 @@ function crearServicioLocal() {
 
   function exigirSesion() {
     if (!usuario) throw new ErrorRegla('Inicie sesión para continuar.', 'LOGIN');
+  }
+
+  /* ---------------------------------------------------------------- Mi perfil (cuentas de este navegador) */
+
+  /** La cuenta de la sesión: nunca la que diga el cuerpo de la petición. */
+  function cuentaDeSesion() {
+    exigirSesion();
+    const cuenta = Almacen.cuentas.listar().find(x => x.usuario === usuario.usuario);
+    if (!cuenta) throw new ErrorRegla('Inicie sesión para continuar.', 'LOGIN');
+    return cuenta;
+  }
+
+  function guardarCuenta(nueva) {
+    Almacen.cuentas.guardar(Almacen.cuentas.listar().map(x => (x.usuario === nueva.usuario ? nueva : x)));
+  }
+
+  /** perfil/datos, perfil/clave, perfil/codigo y perfil/verificar con las reglas de cuentas.js (sin correo real). */
+  async function accionPerfil(ruta, d) {
+    try {
+      const cuenta = cuentaDeSesion(), ahora = Date.now();
+      let mensaje;
+      if (ruta === 'perfil/datos') {
+        const enUso = correo => Almacen.cuentas.listar().some(x => x.usuario !== cuenta.usuario && x.correo === correo);
+        const r = await Cuentas.actualizarDatos(cuenta, d, enUso).catch(e => { throw new ErrorRegla(e.message); });
+        guardarCuenta(r.cuenta);
+        mensaje = r.mensaje;
+      } else if (ruta === 'perfil/clave') {
+        guardarCuenta(await Cuentas.cambiarClave(cuenta, d).catch(e => { throw new ErrorRegla(e.message); }));
+        mensaje = 'Contraseña cambiada.';
+      } else if (ruta === 'perfil/codigo') {
+        const r = await Cuentas.crearCodigo(cuenta, ahora).catch(e => { throw new ErrorRegla(e.message); });
+        guardarCuenta(r.cuenta);
+        // MODO DEMOSTRACIÓN: no hay servidor ni correo; el código se muestra en la consola del navegador.
+        console.info(`[MODO DEMOSTRACIÓN] Código para verificar ${r.cuenta.correo}: ${r.codigo} (vence en 15 minutos)`);
+        mensaje = 'Modo demostración: no se envió un correo real. El código está en la consola del navegador (F12). Vence en 15 minutos.';
+      } else if (ruta === 'perfil/verificar') {
+        const r = await Cuentas.verificarCodigo(cuenta, d.codigo, ahora);
+        guardarCuenta(r.cuenta);
+        if (r.error) throw new ErrorRegla(r.error);
+        mensaje = '¡Correo verificado!';
+      } else {
+        return { ok: false, codigo: 'ERROR', error: 'Acción desconocida: ' + ruta };
+      }
+      return { ok: true, mensaje, perfil: Cuentas.verPerfil(cuentaDeSesion(), Date.now()) };
+    } catch (e) {
+      return fallo(e);
+    }
   }
 
   function exigirAdministrador() {
@@ -731,6 +789,7 @@ function crearServicioLocal() {
       if (!nombre) throw new ErrorRegla('Escriba el nombre del campeonato.');
       if (!d.config.criterios.length) throw new ErrorRegla('Escoja al menos un criterio de desempate.');
       const nuevo = nuevoCampeonato(nombre, d.formato, Object.assign(configuracionPorDefecto(), d.config));
+      nuevo.fechaCreacion = Cronograma.hoy(); // ningún partido puede ir antes de esta fecha
       nuevo.movimientos = [];
       nuevo.propietario = usuario.usuario;
       if (d.mismosEquipos && c && c.propietario === usuario.usuario) { // los equipos del elegido, si es suyo
@@ -806,7 +865,7 @@ function crearServicioLocal() {
       archivarActual();
       const anterior = c.codigo;
       const copia = JSON.parse(JSON.stringify(c));
-      Object.assign(copia, { nombre, partidos: [], fases: [], paso: 0, campeon: -1, semilla: Math.floor(Math.random() * 2147483647), codigo: nuevoCodigo(), fechaArchivo: null });
+      Object.assign(copia, { nombre, partidos: [], fases: [], paso: 0, campeon: -1, semilla: Math.floor(Math.random() * 2147483647), codigo: nuevoCodigo(), fechaArchivo: null, fechaCreacion: Cronograma.hoy() });
       copia.equipos = copia.equipos.filter(e => !e.retirado);
       // La copia conserva los ids de los equipos; queda constancia de por qué cada uno está en su división.
       movimientos.forEach(mv => { const e = copia.equipos.find(x => x.id === mv.idEquipo); if (e) e.division = mv.divisionNueva; });
@@ -841,6 +900,11 @@ function crearServicioLocal() {
     },
     avanzar: () => {
       exigir();
+      if (!m.iniciado()) {
+        const corto = c.equipos.filter(e => !e.retirado).find(e => e.jugadores.length < Plantilla.MINIMO_JUGADORES);
+        if (corto) throw new ErrorRegla(`«${corto.nombre}» tiene ${corto.jugadores.length === 1 ? '1 jugador' : corto.jugadores.length + ' jugadores'}. `
+          + `Cada equipo necesita al menos ${Plantilla.MINIMO_JUGADORES} para iniciar el campeonato (su XI titular). Complete la plantilla en «Equipos».`);
+      }
       let mensaje;
       try { mensaje = m.avanzar(); } catch (e) { throw new ErrorRegla(e.message); }
       if (m.terminado()) archivarActual();
@@ -880,6 +944,11 @@ function crearServicioLocal() {
       return m.retirarEquipo(e);
     },
     partido: d => { exigir(); guardarPartido(d); },
+    'partidos/programar': d => {
+      exigir();
+      if (!m.iniciado()) throw new ErrorRegla('Primero inicie el campeonato: así se genera el fixture que se va a programar.');
+      return Cronograma.programar(c, d, ErrorRegla);
+    },
     criterios: d => {
       exigir();
       if (!d.criterios.length) throw new ErrorRegla('Debe haber al menos un criterio de desempate.');
@@ -893,10 +962,10 @@ function crearServicioLocal() {
       Almacen.historial.eliminar(d.codigo);
     },
     // Noticias del campeonato elegido (mismas rutas y mensajes que ApiControlador)
-    'noticia/proponer': d => { exigir(); noticias.proponer(d, c.codigo); return '¡Gracias! Su noticia quedó pendiente: se publicará cuando el administrador la apruebe.'; },
+    'noticia/proponer': d => { exigir(); noticias.proponer(d, c.codigo); return '¡Gracias! Su noticia quedó pendiente: cuando el organizador del campeonato la apruebe, la verán todas las personas que lo siguen.'; },
     'noticia/comentar': d => { exigir(); noticias.comentar(d.id, d.autor, d.texto, c.codigo); return 'Comentario publicado.'; },
-    'noticia/guardar': d => { noticias.publicar(d, c.codigo); return d.id == null ? 'Noticia publicada.' : 'Noticia guardada.'; },
-    'noticia/aprobar': d => { noticias.aprobar(d.id, c.codigo); return 'Noticia aprobada: ya aparece en el feed.'; },
+    'noticia/guardar': d => { noticias.publicar(d, c.codigo); return d.id == null ? 'Noticia publicada: ya la ven todas las personas que siguen este campeonato.' : 'Noticia guardada.'; },
+    'noticia/aprobar': d => { noticias.aprobar(d.id, c.codigo); return 'Noticia aprobada: ya la ven todas las personas que siguen este campeonato.'; },
     'noticia/eliminar': d => { noticias.eliminar(d.id, c.codigo); return d.rechazo ? 'Propuesta rechazada.' : 'Noticia eliminada.'; },
     'comentario/eliminar': d => { noticias.eliminarComentario(d.noticia, d.id, c.codigo); return 'Comentario eliminado.'; },
     // [REQ-07] Voto del público: solo los visitantes (el administrador ya influye en la nota del sistema).
@@ -1017,7 +1086,17 @@ function crearServicioLocal() {
         return fallo(e);
       }
     },
+    /** «Mi perfil» de la cuenta de la sesión (mismo JSON que GET /api/perfil). */
+    async perfil() {
+      try {
+        exigirSesion();
+        return { ok: true, perfil: Cuentas.verPerfil(cuentaDeSesion(), Date.now()) };
+      } catch (e) {
+        return fallo(e);
+      }
+    },
     async ejecutar(ruta, cuerpo = {}) {
+      if (ruta.startsWith('perfil/')) return accionPerfil(ruta, cuerpo);
       const comando = comandos[ruta];
       if (!comando) return { ok: false, codigo: 'ERROR', error: 'Acción desconocida: ' + ruta };
       try {
@@ -1050,8 +1129,9 @@ function crearServicioLocal() {
     },
     async respaldo() {
       exigirSesion();
-      exigir();
-      return { nombre: nombreArchivo(c.nombre) + '.json', contenido: new Blob([JSON.stringify(c, null, 2)], { type: 'application/json' }) };
+      exigirDueno(); // solo el Organizador dueño, como en Java (el respaldo no lleva cuentas ni claves)
+      // Sin el usuario dueño: al abrirlo, el campeonato queda de quien lo abre.
+      return { nombre: nombreArchivo(c.nombre) + '.json', contenido: new Blob([JSON.stringify(Object.assign({}, c, { propietario: undefined }), null, 2)], { type: 'application/json' }) };
     },
     async exportarHistorial() {
       exigirSesion();

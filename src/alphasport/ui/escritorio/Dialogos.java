@@ -206,8 +206,13 @@ class Dialogos {
     }
 
     boolean confirmar(String titulo, String texto, String textoSi) {
+        return confirmar(titulo, texto, textoSi, "Cancelar");
+    }
+
+    /** Pregunta con el texto de los dos botones; true si se eligió el principal. */
+    boolean confirmar(String titulo, String texto, String textoSi, String textoNo) {
         boolean[] respuesta = {false};
-        Button no = boton("Cancelar", "fantasma");
+        Button no = boton(textoNo, "fantasma");
         Button si = boton(textoSi, "primario");
         si.setDefaultButton(true);
         Stage v = ventana(titulo, cuerpo(titulo, etiqueta(texto, "msg-texto"), acciones(no, si)), 480);
@@ -635,9 +640,107 @@ class Dialogos {
                 mensaje("Ascensos y descensos", "Se creó el campeonato. Se aplicaron los ascensos y descensos de la temporada anterior.\n\n" + s(r, "mensaje"));
                 return;
             }
-            app.aviso(cambiar ? "Formato cambiado a «" + s(m(app.E, "campeonato"), "formatoNombre") + "». Se conservaron los equipos."
-                    : "Campeonato creado. Ahora registre los equipos.");
+            if (cambiar || (mismos.isVisible() && mismos.isSelected())) {
+                app.aviso(cambiar ? "Formato cambiado a «" + s(m(app.E, "campeonato"), "formatoNombre") + "». Se conservaron los equipos."
+                        : "Campeonato creado con los mismos equipos.");
+                return;
+            }
+            // Se pregunta qué sigue en vez de llevarlo directo a la gestión del campeonato.
+            if (confirmar("Campeonato creado", "«" + s(m(app.E, "campeonato"), "nombre") + "» quedó creado. ¿Quiere registrar los equipos ahora?",
+                    "Registrar equipos", "Más tarde")) {
+                equipo(null);
+            } else {
+                app.mostrarVista("campeonatos");
+            }
         });
+        v.showAndWait();
+    }
+
+    /**
+     * Cronograma automático: desde qué fecha, qué días y a qué horas se juega, y en qué canchas (vacío = el estadio
+     * del local). El servicio reparte los partidos pendientes (ver alphasport.service.Cronograma).
+     */
+    void programarFechas() {
+        Map<String, Object> c = m(app.E, "campeonato");
+        java.time.LocalDate hoy = java.time.LocalDate.now();
+        java.time.LocalDate minimo = s(c, "fechaMinima").isEmpty() ? hoy : java.time.LocalDate.parse(s(c, "fechaMinima"));
+        java.time.LocalDate desde = minimo.isAfter(hoy) ? minimo : hoy;
+        javafx.scene.control.DatePicker inicio = new javafx.scene.control.DatePicker(desde);
+        inicio.setDayCellFactory(dp -> new javafx.scene.control.DateCell() {
+            @Override
+            public void updateItem(java.time.LocalDate d, boolean vacio) {
+                super.updateItem(d, vacio);
+                setDisable(vacio || d.isBefore(desde)); // no se programa en el pasado
+            }
+        });
+        TextField horas = new TextField("15:00, 17:00");
+        TextField sedes = new TextField();
+        sedes.setPromptText("Cancha 1, Cancha 2");
+        String[] nombres = {"Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"};
+        List<CheckBox> dias = new ArrayList<>();
+        HBox filaDias = new HBox(12);
+        for (int i = 0; i < 7; i++) {
+            CheckBox d = new CheckBox(nombres[i]);
+            d.setSelected(i >= 5);
+            dias.add(d);
+            filaDias.getChildren().add(d);
+        }
+        CheckBox todos = new CheckBox("Reprogramar también los pendientes que ya tienen fecha");
+        Label err = error();
+        Button cancelar = boton("Cancelar", "fantasma");
+        Button programar = boton("Programar", "primario");
+        String titulo = "Programar fechas automáticamente";
+        Stage v = ventana(titulo, cuerpo(titulo,
+                etiqueta("Diga desde cuándo, qué días y a qué horas se juega: el programa reparte los partidos pendientes, una jornada por día "
+                        + "de juego y sin que un equipo juegue dos veces el mismo día. Después puede ajustar cualquiera en su «Previa».", "sutil"),
+                new HBox(12, campo("Desde", inicio), campo("Horas de juego (separadas por comas)", horas)),
+                grupo("Días de juego", filaDias),
+                campo("Canchas (opcional; vacío = el estadio del equipo local)", sedes), todos, err, acciones(cancelar, programar)), 620);
+        cancelar.setOnAction(e -> v.close());
+        programar.setOnAction(e -> {
+            List<Object> elegidos = new ArrayList<>();
+            for (int i = 0; i < 7; i++) {
+                if (dias.get(i).isSelected()) {
+                    elegidos.add(i + 1);
+                }
+            }
+            java.util.function.Function<String, List<Object>> separar = t -> java.util.Arrays.stream(t.split(","))
+                    .map(String::trim).filter(x -> !x.isEmpty()).map(x -> (Object) x).toList();
+            Map<String, Object> r = app.ejecutar("partidos/programar", mapa("inicio", inicio.getValue() == null ? "" : inicio.getValue().toString(),
+                    "dias", elegidos, "horas", separar.apply(horas.getText()), "sedes", separar.apply(sedes.getText()), "todos", todos.isSelected()));
+            if (!b(r, "ok")) {
+                mostrarError(err, s(r, "error"));
+                return;
+            }
+            v.close();
+            mensaje("Fechas programadas", s(r, "mensaje"));
+        });
+        v.showAndWait();
+    }
+
+    /** Pasos de la guía de uso (los mismos que en la web). */
+    private static final String[][] GUIA_ORGANIZADOR = new String[][]{{"Cree su campeonato", "En «Mis campeonatos», pulse «+ Nuevo campeonato». Escoja el formato (liga, copa, grupos…) y las reglas."}, {"Registre los equipos", "En «Equipos», pulse «+ Con plantilla». Cada equipo necesita al menos 11 jugadores, cada uno con su documento (solo números)."}, {"Inicie el campeonato", "Pulse «Iniciar campeonato»: el programa arma el fixture solo."}, {"Programe las fechas", "En «Gestionar partidos», pulse «Programar fechas»: diga desde cuándo, qué días, a qué horas y en qué canchas, y se reparten todos los partidos."}, {"Prepare cada partido (opcional)", "En la pestaña «Previa» puede ajustar fecha, hora y sede, y elegir la formación y el XI titular."}, {"Cargue los resultados", "En «Registrar resultados» toque el partido y escriba el marcador, los goles, las tarjetas y los cambios. Con «Carga rápida» escribe varios marcadores seguidos."}, {"Avance de ronda", "Cuando se jueguen todos los partidos de la fase, pulse «Cerrar ronda y avanzar». Al final, el programa corona al campeón."}, {"Noticias", "Publique noticias y apruebe las que proponen los aficionados. Las ven todas las personas que siguen su campeonato."}};
+    private static final String[][] GUIA_AFICIONADO = new String[][]{{"Elija un campeonato", "En «Campeonatos activos», pulse «Entrar» en el que quiere seguir. Puede cambiar cuando quiera."}, {"Su inicio", "En «Inicio» ve los partidos de hoy, los próximos, los últimos resultados y el líder."}, {"Partidos y posiciones", "Toque cualquier partido para ver la previa, el cara a cara, la racha y las alineaciones. En «Posiciones» está la tabla."}, {"Califique a los jugadores", "Cuando termina un partido, en «Votaciones» puede ponerle nota a cada jugador."}, {"Noticias", "Lea y comente las noticias del campeonato, o proponga una: el organizador la revisa antes de publicarla."}, {"Mi perfil", "Toque su nombre, debajo del logo, para cambiar su nombre, correo o contraseña."}};
+
+    /** Guía de uso del rol de la sesión (crítica 7: «no vi una guía que me enseñara a manejarlo»). */
+    void guia(boolean organizador) {
+        VBox pasos = new VBox(12);
+        String[][] lista = organizador ? GUIA_ORGANIZADOR : GUIA_AFICIONADO;
+        for (int i = 0; i < lista.length; i++) {
+            Label numero = etiqueta(String.valueOf(i + 1), "dorsal");
+            VBox texto = new VBox(2, etiqueta(lista[i][0], "h3"), etiqueta(lista[i][1], "sutil"));
+            HBox.setHgrow(texto, Priority.ALWAYS);
+            HBox fila = new HBox(12, numero, texto);
+            fila.setAlignment(Pos.TOP_LEFT);
+            pasos.getChildren().add(fila);
+        }
+        Button listo = boton("Entendido", "primario");
+        String titulo = "Cómo usar AlphaSport";
+        Stage v = ventana(titulo, cuerpo(titulo, etiqueta(organizador ? "Como organizador, estos son los pasos para llevar un campeonato de principio a fin:"
+                : "Como aficionado, esto es lo que puede hacer:", "sutil"), pasos,
+                etiqueta("Puede volver a abrir esta guía cuando quiera con el botón «?» del panel.", "sutil"), acciones(listo)), 620);
+        listo.setDefaultButton(true);
+        listo.setOnAction(e -> v.close());
         v.showAndWait();
     }
 
@@ -661,8 +764,16 @@ class Dialogos {
         ComboBox<String> posicion = comboPosiciones();
         Label errJugador = error();
         Label err = error();
+        Label errDt = error();
         VBox lista = new VBox(6);
         Runnable[] dibujar = new Runnable[1];
+        // Jugador de la lista que se está corrigiendo en el formulario de arriba (null = se agrega uno nuevo).
+        @SuppressWarnings("unchecked")
+        Map<String, Object>[] enEdicion = new Map[1];
+        Button agregar = boton("Agregar");
+        Button cancelarEdicion = boton("Cancelar", "fantasma");
+        cancelarEdicion.setVisible(false);
+        cancelarEdicion.setManaged(false);
 
         // ---- Escudo: se sube con su botón y, una vez puesto, se toca para cambiarlo o eliminarlo.
         String[] escudo = {s(equipo, "escudo")};       // nombre guardado, data URL recién elegida o "" (sin escudo)
@@ -729,9 +840,29 @@ class Dialogos {
                 datos.setMaxWidth(Double.MAX_VALUE);
                 Button quitar = boton("Quitar", "mini", "peligro");
                 quitar.setOnAction(e -> {
+                    if (enEdicion[0] == j) {
+                        cancelarEdicion.fire();
+                    }
                     jugadores.remove(j);
                     dibujar[0].run();
                     siguienteDorsal.run();
+                });
+                // Corregir un jugador sin quitarlo y volver a escribirlo (crítica: no había dónde editar).
+                Button editar = boton("Editar", "mini", "fantasma");
+                editar.setOnAction(e -> {
+                    enEdicion[0] = j;
+                    dorsal.getValueFactory().setValue(n(j, "dorsal"));
+                    jgNombre.setText(s(j, "nombre"));
+                    jgDocumento.setText(s(j, "documento"));
+                    posicion.setValue(s(j, "posicion"));
+                    fotoNueva[0] = s(j, "foto");
+                    dibujarFotoNueva.run();
+                    cancelarEdicion.setVisible(true);
+                    cancelarEdicion.setManaged(true);
+                    agregar.setText("Guardar cambios");
+                    mostrarError(errJugador, null);
+                    jgNombre.requestFocus();
+                    jgNombre.selectAll();
                 });
                 // La foto de cada jugador de la lista también se toca para subirla, cambiarla o eliminarla.
                 StackPane foto = Fotos.cedula(s(j, "foto"), 30);
@@ -741,23 +872,80 @@ class Dialogos {
                             mostrarError(errJugador, null);
                             dibujar[0].run();
                         }, texto -> mostrarError(errJugador, texto)));
-                HBox fila = new HBox(10, foto, etiqueta(String.valueOf(n(j, "dorsal")), "dorsal"), datos, quitar);
+                HBox fila = new HBox(10, foto, etiqueta(String.valueOf(n(j, "dorsal")), "dorsal"), datos, editar, quitar);
                 fila.setAlignment(Pos.CENTER_LEFT);
                 fila.getStyleClass().add("fila-lista");
                 lista.getChildren().add(fila);
             }
         };
-        Button agregar = boton("Agregar");
+        // Documento y dorsal se revisan mientras se escribe (críticas 14 y 15), con el mensaje junto al formulario.
+        java.util.function.Supplier<String> revisar = () -> {
+            int d = dorsal.getValue();
+            if (jugadores.stream().anyMatch(j -> j != enEdicion[0] && n(j, "dorsal") == d)) {
+                return "El dorsal " + d + " ya está en uso.";
+            }
+            String mal = alphasport.service.ReglasPlantilla.problemaDocumento(jgDocumento.getText());
+            if (mal != null) {
+                return "El documento " + mal + ".";
+            }
+            String doc = alphasport.service.ReglasPlantilla.soloDigitos(jgDocumento.getText());
+            if (!doc.isEmpty()) {
+                for (Map<String, Object> j : jugadores) {
+                    if (j != enEdicion[0] && doc.equals(alphasport.service.ReglasPlantilla.soloDigitos(s(j, "documento")))) {
+                        return "Ese documento ya es de #" + n(j, "dorsal") + " " + s(j, "nombre") + " en esta plantilla.";
+                    }
+                }
+                for (Map<String, Object> otro : l(app.E, "equipos")) {
+                    if (equipo != null && n(otro, "id") == n(equipo, "id")) {
+                        continue;
+                    }
+                    for (Map<String, Object> j : l(otro, "jugadores")) {
+                        if (doc.equals(alphasport.service.ReglasPlantilla.soloDigitos(s(j, "documento")))) {
+                            return "Ese documento ya es de #" + n(j, "dorsal") + " " + s(j, "nombre") + " (" + s(otro, "nombre") + ").";
+                        }
+                    }
+                }
+            }
+            return null;
+        };
+        jgDocumento.textProperty().addListener((o, a, b) -> mostrarError(errJugador, revisar.get()));
+        dorsal.valueProperty().addListener((o, a, b) -> mostrarError(errJugador, revisar.get()));
+        dtDocumento.textProperty().addListener((o, a, b) -> {
+            String mal = alphasport.service.ReglasPlantilla.problemaDocumento(dtDocumento.getText());
+            mostrarError(errDt, mal == null ? null : "El documento del director técnico " + mal + ".");
+        });
+        cancelarEdicion.setOnAction(e -> {
+            enEdicion[0] = null;
+            fotoNueva[0] = "";
+            dibujarFotoNueva.run();
+            jgNombre.clear();
+            jgDocumento.clear();
+            agregar.setText("Agregar");
+            cancelarEdicion.setVisible(false);
+            cancelarEdicion.setManaged(false);
+            mostrarError(errJugador, null);
+            siguienteDorsal.run();
+        });
         Runnable agregarJugador = () -> {
             int d = dorsal.getValue();
-            String error = jgNombre.getText().isBlank() ? "Escriba el nombre del jugador."
-                    : tieneDorsal(jugadores, d) ? "El dorsal " + d + " ya está en uso." : null;
+            String error = jgNombre.getText().isBlank() ? "Escriba el nombre del jugador." : revisar.get();
             mostrarError(errJugador, error);
             if (error != null) {
                 return;
             }
-            jugadores.add(mapa("id", 0, "nombre", jgNombre.getText().trim(), "documento", jgDocumento.getText().trim(),
-                    "dorsal", d, "posicion", posicion.getValue(), "foto", fotoNueva[0]));
+            Map<String, Object> datos = mapa("nombre", jgNombre.getText().trim(), "documento", alphasport.service.ReglasPlantilla.soloDigitos(jgDocumento.getText()),
+                    "dorsal", d, "posicion", posicion.getValue(), "foto", fotoNueva[0]);
+            if (enEdicion[0] != null) {
+                enEdicion[0].putAll(datos); // conserva su id, tarjetas y goles
+                enEdicion[0] = null;
+                agregar.setText("Agregar");
+                cancelarEdicion.setVisible(false);
+                cancelarEdicion.setManaged(false);
+            } else {
+                Map<String, Object> nuevo = new LinkedHashMap<>(datos);
+                nuevo.put("id", 0);
+                jugadores.add(nuevo);
+            }
             fotoNueva[0] = "";
             dibujarFotoNueva.run();
             jgNombre.clear();
@@ -774,7 +962,7 @@ class Dialogos {
         Button cancelar = boton("Cancelar", "fantasma");
         Button guardar = boton("Guardar equipo", "primario");
         HBox filaJugador = new HBox(10, jgFoto, campo("Dorsal", dorsal), campo("Nombre", jgNombre), campo("Documento", jgDocumento),
-                campo("Posición", posicion), agregar);
+                campo("Posición", posicion), agregar, cancelarEdicion);
         filaJugador.setAlignment(Pos.BOTTOM_LEFT);
         String titulo = equipo == null ? "Agregar equipo" : "Equipo: " + s(equipo, "nombre");
         VBox columnaEscudo = new VBox(8, cajaEscudo, subirEscudo);
@@ -785,10 +973,14 @@ class Dialogos {
         HBox cabeceraEquipo = new HBox(18, columnaEscudo, datosEquipo);
         cabeceraEquipo.setAlignment(Pos.CENTER_LEFT);
         Stage v = ventana(titulo, cuerpo(titulo, cabeceraEquipo,
-                grupo("Director técnico", new HBox(12, campo("Nombre", dtNombre), campo("Documento", dtDocumento), campo("Nacionalidad", dtNacionalidad))),
+                grupo("Director técnico", new HBox(12, campo("Nombre", dtNombre), campo("Documento", dtDocumento), campo("Nacionalidad", dtNacionalidad)), errDt),
                 grupo("Plantilla", filaJugador, errJugador, lista), err, acciones(cancelar, guardar)), 860);
         cancelar.setOnAction(e -> v.close());
         guardar.setOnAction(e -> {
+            if (enEdicion[0] != null) {
+                mostrarError(errJugador, "Termine de editar el jugador: pulse «Guardar cambios» o «Cancelar».");
+                return;
+            }
             Map<String, Object> r = app.ejecutar("equipo", mapa("id", equipo == null ? null : n(equipo, "id"),
                     "nombre", nombre.getText(), "estadio", estadio.getText(),
                     "dt", mapa("nombre", dtNombre.getText(), "documento", dtDocumento.getText(), "nacionalidad", dtNacionalidad.getText()),
@@ -798,7 +990,17 @@ class Dialogos {
                 return;
             }
             v.close();
-            app.aviso("Equipo guardado.");
+            if (equipo != null) {
+                app.aviso("Equipo guardado.");
+                return;
+            }
+            // Equipo nuevo: se pregunta si sigue registrando equipos (y cuántos jugadores le faltan para iniciar).
+            int cuantos = jugadores.size(), minimo = alphasport.service.ReglasPlantilla.MINIMO_JUGADORES;
+            String falta = cuantos < minimo ? "\nLe faltan " + (minimo - cuantos) + " jugadores para poder iniciar el campeonato." : "";
+            if (confirmar("Equipo guardado", "«" + nombre.getText().trim() + "» quedó registrado con " + (cuantos == 1 ? "1 jugador" : cuantos + " jugadores")
+                    + "." + falta + "\n¿Quiere agregar otro equipo?", "Agregar otro", "No, terminar")) {
+                equipo(null);
+            }
         });
         v.showAndWait();
     }
@@ -1509,6 +1711,7 @@ class Dialogos {
             }
             if (!b(r, "ok")) {
                 mostrarError(err, s(r, "error"));
+                mensaje("Revise el partido", s(r, "error")); // a la vista, no solo al final del formulario
                 if (s(r, "codigo").equals("PENALES")) {
                     hayPenales.setSelected(true);
                     actualizar.run();
@@ -1634,7 +1837,7 @@ class Dialogos {
             try {
                 archivo = elegirArchivo(selector, (Stage) elegir.getScene().getWindow());
             } catch (RuntimeException ex) {
-                mostrarError(err, "No se pudo abrir el selector de archivos: " + ex.getMessage());
+                mostrarError(err, "No se pudo abrir el selector de archivos. Intente de nuevo.");
                 return;
             } finally {
                 elegir.setDisable(false);
@@ -1663,7 +1866,7 @@ class Dialogos {
                 quitarFoto.setDisable(false);
                 mostrarError(err, null);
             } catch (java.io.IOException | RuntimeException ex) {
-                mostrarError(err, "No se pudo abrir el archivo: " + ex.getMessage());
+                mostrarError(err, "No se pudo abrir el archivo. Revise que sea una imagen JPG o PNG y que no esté abierta en otro programa.");
             }
         });
         quitarFoto.setOnAction(e -> {
@@ -1764,10 +1967,10 @@ class Dialogos {
             }
         } catch (RuntimeException e) {
             // Nunca se deja una ventana a medio armar: se avisa y la aplicación sigue respondiendo.
-            mensaje("No se pudo abrir el partido", e.getMessage() == null ? "Todavía no hay información de este partido." : e.getMessage());
+            mensaje("No se pudo abrir el partido", e instanceof alphasport.service.ReglaNegocioException ? e.getMessage() : "Todavía no hay información de este partido.");
             return;
         }
-        Button cerrar = boton("Cerrar", "primario");
+        Button cerrar = boton("← Volver", "primario"); // vuelve a la pantalla de antes
         cerrar.setDefaultButton(true);
         // El ancho de la cancha horizontal (960) más los márgenes; nunca más ancho que la pantalla.
         double ancho = Math.min(1024, javafx.stage.Screen.getPrimary().getVisualBounds().getWidth() - 126);
@@ -1864,7 +2067,7 @@ class Dialogos {
             {"PJ", "pj", "60"}, {"G", "g", "55"}, {"E", "e", "55"}, {"P", "p", "55"}, {"GF", "gf", "60"}, {"GC", "gc", "60"}, {"Pts", "pts", "65"}});
         TabPane pestanas = new TabPane(new Tab("Campeonatos", pestanaCampeonatos), new Tab("Palmarés histórico", palmares));
         pestanas.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        Button cerrar = boton("Cerrar", "fantasma");
+        Button cerrar = boton("← Volver", "fantasma");
         ventana[0] = ventana("Historial de campeonatos", cuerpo("Historial de campeonatos", pestanas, acciones(cerrar)), 1100);
         cerrar.setOnAction(e -> ventana[0].close());
         if (!lista.isEmpty()) {

@@ -220,17 +220,33 @@ if (typeof Calificaciones !== 'undefined') {
 // Cuentas (cuentas.js, web sola): reglas del registro iguales a Java y hash PBKDF2 de WebCrypto en el mismo formato.
 async function probarCuentas() {
   if (typeof Cuentas === 'undefined') return; // en Node no se carga cuentas.js
-  const base = { tipo: 'ORGANIZADOR', nombre: '  Ana   Torres ', usuario: ' Ana.Torres ', correo: ' Ana@Correo.COM ', clave: 'clave1234', confirmacion: 'clave1234' };
+  const base = { tipo: 'ORGANIZADOR', nombre: '  Ana   Torres ', usuario: ' Ana.Torres ', correo: ' Ana@Correo.COM ', clave: 'Clave#1234', confirmacion: 'Clave#1234' };
   const error = cambios => { try { Cuentas.validarRegistro(Object.assign({}, base, cambios)); return ''; } catch (e) { return e.message; } };
+  const clave = c => error({ clave: c, confirmacion: c });
   const limpio = Cuentas.validarRegistro(base);
   const valido = limpio.usuario === 'ana.torres' && limpio.correo === 'ana@correo.com' && limpio.nombre === 'Ana Torres' && limpio.rol === 'ORGANIZADOR';
-  const reglas = error({ clave: 'abc123', confirmacion: 'abc123' }).includes('entre 8 y 128')
-    && error({ clave: 'solamenteletras', confirmacion: 'solamenteletras' }).includes('letras y números')
-    && error({ clave: '1234567890', confirmacion: '1234567890' }).includes('letras y números')
-    && error({ confirmacion: 'clave12345' }).includes('no coinciden')
-    && error({ usuario: 'lu' }).includes('entre 3 y 30') && error({ usuario: 'josé' }).includes('sin tilde')
+  // Cada regla de la contraseña, con el mensaje que nombra todo lo que falta (los mismos textos que Java).
+  const reglas = clave('abc123') === 'Falta: al menos 8 caracteres, una mayúscula y un carácter especial.'
+    && clave('Cl#1a') === 'Falta: al menos 8 caracteres.' && clave('clave#1234') === 'Falta: una mayúscula.'
+    && clave('CLAVE#1234') === 'Falta: una minúscula.' && clave('Clave#abcd') === 'Falta: un número.'
+    && clave('Clave12345') === 'Falta: un carácter especial.'
+    && clave('solamenteletras') === 'Falta: una mayúscula, un número y un carácter especial.'
+    && clave('Clave #1234') === 'La contraseña no puede tener espacios.'
+    && clave('Clave#12\u00073') === 'La contraseña no puede tener caracteres de control.'
+    && clave('Aa1#' + 'x'.repeat(130)) === 'La contraseña no puede tener más de 128 caracteres.'
+    && Cuentas.problemaClave('Ñandú#2026') === null && Cuentas.reglasClave('').length === 5
+    && error({ confirmacion: 'Clave#12345' }).includes('no coinciden')
+    && error({ usuario: 'lu' }).includes('de 4 a 20 caracteres') && error({ usuario: 'josé' }).includes('letras a-z sin tilde')
     && error({ usuario: '.ana' }).includes('empezar con una letra') && error({ nombre: 'A' }).includes('Escriba su nombre')
-    && error({ correo: 'ana@correo' }).includes('correo válido') && error({ correo: '' }).includes('Escriba su correo');
+    && error({ correo: 'ana@correo' }) === 'Al dominio le falta la extensión, por ejemplo .com.' && error({ correo: '' }).includes('Escriba su correo');
+  // Correo: cada regla con su mensaje concreto.
+  const correo = c => Cuentas.problemaCorreo(Cuentas.normalizar(c));
+  const correos = correo('a@.com') === 'El dominio no puede empezar con punto.' && correo('a@..com') === 'El dominio no puede empezar con punto.'
+    && correo('a@com.') === 'El dominio no puede terminar en punto.' && correo('a@x..com') === 'El dominio no puede tener puntos seguidos.'
+    && correo('a..b@x.com') === 'El nombre antes de la @ no puede tener puntos seguidos.'
+    && correo('a@-x.com') === 'Las partes del dominio no pueden empezar ni terminar en guion.'
+    && correo('a@b@x.com') === 'El correo solo puede tener una @.' && correo('a@x.c1') !== null && correo('a b@x.com') !== null
+    && correo('ana.perez+1@mail.example.co') === null && correo(' Ana_P%9-x@Sub-1.Dominio.ORG ') === null;
   const roles = ['ADMINISTRADOR', 'ADMIN', 'VISITANTE', 'organizador', '', undefined].every(tipo => error({ tipo }).includes('tipo de cuenta'))
     && error({ tipo: 'AFICIONADO' }) === '';
   const h = await Cuentas.hash('clave1234'), otro = await Cuentas.hash('clave1234');
@@ -239,8 +255,8 @@ async function probarCuentas() {
   const hash = h.startsWith('pbkdf2_sha256$100000$') && !h.includes('clave1234') && h !== otro
     && await Cuentas.coincide('clave1234', h) && !(await Cuentas.coincide('Clave1234', h)) && !(await Cuentas.coincide('clave1234', 'clave1234'))
     && await Cuentas.coincide('clave1234', deJava) && !(await Cuentas.coincide('otra1234', deJava));
-  const ok = valido && reglas && roles && hash;
-  if (!ok) log(`  valido=${valido} reglas=${reglas} roles=${roles} hash=${hash}`);
+  const ok = valido && reglas && correos && roles && hash;
+  if (!ok) log(`  valido=${valido} reglas=${reglas} correos=${correos} roles=${roles} hash=${hash}`);
   log('Cuentas de la web sola (registro y claves con hash):', ok ? 'correcto' : 'MAL');
   if (!ok) fallos++;
 }

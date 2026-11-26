@@ -11,6 +11,7 @@ import java.util.Optional;
 public class RepositorioUsuariosEnMemoria implements RepositorioUsuarios {
 
     private final Map<String, CuentaUsuario> cuentas = new LinkedHashMap<>();
+    private final Map<String, Verificacion> verificaciones = new LinkedHashMap<>();
     /** Id que recibe la siguiente cuenta (como el SERIAL de la tabla usuarios). */
     private int siguienteId = 1;
 
@@ -62,6 +63,55 @@ public class RepositorioUsuariosEnMemoria implements RepositorioUsuarios {
     }
 
     /** Guarda la cuenta con su propio id (el que traiga, o el siguiente). */
+    @Override
+    public synchronized Alta actualizarDatos(String usuario, String nombre, String correo) {
+        CuentaUsuario c = cuentas.get(RepositorioUsuarios.normalizar(usuario));
+        if (c == null) {
+            return Alta.CREADA;
+        }
+        String nuevo = RepositorioUsuarios.normalizar(correo);
+        boolean otroCorreo = !nuevo.equals(RepositorioUsuarios.normalizar(c.correo()));
+        if (otroCorreo && existeCorreo(nuevo)) {
+            return Alta.CORREO_EN_USO;
+        }
+        cuentas.put(RepositorioUsuarios.normalizar(usuario), new CuentaUsuario(c.usuario(), nombre, nuevo, c.rol(), c.claveHash(), c.id()));
+        if (otroCorreo) {
+            verificaciones.remove(RepositorioUsuarios.normalizar(usuario)); // otro correo: vuelve a «sin verificar» y sin codigo
+        }
+        return Alta.CREADA;
+    }
+
+    @Override
+    public synchronized void cambiarClave(String usuario, String claveHash) {
+        CuentaUsuario c = cuentas.get(RepositorioUsuarios.normalizar(usuario));
+        if (c != null) {
+            cuentas.put(RepositorioUsuarios.normalizar(usuario), new CuentaUsuario(c.usuario(), c.nombre(), c.correo(), c.rol(), claveHash, c.id()));
+        }
+    }
+
+    @Override
+    public synchronized void guardarCodigo(String usuario, String codigoHash, long venceEn, int intentos) {
+        String clave = RepositorioUsuarios.normalizar(usuario);
+        if (cuentas.containsKey(clave)) {
+            boolean verificado = verificacion(clave).correoVerificado();
+            verificaciones.put(clave, codigoHash == null ? new Verificacion(verificado, null, 0, 0)
+                    : new Verificacion(verificado, codigoHash, venceEn, intentos));
+        }
+    }
+
+    @Override
+    public synchronized Verificacion verificacion(String usuario) {
+        return verificaciones.getOrDefault(RepositorioUsuarios.normalizar(usuario), Verificacion.NINGUNA);
+    }
+
+    @Override
+    public synchronized void marcarVerificado(String usuario) {
+        String clave = RepositorioUsuarios.normalizar(usuario);
+        if (cuentas.containsKey(clave)) {
+            verificaciones.put(clave, new Verificacion(true, null, 0, 0));
+        }
+    }
+
     private void agregar(CuentaUsuario cuenta) {
         CuentaUsuario conId = cuenta.id() > 0 ? cuenta : cuenta.conId(siguienteId);
         siguienteId = Math.max(siguienteId, conId.id()) + 1;

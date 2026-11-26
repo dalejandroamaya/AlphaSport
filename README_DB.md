@@ -49,6 +49,10 @@ Si falta alguna, el programa lo avisa al abrir y no toca los datos.
 | `005_registro_usuarios.sql` | 5 | Registro de cuentas: roles `ORGANIZADOR` y `AFICIONADO`, usuario y correo en minúsculas |
 | `006_varios_campeonatos.sql` | 6 | Varios campeonatos en curso: dueño de cada torneo y noticias por campeonato |
 | `007_imagenes.sql` | 7 | Fotos, escudos y fotos de noticias en la tabla `imagenes` (las ven todos los computadores) |
+| `008_correo_254.sql` | 8 | La columna `email` admite correos de hasta 254 caracteres (solo la ensancha, no cambia datos) |
+| `009_verificar_correo.sql` | 9 | Mi perfil: `correo_verificado`, `codigo_verificacion` (hash), `codigo_vence` y `codigo_intentos` en `usuarios` (solo `ADD COLUMN IF NOT EXISTS`) |
+
+**Migraciones 008 y 009 (cuentas).** La 008 ensancha `email` a 254 caracteres (el máximo de un correo). La 009 agrega cuatro columnas para verificar el correo desde «Mi perfil»: si está verificado, el hash del código de 6 dígitos (nunca el código), cuándo vence (15 minutos) y los intentos fallidos (máximo 5). Las dos usan solo `ALTER TABLE` simples, sin PL/pgSQL, y se pueden repetir. Las cuentas que ya existían quedan con el correo sin verificar y siguen entrando con su contraseña de siempre. El programa exige la versión 9: en una base que ya existía (por ejemplo Neon) ejecute la 008 y la 009 antes de usar esta versión.
 
 **Migración 006.** Permite varios campeonatos en curso a la vez. Solo usa SQL básico (`ALTER TABLE`, `UPDATE`, `INSERT … SELECT`):
 

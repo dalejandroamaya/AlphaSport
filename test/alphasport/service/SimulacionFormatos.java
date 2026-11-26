@@ -58,6 +58,7 @@ public class SimulacionFormatos {
         probarEstadisticas();
         probarDivisiones();
         probarWalkoverYCampeones();
+        probarCronograma();
         probarNoticias();
         probarPreviaYResultado();
         probarReglasPartido();
@@ -66,6 +67,7 @@ public class SimulacionFormatos {
         probarClaves();
         probarRegistro();
         probarVariosCampeonatos();
+        probarPerfil();
         probarOrdenPorLinea();
         probarDocumentoUnico();
         probarCalificaciones();
@@ -174,9 +176,9 @@ public class SimulacionFormatos {
             ConfiguracionTorneo cfg = new ConfiguracionTorneo();
             cfg.setSorteoAleatorio(false);
             servicio.crear("Fotos", TipoFormato.LIGA, cfg, false);
-            java.util.Map<String, Object> j1 = new java.util.HashMap<>(java.util.Map.of("id", 0, "nombre", "Ana", "documento", "1",
+            java.util.Map<String, Object> j1 = new java.util.HashMap<>(java.util.Map.of("id", 0, "nombre", "Ana", "documento", "10001",
                     "dorsal", 1, "posicion", "Portero", "foto", alargada));
-            java.util.Map<String, Object> j2 = new java.util.HashMap<>(java.util.Map.of("id", 0, "nombre", "Beto", "documento", "2",
+            java.util.Map<String, Object> j2 = new java.util.HashMap<>(java.util.Map.of("id", 0, "nombre", "Beto", "documento", "10002",
                     "dorsal", 2, "posicion", "Defensa central", "foto", ""));
             java.util.Map<String, Object> cuerpo = new java.util.HashMap<>(java.util.Map.of("nombre", "Lobos", "estadio", "",
                     "jugadores", new ArrayList<Object>(List.of(j1, j2)), "escudo", dataUrl(transparente, "png")));
@@ -317,7 +319,7 @@ public class SimulacionFormatos {
             for (alphasport.model.Equipo e : new ArrayList<>(c.getEquipos())) {
                 List<alphasport.model.Jugador> plantilla = new ArrayList<>();
                 for (int dorsal = 1; dorsal <= 14; dorsal++) {
-                    plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, "C" + e.getId() + "-" + dorsal,
+                    plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, String.valueOf(100000 + e.getId() * 100 + dorsal),
                             dorsal, dorsal == 1 ? "Portero" : "Mediocampista central"));
                 }
                 servicio.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
@@ -764,36 +766,49 @@ public class SimulacionFormatos {
             AutenticacionService auth = new AutenticacionService(cuentas, rapido);
             java.util.function.BiFunction<String, String[], AutenticacionService.SolicitudRegistro> solicitud = (tipo, d) ->
                     new AutenticacionService.SolicitudRegistro(d[0], d[1], d[2], d[3], d[4], tipo);
-            String[] ana = {"  Ana.Torres ", "  Ana   Torres ", " Ana@Correo.COM ", "clave1234", "clave1234"};
+            String[] ana = {"  Ana.Torres ", "  Ana   Torres ", " Ana@Correo.COM ", "Clave#1234", "Clave#1234"};
             // Registro valido: usuario y correo en minusculas, nombre sin espacios de mas, la clave solo como hash.
             alphasport.model.Usuario u = auth.registrar(solicitud.apply("ORGANIZADOR", ana));
             alphasport.model.CuentaUsuario guardada = cuentas.buscar("ANA.TORRES").orElseThrow();
             boolean valido = u.getNombre().equals("ana.torres") && u.getRol() == alphasport.model.Rol.ORGANIZADOR && u.puedeEditar()
                     && u.getId() > 0 && u.getId() == cuentas.buscar("ana.torres").orElseThrow().id() // su id, para ser duena de sus campeonatos
                     && guardada.correo().equals("ana@correo.com") && guardada.nombre().equals("Ana Torres")
-                    && !guardada.claveHash().contains("clave1234") && rapido.coincide("clave1234", guardada.claveHash())
-                    && !guardada.toString().contains(guardada.claveHash()) && !solicitud.apply("AFICIONADO", ana).toString().contains("clave1234");
+                    && !guardada.claveHash().contains("Clave#1234") && rapido.coincide("Clave#1234", guardada.claveHash())
+                    && !guardada.toString().contains(guardada.claveHash()) && !solicitud.apply("AFICIONADO", ana).toString().contains("Clave#1234");
             // Usuario o correo repetidos, sin importar mayusculas ni espacios.
             boolean repetidos = mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO",
-                    new String[]{"ANA.TORRES", "Otra", "otra@correo.com", "clave1234", "clave1234"}))).contains("usuario ya está en uso")
+                    new String[]{"ANA.TORRES", "Otra", "otra@correo.com", "Clave#1234", "Clave#1234"}))).contains("usuario ya está en uso")
                     && mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO",
-                    new String[]{"otra", "Otra", " ANA@correo.com", "clave1234", "clave1234"}))).contains("correo ya está registrado")
+                    new String[]{"otra", "Otra", " ANA@correo.com", "Clave#1234", "Clave#1234"}))).contains("correo ya está registrado")
                     && cuentas.existeUsuario("Ana.Torres") && cuentas.existeCorreo("ANA@CORREO.COM") && !cuentas.existeCorreo("");
             // Contraseña debil o mal confirmada, y datos que no sirven.
             java.util.function.Function<String[], String> error = d -> mensaje(() -> auth.registrar(solicitud.apply("AFICIONADO", d)));
-            boolean debil = error.apply(new String[]{"luis", "Luis", "luis@x.co", "abc123", "abc123"}).contains("entre 8 y 128")
-                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "solamenteletras", "solamenteletras"}).contains("letras y números")
-                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "1234567890", "1234567890"}).contains("letras y números")
-                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "clave1234", "clave12345"}).contains("no coinciden")
-                    && error.apply(new String[]{"lu", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("entre 3 y 30")
-                    && error.apply(new String[]{"josé", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("sin tilde")
-                    && error.apply(new String[]{".luis", "Luis", "luis@x.co", "clave1234", "clave1234"}).contains("empezar con una letra")
-                    && error.apply(new String[]{"luis", "L", "luis@x.co", "clave1234", "clave1234"}).contains("Escriba su nombre")
-                    && error.apply(new String[]{"luis", "Luis", "luis@x", "clave1234", "clave1234"}).contains("correo válido")
-                    && error.apply(new String[]{"luis", "Luis", "", "clave1234", "clave1234"}).contains("Escriba su correo")
+            java.util.function.Function<String, String> clave = c -> error.apply(new String[]{"luis", "Luis", "luis@x.co", c, c});
+            // Cada regla de la contraseña por separado, y el mensaje nombra todo lo que falta (no solo lo primero).
+            boolean debil = clave.apply("abc123").equals("Falta: al menos 8 caracteres, una mayúscula y un carácter especial.")
+                    && clave.apply("Cl#1a").equals("Falta: al menos 8 caracteres.")
+                    && clave.apply("clave#1234").equals("Falta: una mayúscula.")
+                    && clave.apply("CLAVE#1234").equals("Falta: una minúscula.")
+                    && clave.apply("Clave#abcd").equals("Falta: un número.")
+                    && clave.apply("Clave12345").equals("Falta: un carácter especial.")
+                    && clave.apply("solamenteletras").equals("Falta: una mayúscula, un número y un carácter especial.")
+                    && clave.apply("Clave #1234").equals("La contraseña no puede tener espacios.")
+                    && clave.apply("Clave#12\u00073").equals("La contraseña no puede tener caracteres de control.")
+                    && clave.apply("Aa1#" + "x".repeat(130)).equals("La contraseña no puede tener más de 128 caracteres.")
+                    && AutenticacionService.problemaClave("Ñandú#2026") == null // letras con tilde y Ñ cuentan como mayúscula y minúscula
+                    && AutenticacionService.reglasClave("clave#1234").stream().filter(r -> !r.cumple()).map(AutenticacionService.Regla::texto)
+                            .toList().equals(List.of("Una letra mayúscula"))
+                    && AutenticacionService.reglasClave("").size() == 5
+                    && error.apply(new String[]{"luis", "Luis", "luis@x.co", "Clave#1234", "Clave#12345"}).contains("no coinciden")
+                    && error.apply(new String[]{"lu", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("de 4 a 20 caracteres")
+                    && error.apply(new String[]{"josé", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("letras a-z sin tilde")
+                    && error.apply(new String[]{".luis", "Luis", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("empezar con una letra")
+                    && error.apply(new String[]{"luis", "L", "luis@x.co", "Clave#1234", "Clave#1234"}).contains("Escriba su nombre")
+                    && error.apply(new String[]{"luis", "Luis", "luis@x", "Clave#1234", "Clave#1234"}).equals("Al dominio le falta la extensión, por ejemplo .com.")
+                    && error.apply(new String[]{"luis", "Luis", "", "Clave#1234", "Clave#1234"}).contains("Escriba su correo")
                     && !cuentas.existeUsuario("luis");
             // El rol solo puede ser ORGANIZADOR o AFICIONADO: nunca otro valor enviado por el cliente.
-            String[] luis = {"luis", "Luis", "luis@x.co", "futbol2026", "futbol2026"};
+            String[] luis = {"luis", "Luis", "luis@x.co", "Futbol#2026", "Futbol#2026"};
             boolean rolInvalido = true;
             for (String tipo : new String[]{"ADMINISTRADOR", "ADMIN", "VISITANTE", "organizador", "", null, "ORGANIZADOR "}) {
                 rolInvalido &= mensaje(() -> auth.registrar(solicitud.apply(tipo, luis))).contains("tipo de cuenta");
@@ -801,7 +816,7 @@ public class SimulacionFormatos {
             rolInvalido &= !cuentas.existeUsuario("luis");
             // Inicio de sesion: correcto, y el mismo mensaje con clave mala o usuario inexistente.
             String malaClave = mensaje(() -> auth.iniciarSesion("ana.torres", "otra1234"));
-            boolean login = auth.iniciarSesion(" ANA.torres ", "clave1234").getRol() == alphasport.model.Rol.ORGANIZADOR
+            boolean login = auth.iniciarSesion(" ANA.torres ", "Clave#1234").getRol() == alphasport.model.Rol.ORGANIZADOR
                     && malaClave.equals("Usuario o contraseña incorrectos.") && malaClave.equals(mensaje(() -> auth.iniciarSesion("nadie", "otra1234")))
                     && mensaje(() -> auth.iniciarSesion("ana.torres", null)).equals(malaClave);
             // Por la ruta «registro»: abre la sesion, la respuesta no trae claves ni hash, y un Aficionado no gestiona torneos.
@@ -810,32 +825,194 @@ public class SimulacionFormatos {
                     java.nio.file.Files.createTempDirectory("alphasport-registro")));
             alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, auth);
             java.util.Map<String, Object> r = api.ejecutar("registro", java.util.Map.of("tipo", "AFICIONADO", "nombre", "Luis Pérez",
-                    "usuario", "Luis", "correo", "luis@x.co", "clave", "futbol2026", "confirmacion", "futbol2026"));
+                    "usuario", "Luis", "correo", "luis@x.co", "clave", "Futbol#2026", "confirmacion", "Futbol#2026"));
             String json = alphasport.ui.Json.escribir(r);
-            boolean ruta = r.get("sesion").toString().contains("rol=AFICIONADO") && !json.contains("futbol2026") && !json.contains("pbkdf2")
+            boolean ruta = r.get("sesion").toString().contains("rol=AFICIONADO") && !json.contains("Futbol#2026") && !json.contains("pbkdf2")
                     && api.getUsuarioActual().getNombre().equals("luis")
                     && "PERMISO".equals(codigoDe(() -> api.ejecutar("nuevo", java.util.Map.of("nombre", "Copa", "formato", "LIGA"))))
                     && !servicio.hayCampeonato();
             api.ejecutar("logout", java.util.Map.of());
             boolean forzado = mensaje(() -> api.ejecutar("registro", java.util.Map.of("tipo", "ADMINISTRADOR", "nombre", "Hack",
-                    "usuario", "hack", "correo", "h@x.co", "clave", "clave1234", "confirmacion", "clave1234"))).contains("tipo de cuenta")
+                    "usuario", "hack", "correo", "h@x.co", "clave", "Clave#1234", "confirmacion", "Clave#1234"))).contains("tipo de cuenta")
                     && api.getUsuarioActual() == null && !cuentas.existeUsuario("hack");
-            api.ejecutar("login", java.util.Map.of("usuario", "ana.torres", "clave", "clave1234"));
+            api.ejecutar("login", java.util.Map.of("usuario", "ana.torres", "clave", "Clave#1234"));
             // El Organizador sí pasa el permiso de gestionar (la ruta lo deja seguir) y puede crear el torneo.
             boolean organizador = !"PERMISO".equals(codigoDe(() -> api.ejecutar("nuevo", java.util.Map.of("nombre", "Copa", "formato", "LIGA"))))
                     && api.getUsuarioActual().puede(alphasport.model.Permiso.GESTIONAR_CAMPEONATO);
             servicio.crear("Copa de Ana", TipoFormato.LIGA, new ConfiguracionTorneo(), false);
             organizador &= servicio.hayCampeonato();
-            correcto = valido && repetidos && debil && rolInvalido && login && ruta && forzado && organizador;
+            // Correo: cada regla con su mensaje concreto (el mismo texto que cuentas.js).
+            java.util.function.Function<String, String> correo = AutenticacionService::problemaCorreo;
+            // Usuario: cada regla con su mensaje; varias a la vez se nombran todas.
+            java.util.function.Function<String, String> usuarioMal = AutenticacionService::problemaUsuario;
+            boolean usuarios = "El usuario debe tener de 4 a 20 caracteres.".equals(usuarioMal.apply("ana"))
+                    && "El usuario debe tener de 4 a 20 caracteres.".equals(usuarioMal.apply("a".repeat(21)))
+                    && "El usuario solo puede tener letras a-z sin tilde, números y los signos . _ -".equals(usuarioMal.apply("josé1"))
+                    && "El usuario debe empezar con una letra.".equals(usuarioMal.apply("1ana"))
+                    && "El usuario debe empezar con una letra.".equals(usuarioMal.apply("_ana"))
+                    && "El usuario no puede terminar en punto, guion bajo ni guion.".equals(usuarioMal.apply("ana."))
+                    && "El usuario no puede tener dos signos seguidos (por ejemplo «..» o «_-»).".equals(usuarioMal.apply("ana._b"))
+                    && "El usuario debe empezar con una letra. El usuario no puede ser solo números.".equals(usuarioMal.apply("12345"))
+                    && "Ese nombre de usuario está reservado. Elija otro.".equals(usuarioMal.apply(" ADMIN "))
+                    && "Ese nombre de usuario está reservado. Elija otro.".equals(usuarioMal.apply("soporte"))
+                    && "Escriba un nombre de usuario.".equals(usuarioMal.apply("  "))
+                    && usuarioMal.apply("Ana.Torres-9") == null && usuarioMal.apply("a_b.c-d1") == null
+                    && AutenticacionService.reglasUsuario("").size() == 7;
+            // Reproduce lo que vio el profesor: con el tipo Aficionado (y Organizador) una clave debil daba el error
+            // generico «letras y números» o se aceptaba. Ahora ambos tipos reciben el nombre de lo que falta.
+            boolean ambosRoles = true;
+            for (String tipo : new String[]{"AFICIONADO", "ORGANIZADOR"}) {
+                java.util.function.Function<String, String> conTipo = c -> mensaje(() -> auth.registrar(
+                        solicitud.apply(tipo, new String[]{"pedro.p", "Pedro", "pedro@x.co", c, c})));
+                ambosRoles &= conTipo.apply("solamenteletras").equals("Falta: una mayúscula, un número y un carácter especial.")
+                        && conTipo.apply("clave#1234").equals("Falta: una mayúscula.")
+                        && conTipo.apply("Clave12345").equals("Falta: un carácter especial.")
+                        && mensaje(() -> auth.registrar(solicitud.apply(tipo, new String[]{"admin", "Pedro", "pedro@x.co", "Clave#1234", "Clave#1234"})))
+                        .equals("Ese nombre de usuario está reservado. Elija otro.")
+                        && mensaje(() -> auth.registrar(solicitud.apply(tipo, new String[]{"pedro.p", "Pedro", "a@.com", "Clave#1234", "Clave#1234"})))
+                        .equals("El dominio no puede empezar con punto.");
+            }
+            ambosRoles &= !cuentas.existeUsuario("pedro.p");
+            boolean correos = usuarios && ambosRoles && "El dominio no puede empezar con punto.".equals(correo.apply("a@.com"))
+                    && "El dominio no puede empezar con punto.".equals(correo.apply("a@..com"))
+                    && "El dominio no puede terminar en punto.".equals(correo.apply("a@com."))
+                    && "El dominio no puede tener puntos seguidos.".equals(correo.apply("a@x..com"))
+                    && "El nombre antes de la @ no puede tener puntos seguidos.".equals(correo.apply("a..b@x.com"))
+                    && "El nombre antes de la @ no puede empezar ni terminar en punto.".equals(correo.apply(".a@x.com"))
+                    && "Las partes del dominio no pueden empezar ni terminar en guion.".equals(correo.apply("a@-x.com"))
+                    && "El correo solo puede tener una @.".equals(correo.apply("a@b@x.com"))
+                    && "Al correo le falta la @, por ejemplo nombre@correo.com.".equals(correo.apply("ax.com"))
+                    && "Falta el nombre antes de la @.".equals(correo.apply("@x.com"))
+                    && correo.apply("a@x.c1") != null && correo.apply("a@x.c") != null && correo.apply("a b@x.com") != null
+                    && correo.apply("a".repeat(65) + "@x.com") != null && correo.apply("a@" + "x".repeat(64) + ".com") != null
+                    && correo.apply("a@" + "x".repeat(250) + ".com") != null
+                    && correo.apply("ana.perez+1@mail.example.co") == null && correo.apply(" Ana_P%9-x@Sub-1.Dominio.ORG ") == null
+                    && correo.apply("a@" + "x".repeat(63) + ".com") == null;
+            // Una cuenta antigua con una contraseña que hoy no cumple las reglas sigue entrando: el login no mide la fuerza.
+            cuentas.crear(new alphasport.model.CuentaUsuario("viejo", "Viejo", "viejo@x.co", alphasport.model.Rol.AFICIONADO, rapido.hash("abc123")));
+            boolean antigua = auth.iniciarSesion("viejo", "abc123").getRol() == alphasport.model.Rol.AFICIONADO;
+            correcto = valido && repetidos && debil && correos && antigua && rolInvalido && login && ruta && forzado && organizador;
             if (!correcto) {
-                System.out.println("  valido=" + valido + " repetidos=" + repetidos + " debil=" + debil + " rolInvalido=" + rolInvalido
-                        + " login=" + login + " ruta=" + ruta + " forzado=" + forzado + " organizador=" + organizador);
+                System.out.println("  valido=" + valido + " repetidos=" + repetidos + " debil=" + debil + " correos=" + correos + " antigua=" + antigua
+                        + " rolInvalido=" + rolInvalido + " login=" + login + " ruta=" + ruta + " forzado=" + forzado + " organizador=" + organizador);
             }
         } catch (Exception e) {
             e.printStackTrace(System.out);
             correcto = false;
         }
         System.out.println("Registro de cuentas Organizador y Aficionado: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
+    /**
+     * Mi perfil: editar datos (el usuario no cambia y la cuenta sale de la sesion), cambiar la clave con la
+     * actual correcta e incorrecta, y el codigo de verificacion correcto, incorrecto, vencido y con los 5
+     * intentos agotados; cambiar el correo lo deja sin verificar.
+     */
+    private static void probarPerfil() {
+        boolean correcto;
+        try {
+            ClavesPbkdf2 rapido = new ClavesPbkdf2(1000);
+            alphasport.persistence.RepositorioUsuariosEnMemoria cuentas = new alphasport.persistence.RepositorioUsuariosEnMemoria();
+            AutenticacionService auth = new AutenticacionService(cuentas, rapido);
+            auth.registrar(new AutenticacionService.SolicitudRegistro("ana.torres", "Ana", "ana@x.co", "Clave#1234", "Clave#1234", "AFICIONADO"));
+            auth.registrar(new AutenticacionService.SolicitudRegistro("beto.org", "Beto", "beto@x.co", "Clave#1234", "Clave#1234", "ORGANIZADOR"));
+            java.util.concurrent.atomic.AtomicLong ahora = new java.util.concurrent.atomic.AtomicLong(1_000_000L);
+            java.time.Clock reloj = new java.time.Clock() {
+                @Override
+                public java.time.ZoneId getZone() {
+                    return java.time.ZoneOffset.UTC;
+                }
+
+                @Override
+                public java.time.Clock withZone(java.time.ZoneId z) {
+                    return this;
+                }
+
+                @Override
+                public java.time.Instant instant() {
+                    return java.time.Instant.ofEpochMilli(ahora.get());
+                }
+            };
+            List<String> enviados = new ArrayList<>();
+            PerfilService perfil = new PerfilService(cuentas, rapido, new EnviadorCorreo() {
+                @Override
+                public void enviarCodigo(String correo, String codigo) {
+                    enviados.add(codigo);
+                }
+
+                @Override
+                public boolean esDemostracion() {
+                    return true;
+                }
+            }, reloj);
+            // Datos: el nombre cambia; el correo nuevo pide la clave actual y queda sin verificar.
+            boolean datos = perfil.actualizarDatos("ana.torres", "  Ana   María ", "ana@x.co", null).equals("Datos guardados.")
+                    && cuentas.buscar("ana.torres").orElseThrow().nombre().equals("Ana María")
+                    && mensaje(() -> perfil.actualizarDatos("ana.torres", "Ana", "nueva@x.co", "")).equals("Para cambiar el correo escriba su contraseña actual.")
+                    && mensaje(() -> perfil.actualizarDatos("ana.torres", "Ana", "nueva@x.co", "Mala#1234")).equals("La contraseña actual no es correcta.")
+                    && mensaje(() -> perfil.actualizarDatos("ana.torres", "Ana", "beto@x.co", "Clave#1234")).equals("Ese correo ya está registrado en otra cuenta.")
+                    && mensaje(() -> perfil.actualizarDatos("ana.torres", "Ana", "a@.com", "Clave#1234")).equals("El dominio no puede empezar con punto.")
+                    && mensaje(() -> perfil.actualizarDatos("ana.torres", "A", "ana@x.co", null)).startsWith("Escriba su nombre")
+                    && Boolean.FALSE.equals(perfil.ver("ana.torres").get("correoVerificado"))
+                    && perfil.ver("ana.torres").get("usuario").equals("ana.torres");
+            // Clave: actual incorrecta, nueva debil, confirmacion distinta y bien; la nueva sirve para entrar y la vieja ya no.
+            boolean clave = mensaje(() -> perfil.cambiarClave("ana.torres", "Mala#1234", "Nueva#5678", "Nueva#5678")).equals("La contraseña actual no es correcta.")
+                    && mensaje(() -> perfil.cambiarClave("ana.torres", "Clave#1234", "nueva5678", "nueva5678")).equals("Falta: una mayúscula y un carácter especial.")
+                    && mensaje(() -> perfil.cambiarClave("ana.torres", "Clave#1234", "Nueva#5678", "Nueva#5679")).equals("Las contraseñas no coinciden.")
+                    && mensaje(() -> perfil.cambiarClave("ana.torres", "Clave#1234", "Nueva#5678", "Nueva#5678")).isEmpty()
+                    && auth.iniciarSesion("ana.torres", "Nueva#5678") != null
+                    && mensaje(() -> auth.iniciarSesion("ana.torres", "Clave#1234")).equals("Usuario o contraseña incorrectos.");
+            // Codigo: sin pedir, incorrecto (cuenta intentos) y correcto; se guarda solo su hash.
+            boolean codigo = mensaje(() -> perfil.verificarCodigo("ana.torres", "123456")).equals("Primero pida un código.")
+                    && perfil.enviarCodigo("ana.torres").startsWith("Modo demostración") && enviados.size() == 1
+                    && !cuentas.verificacion("ana.torres").codigoHash().contains(enviados.get(0));
+            String bueno = enviados.get(0), malo = bueno.equals("000000") ? "111111" : "000000";
+            codigo &= mensaje(() -> perfil.verificarCodigo("ana.torres", malo)).equals("Código incorrecto. Le quedan 4 intentos.")
+                    && mensaje(() -> perfil.verificarCodigo("ana.torres", bueno)).isEmpty()
+                    && Boolean.TRUE.equals(perfil.ver("ana.torres").get("correoVerificado"))
+                    && mensaje(() -> perfil.enviarCodigo("ana.torres")).equals("Su correo ya está verificado.");
+            // Vencido: pasan 15 minutos y un segundo.
+            perfil.enviarCodigo("beto.org");
+            String deBeto = enviados.get(enviados.size() - 1);
+            ahora.addAndGet(PerfilService.VIGENCIA_CODIGO.toMillis() + 1000);
+            boolean vencido = mensaje(() -> perfil.verificarCodigo("beto.org", deBeto)).equals("El código venció. Pida uno nuevo.")
+                    && mensaje(() -> perfil.verificarCodigo("beto.org", deBeto)).equals("Primero pida un código.");
+            // Intentos agotados: 5 errores y despues ni el codigo correcto sirve.
+            perfil.enviarCodigo("beto.org");
+            String otro = enviados.get(enviados.size() - 1), mal = otro.equals("000000") ? "111111" : "000000";
+            for (int i = 0; i < 4; i++) {
+                mensaje(() -> perfil.verificarCodigo("beto.org", mal));
+            }
+            boolean agotado = mensaje(() -> perfil.verificarCodigo("beto.org", mal)).equals("Código incorrecto. Agotó los 5 intentos: pida un código nuevo.")
+                    && mensaje(() -> perfil.verificarCodigo("beto.org", otro)).equals("Primero pida un código.")
+                    && Boolean.FALSE.equals(perfil.ver("beto.org").get("correoVerificado"));
+            // Cambiar el correo vuelve a «sin verificar».
+            boolean vuelve = perfil.actualizarDatos("ana.torres", "Ana", "ana.nueva@x.co", "Nueva#5678").contains("sin verificar")
+                    && Boolean.FALSE.equals(perfil.ver("ana.torres").get("correoVerificado"));
+            // Por la ruta: la cuenta es la de la sesion aunque el cuerpo diga otro usuario.
+            CampeonatoService servicio = new CampeonatoService(new alphasport.persistence.ArchivoRepositorioCampeonato(
+                    java.nio.file.Files.createTempDirectory("alphasport-perfil")), new alphasport.persistence.ArchivoRepositorioHistorial(
+                    java.nio.file.Files.createTempDirectory("alphasport-perfil")));
+            alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, auth);
+            boolean sinSesion = "LOGIN".equals(codigoDe(() -> api.consultar("perfil")));
+            api.ejecutar("login", java.util.Map.of("usuario", "beto.org", "clave", "Clave#1234"));
+            api.ejecutar("perfil/datos", java.util.Map.of("usuario", "ana.torres", "nombre", "Beto Ruiz", "correo", "beto@x.co"));
+            boolean ruta = sinSesion && cuentas.buscar("beto.org").orElseThrow().nombre().equals("Beto Ruiz")
+                    && cuentas.buscar("ana.torres").orElseThrow().nombre().equals("Ana")
+                    && ((java.util.Map<?, ?>) api.consultar("perfil").get("perfil")).get("usuario").equals("beto.org");
+            correcto = datos && clave && codigo && vencido && agotado && vuelve && ruta;
+            if (!correcto) {
+                System.out.println("  datos=" + datos + " clave=" + clave + " codigo=" + codigo + " vencido=" + vencido + " agotado=" + agotado
+                        + " vuelve=" + vuelve + " ruta=" + ruta);
+            }
+        } catch (Exception e) {
+            e.printStackTrace(System.out);
+            correcto = false;
+        }
+        System.out.println("Mi perfil: datos, contraseña y verificación del correo: " + (correcto ? "correcto" : "MAL"));
         if (!correcto) {
             fallos++;
         }
@@ -902,6 +1079,18 @@ public class SimulacionFormatos {
                     && "PERMISO".equals(codigoDe(() -> ana.ejecutar("campeonato/terminar", java.util.Map.of("codigo", ligaBeto))))
                     && equipos.apply(ligaBeto).size() == 4 && equipos.apply(ligaAna).size() == 4
                     && !"PERMISO".equals(codigoDe(() -> anaEnBeto.consultar("estado"))); // ver el estado no falla: vuelve a lo suyo
+            // Respaldo: solo el Organizador dueño. El Aficionado y otro Organizador reciben PERMISO aunque llamen la ruta
+            // directamente; abrir respaldos tampoco es del Aficionado; y el archivo no lleva cuentas, correos ni claves.
+            alphasport.ui.ApiControlador anaEnSuLiga = base.cliente(ana.getToken(), ligaAna);
+            byte[] respaldoAna = anaEnSuLiga.respaldo().datos();
+            String textoRespaldo = new String(respaldoAna, java.nio.charset.StandardCharsets.ISO_8859_1);
+            permisos &= "PERMISO".equals(codigoDe(() -> base.cliente(luis.getToken(), ligaAna).respaldo()))
+                    && "PERMISO".equals(codigoDe(() -> base.cliente(ana.getToken(), ligaBeto).respaldo())) // otro Organizador
+                    && "PERMISO".equals(codigoDe(() -> base.cliente(luis.getToken(), ligaAna).abrirRespaldo(respaldoAna)))
+                    && respaldoAna.length > 0 && !textoRespaldo.contains("pbkdf2") && !textoRespaldo.contains("clave-ana1")
+                    && !textoRespaldo.contains("@") && !textoRespaldo.contains("CuentaUsuario")
+                    // el historial en texto sí lo puede pedir (sin partidos jugados responde que está vacío, no PERMISO)
+                    && !"PERMISO".equals(codigoDe(() -> base.cliente(luis.getToken(), ligaAna).historialEnTexto()));
             // Elegir: Luis elige la de Beto y la ve; Beto, con uno solo, lo tiene sin elegir; Maria, con tres, tiene que elegir.
             luis.ejecutar("campeonato/elegir", java.util.Map.of("codigo", ligaBeto));
             alphasport.ui.ApiControlador betoOtraVez = entrar.apply("beto", "clave-beto1"), maria = entrar.apply("maria", "clave-maria1");
@@ -917,7 +1106,7 @@ public class SimulacionFormatos {
                 for (alphasport.model.Equipo e : s.getCampeonato().getEquipos()) {
                     List<alphasport.model.Jugador> plantilla = new ArrayList<>();
                     for (int dorsal = 1; dorsal <= 12; dorsal++) {
-                        plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, codigo + "-" + e.getId() + "-" + dorsal, dorsal,
+                        plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, String.valueOf(200000 + e.getId() * 100 + dorsal), dorsal,
                                 dorsal == 1 ? "Portero" : "Mediocampista central"));
                     }
                     s.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
@@ -1040,7 +1229,7 @@ public class SimulacionFormatos {
                 {"Cuatro", "4", "Defensa central"}, {"Doce", "12", "Portero"}, {"Dos", "2", "Lateral derecho"}, {"Once", "11", "Extremo izquierdo"}};
             List<alphasport.model.Jugador> plantilla = new ArrayList<>();
             for (String[] d : datos) {
-                plantilla.add(new alphasport.model.Jugador(d[0], "DOC-" + d[1], Integer.parseInt(d[1]), d[2]));
+                plantilla.add(new alphasport.model.Jugador(d[0], String.valueOf(50000 + Integer.parseInt(d[1])), Integer.parseInt(d[1]), d[2]));
             }
             servicio.equipos().guardarEquipo(e.getId(), "Orden FC", "", null, plantilla);
             alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService());
@@ -1084,14 +1273,16 @@ public class SimulacionFormatos {
                 return l;
             };
             servicio.equipos().guardarEquipo(rojos, "Rojos", "", null, plantilla.apply(new String[][]{{"Ana", "  10 20  30 ", "1"}, {"Bea", "", "2"}, {"Cris", "", "3"}}));
-            boolean limpia = servicio.buscarEquipo(rojos).getJugadores().get(0).getDocumento().equals("10 20 30");
+            boolean limpia = servicio.buscarEquipo(rojos).getJugadores().get(0).getDocumento().equals("102030"); // se guardan solo los dígitos
             // Mismo documento en la misma plantilla, en otro equipo (con otros espacios y mayusculas) o en un equipo nuevo.
             String mensajeRepetido = mensaje(() -> servicio.equipos().guardarEquipo(rojos, "Rojos", "", null,
                     plantilla.apply(new String[][]{{"Ana", "102030", "1"}, {"Dani", "10 2030", "4"}})));
             String mensajeOtroEquipo = mensaje(() -> servicio.equipos().guardarEquipo(azules, "Azules", "", null,
                     plantilla.apply(new String[][]{{"Eva", "1020 30", "1"}})));
-            boolean letras = servicio.getCampeonato().getEquipos().size() == 2;
-            servicio.equipos().guardarEquipo(azules, "Azules", "", null, plantilla.apply(new String[][]{{"Eva", "ab-1", "1"}}));
+            // Documentos con letras o muy cortos: se rechazan (solo números, de 5 a 12 dígitos).
+            boolean letras = servicio.getCampeonato().getEquipos().size() == 2
+                    && rechaza(() -> servicio.equipos().guardarEquipo(azules, "Azules", "", null, plantilla.apply(new String[][]{{"Eva", "ab-1", "1"}})))
+                    && rechaza(() -> servicio.equipos().guardarEquipo(azules, "Azules", "", null, plantilla.apply(new String[][]{{"Eva", "123", "1"}})));
             letras &= rechaza(() -> servicio.equipos().guardarEquipo(null, "Verdes", "", null, plantilla.apply(new String[][]{{"Fer", "AB-1", "1"}})))
                     && servicio.getCampeonato().buscarEquipoPorNombre("Verdes") == null;
             // Sin documento se permite, y el mismo jugador puede volver a guardarse con su documento.
@@ -1168,7 +1359,7 @@ public class SimulacionFormatos {
             for (alphasport.model.Equipo e : new ArrayList<>(c.getEquipos())) {
                 List<alphasport.model.Jugador> plantilla = new ArrayList<>();
                 for (int d = 1; d <= 14; d++) {
-                    plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + d, "D" + e.getId() + "-" + d, d, "Mediocampista"));
+                    plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + d, String.valueOf(300000 + e.getId() * 100 + d), d, "Mediocampista"));
                 }
                 servicio.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
             }
@@ -1183,7 +1374,7 @@ public class SimulacionFormatos {
             // 1) Previa: partido pendiente con XI, formación, fecha, hora y sede.
             java.util.Map<String, Object> previa = new java.util.HashMap<>(java.util.Map.of("estado", "PENDIENTE",
                     "titularesLocal", xiLocal, "titularesVisitante", xiVisitante, "formacionLocal", "4-4-2", "formacionVisitante", "4-3-3",
-                    "fecha", "2026-12-05", "hora", "18:00", "sede", "Estadio Norte", "obs", ""));
+                    "fecha", java.time.LocalDate.now().toString(), "hora", "18:00", "sede", "Estadio Norte", "obs", ""));
             previa.putAll(java.util.Map.of("gl", 0, "gv", 0, "pl", -1, "pv", -1, "tarjetas", List.of(), "cambios", List.of(), "goles", List.of()));
             api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", previa, "accion", "guardar", "confirmado", false));
             boolean previaGuardada = !p.isJugado() && p.getTitularesLocal().equals(xiLocal) && p.getTitularesVisitante().equals(xiVisitante)
@@ -1441,7 +1632,7 @@ public class SimulacionFormatos {
         for (int i = 1; i <= 4; i++) {
             c.agregarEquipo("E" + i);
         }
-        alphasport.model.Jugador jugador = new alphasport.model.Jugador("Jugador expulsado", "1", 10, "Delantero");
+        alphasport.model.Jugador jugador = new alphasport.model.Jugador("Jugador expulsado", "10001", 10, "Delantero");
         jugador.setId(c.nuevoIdJugador());
         c.buscarEquipo(1).agregarJugador(jugador);
         MotorCampeonato motor = new MotorCampeonato(c);
@@ -1489,9 +1680,9 @@ public class SimulacionFormatos {
         for (int i = 1; i <= 4; i++) {
             c.agregarEquipo("E" + i);
         }
-        alphasport.model.Jugador nueve = new alphasport.model.Jugador("Nueve", "1", 9, "Delantero centro");
-        alphasport.model.Jugador diez = new alphasport.model.Jugador("Diez", "2", 10, "Mediapunta");
-        alphasport.model.Jugador central = new alphasport.model.Jugador("Central", "3", 4, "Defensa central");
+        alphasport.model.Jugador nueve = new alphasport.model.Jugador("Nueve", "10001", 9, "Delantero centro");
+        alphasport.model.Jugador diez = new alphasport.model.Jugador("Diez", "10002", 10, "Mediapunta");
+        alphasport.model.Jugador central = new alphasport.model.Jugador("Central", "10003", 4, "Defensa central");
         nueve.setId(c.nuevoIdJugador());
         diez.setId(c.nuevoIdJugador());
         central.setId(c.nuevoIdJugador());
@@ -1597,6 +1788,80 @@ public class SimulacionFormatos {
      * W.O. desde el editor (que trabaja sobre una copia sin ids): gana el local y gana el visitante,
      * cada uno con sus 3 goles y sus 3 puntos. Y en una liga con divisiones hay un campeon por division.
      */
+    /** Deja cada equipo con al menos el mínimo de jugadores para iniciar (ReglasPlantilla.MINIMO_JUGADORES). */
+    static void completarPlantillas(Campeonato c) {
+        for (alphasport.model.Equipo e : c.getEquipos()) {
+            for (int dorsal = e.getJugadores().size() + 1; e.getJugadores().size() < ReglasPlantilla.MINIMO_JUGADORES; dorsal++) {
+                alphasport.model.Jugador j = new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, String.valueOf(700000 + e.getId() * 100 + dorsal),
+                        dorsal, dorsal == 1 ? "Portero" : "Mediocampista");
+                j.setId(c.nuevoIdJugador());
+                e.getJugadores().add(j);
+            }
+        }
+    }
+
+    /**
+     * Cronograma automático: reparte los partidos pendientes en los días y horas pedidos, sin que un equipo juegue
+     * dos veces el mismo día ni más partidos por día que horas por canchas; rechaza un inicio antes de hoy. Además,
+     * un partido no puede quedar antes de la creación del campeonato ni jugado en el futuro.
+     */
+    private static void probarCronograma() {
+        boolean correcto;
+        try {
+            java.nio.file.Path carpeta = java.nio.file.Files.createTempDirectory("alphasport-cronograma");
+            CampeonatoService servicio = new CampeonatoService(new alphasport.persistence.ArchivoRepositorioCampeonato(carpeta),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(carpeta));
+            ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+            cfg.setSorteoAleatorio(false);
+            servicio.crear("Cronograma", TipoFormato.LIGA, cfg, false);
+            for (int i = 1; i <= 6; i++) {
+                servicio.equipos().agregarEquipo("C" + i);
+            }
+            completarPlantillas(servicio.getCampeonato());
+            servicio.avanzar();
+            java.time.LocalDate hoy = java.time.LocalDate.now();
+            java.time.LocalDate inicio = hoy.plusDays(1);
+            java.util.Set<java.time.DayOfWeek> dias = java.util.EnumSet.of(java.time.DayOfWeek.SATURDAY, java.time.DayOfWeek.SUNDAY);
+            boolean rechazaPasado = rechaza(() -> servicio.partidos().programar(new Cronograma.Pedido(hoy.minusDays(1), dias, List.of("15:00"), List.of(), false)))
+                    && rechaza(() -> servicio.partidos().programar(new Cronograma.Pedido(inicio, java.util.Set.of(), List.of("15:00"), List.of(), false)))
+                    && rechaza(() -> servicio.partidos().programar(new Cronograma.Pedido(inicio, dias, List.of("25:00"), List.of(), false)));
+            String mensaje = servicio.partidos().programar(new Cronograma.Pedido(inicio, dias, List.of("17:00", "15:00"), List.of("Cancha 1"), false));
+            List<Partido> ps = servicio.getCampeonato().getPartidos();
+            java.util.Map<String, List<Partido>> porDia = new java.util.HashMap<>();
+            ps.forEach(x -> porDia.computeIfAbsent(x.getFecha(), k -> new ArrayList<>()).add(x));
+            boolean todos = ps.stream().allMatch(x -> x.getFecha().length() == 10 && java.time.LocalDate.parse(x.getFecha()) != null && "Cancha 1".equals(x.getSede()));
+            boolean diasBien = porDia.keySet().stream().map(java.time.LocalDate::parse)
+                    .allMatch(d -> !d.isBefore(inicio) && dias.contains(d.getDayOfWeek()));
+            boolean cupo = porDia.values().stream().allMatch(l -> l.size() <= 2
+                    && l.stream().map(Partido::getHora).distinct().count() == l.size());
+            boolean sinRepetir = porDia.values().stream().allMatch(l -> l.stream().flatMap(x -> java.util.stream.Stream.of(x.getIdLocal(), x.getIdVisitante()))
+                    .distinct().count() == l.size() * 2L);
+            // Fechas a mano: ni antes de la creación ni jugado en el futuro.
+            Partido p = ps.get(0);
+            Partido antes = new Partido();
+            antes.copiarDatosDe(p);
+            antes.setFecha(hoy.minusDays(3).toString());
+            Partido futuro = new Partido();
+            futuro.copiarDatosDe(p);
+            futuro.setEstado(alphasport.model.EstadoPartido.JUGADO);
+            futuro.setFecha(hoy.plusDays(3).toString());
+            boolean fechas = rechaza(() -> servicio.partidos().guardarPartido(p.getId(), antes, true))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), futuro, true));
+            correcto = rechazaPasado && todos && diasBien && cupo && sinRepetir && fechas && mensaje.startsWith("Se programaron " + ps.size());
+            if (!correcto) {
+                System.out.println("  rechazaPasado=" + rechazaPasado + " todos=" + todos + " dias=" + diasBien + " cupo=" + cupo
+                        + " sinRepetir=" + sinRepetir + " fechas=" + fechas + " " + mensaje);
+            }
+        } catch (Exception e) {
+            correcto = false;
+            System.out.println("  ERROR: " + e);
+        }
+        System.out.println("Cronograma automático y fechas válidas: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
     private static void probarWalkoverYCampeones() {
         boolean correcto;
         try {
@@ -1611,6 +1876,7 @@ public class SimulacionFormatos {
             for (int i = 1; i <= 9; i++) {
                 servicio.equipos().agregarEquipo("W" + i);
             }
+            completarPlantillas(servicio.getCampeonato()); // para iniciar, cada equipo necesita su XI
             servicio.avanzar();
             Campeonato c = servicio.getCampeonato();
             Partido p1 = c.getPartidos().get(0), p2 = c.getPartidos().get(1);

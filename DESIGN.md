@@ -2,31 +2,35 @@
 name: AlphaSport
 description: Gestor de campeonatos de fútbol con el aspecto de un marcador en vivo, plano y compacto.
 colors:
-  cesped: "#2ee598"
-  cesped-profundo: "#10b36c"
-  oro: "#f7c75a"
-  oro-profundo: "#d39a22"
-  noche: "#050a12"
-  superficie: "#0b1522"
-  superficie-2: "#12233a"
-  linea: "rgba(150, 185, 230, .1)"
-  pantalla: "#050c16"
-  texto: "#eef4ff"
-  texto-sutil: "#a3b2ca"
-  rojo-alerta: "#ff6b81"
-  ambar: "#ffb950"
-  cian-foco: "#74dcff"
-  cesped-dia: "#057545"
-  oro-texto-dia: "#865c00"
-  texto-dia: "#0b1726"
-  fondo-dia: "#e7ecf2"
+  marino: "#1c3146"
+  azul: "#4187c5"
+  ambar: "#ffba07"
+  gris: "#a2aebc"
+  rojo: "#fe0000"
+  cesped: "#5b9ad4"
+  cesped-profundo: "#4187c5"
+  oro: "#ffba07"
+  oro-profundo: "#d99a00"
+  noche: "#0f1b29"
+  superficie: "#16273a"
+  superficie-2: "#1c3146"
+  linea: "rgba(162, 174, 188, .1)"
+  pantalla: "#0b1522"
+  texto: "#eaf0f6"
+  texto-sutil: "#a2aebc"
+  panel-oscuro: "#a2aebc"
+  rojo-alerta: "#ff5a5a"
+  cian-foco: "#7db3e6"
+  cesped-dia: "#2f6fae"
+  oro-texto-dia: "#8a5f00"
+  texto-dia: "#1c3146"
+  fondo-dia: "#e8edf2"
   superficie-dia: "#ffffff"
   superficie-2-dia: "#dfe7f1"
-  tinta-cesped: "#03170d"
+  tinta-cesped: "#0e1824"
   sobre-cesped-dia: "#ffffff"
-  tinta-oro: "#2a1900"
-  rojo-suave: "#ffa3b1"
-  gris-coronacion: "#c3cfe2"
+  tinta-oro: "#1c3146"
+  rojo-dia: "#d00000"
 typography:
   display:
     fontFamily: "Inter, Segoe UI, Arial, sans-serif"
@@ -110,19 +114,20 @@ Cada ronda es un panel con una barra de encabezado en mayúsculas, y cada partid
 - Fondo liso y paneles sólidos con esquinas de 8 px, sin vidrio, sin sombras y sin destellos.
 - Inter en toda la interfaz: base de 13–14 px, negrita para ganadores y marcadores.
 - Etiquetas, pestañas y encabezados en mayúsculas pequeñas con un poco de espaciado.
-- Verde para acción y juego, dorado solo para logros.
+- Paleta AlphaSport: azul marino, azul, ámbar, gris y rojo. Azul para acción y juego, ámbar solo para logros, rojo para peligro y tarjetas.
+- Logo del lobo (logo.png) con «ALPHASPORT SOFTWARE» (logo-texto.png, máscara que toma el color del modo). En modo oscuro el lobo lleva un filo claro.
 - La foto del estadio queda solo en la pantalla de entrada.
 - Modo oscuro y claro con el mismo acabado.
 
 ## Colors
 
-Una noche azul profunda con dos luces de estadio: verde césped para lo que está en juego y dorado para lo que se gana.
+La paleta del logo: azul marino #1C3146, azul #4187C5, ámbar #FFBA07, gris #A2AEBC y rojo #FE0000. De noche, paneles azul marino y el panel de opciones en el gris de la paleta (ahí resalta el logo); de día, paneles blancos sobre gris azulado y textos azul marino. (Los tokens conservan el nombre «cesped» por compatibilidad: hoy es el azul de acción.)
 
 ### Primary
-- **Verde césped** (cesped): botón principal, pestaña activa, estado «jugado», sección activa de la navegación y bordes de foco. En modo claro baja a **verde cancha de día** (cesped-dia, 5,8:1 con blanco). El texto sobre el verde usa el token **sobre-cesped**: tinta oscura de noche (tinta-cesped) y blanco de día (sobre-cesped-dia).
+- **Azul de acción** (cesped): botón principal, pestaña activa, estado «jugado» y bordes de foco. De noche #5B9AD4 con texto azul marino oscuro (tinta-cesped, 6:1); de día #2F6FAE con texto blanco (5,2:1). En el panel gris de noche, la sección activa es un bloque azul marino con texto blanco.
 
 ### Secondary
-- **Dorado de trofeo** (oro): el líder de la tabla, el ganador de la final, la cabecera de un torneo terminado y la coronación. En modo claro el texto dorado usa **oro de medalla** (oro-texto-dia).
+- **Ámbar de trofeo** (oro, #FFBA07): el líder de la tabla, el ganador de la final, la cabecera de un torneo terminado y la coronación. En modo claro el texto ámbar usa **ámbar de medalla** (oro-texto-dia).
 
 ### Neutral
 - **Noche** (noche): fondo de la aplicación.
@@ -136,7 +141,7 @@ Una noche azul profunda con dos luces de estadio: verde césped para lo que est�
 - **Rojo tarjeta** (rojo-alerta) para errores, acciones destructivas y el marcador de un partido en juego; **ámbar** para aplazado o repechaje; **cian** para el anillo de foco del teclado y el estado pendiente.
 
 ### Named Rules
-**The Gold Is Earned Rule.** El dorado aparece solo donde algo se ganó: líder, final, campeón o torneo terminado.
+**The Gold Is Earned Rule.** El ámbar aparece solo donde algo se ganó: líder, final, campeón o torneo terminado.
 
 **The Two Lights Rule.** Modo oscuro y claro comparten estructura y roles de color; solo cambian las superficies y los tonos de texto.
 
@@ -172,13 +177,13 @@ Plano. Los paneles se separan del fondo por el color de su superficie, no por so
 
 ### Buttons
 - **Shape:** rectángulo con esquinas de 8 px, 34 px de alto (28 px en los mini).
-- **Primary:** verde césped sólido con texto oscuro (blanco de día).
-- **Logro:** dorado sólido, solo para acciones de un torneo terminado.
+- **Primary:** azul sólido con texto azul marino oscuro (blanco de día).
+- **Logro:** ámbar sólido con texto azul marino, solo para acciones de un torneo terminado.
 - **Secondary:** relleno blanco al 7 % (gris claro de día).
 - **Destructive:** texto rojo sin fondo hasta que se señala.
 
 ### Pestañas
-Pastillas de 28 px, mayúsculas pequeñas en negrita; la activa en verde césped sólido.
+Pastillas de 28 px, mayúsculas pequeñas en negrita; la activa en azul sólido.
 
 ### Chips y estados
 Esquinas de 4 px, mayúsculas pequeñas en negrita, fondo tenue del color del estado.
@@ -187,19 +192,19 @@ Esquinas de 4 px, mayúsculas pequeñas en negrita, fondo tenue del color del es
 Panel de superficie con barra de encabezado (superficie 2, 32 px). Filas de dos líneas separadas por una línea de 1 px; al pasar el puntero la fila se aclara apenas.
 
 ### Tablas
-Encabezado en barra de superficie 2 con mayúsculas pequeñas; filas separadas por líneas de 1 px, sin rayado alternado. El líder lleva un fondo dorado muy tenue.
+Encabezado en barra de superficie 2 con mayúsculas pequeñas; filas separadas por líneas de 1 px, sin rayado alternado. El líder lleva un fondo ámbar muy tenue.
 
 ### Fotos y escudos
 Fotos de jugador tipo cédula (3:4) o la persona «NN»; el escudo subido reemplaza al escudo de iniciales en todos los tamaños.
 
 ### Coronación
-Diálogo con la foto del estadio, haces dorados hacia el trofeo, nombre del campeón en dorado, seis cifras y confeti.
+Diálogo con la foto del estadio, haces ámbar hacia el trofeo, nombre del campeón en ámbar, seis cifras y confeti.
 
 ## Do's and Don'ts
 
 ### Do:
 - **Do** poner cada ronda en su panel con la barra de encabezado y los partidos como filas.
-- **Do** reservar el dorado para el líder, la final, el campeón y el torneo terminado.
+- **Do** reservar el ámbar para el líder, la final, el campeón y el torneo terminado.
 - **Do** usar Inter en negrita con cifras tabulares para goles y puntos.
 - **Do** respetar «reducir movimiento».
 - **Do** acreditar las fotos de Unsplash (Josemar Duarte, noche; Miguel Ramírez, día) en la pantalla de entrada; fotos, fuentes y logos viven en `web/img` y `web/fuentes` para funcionar sin internet, también en el escritorio (JavaFX).

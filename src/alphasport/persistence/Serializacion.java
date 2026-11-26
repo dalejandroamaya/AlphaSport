@@ -29,7 +29,7 @@ public final class Serializacion {
         try (ObjectInputStream entrada = new ObjectInputStream(new ByteArrayInputStream(datos))) {
             return (Campeonato) entrada.readObject();
         } catch (IOException | ClassNotFoundException | ClassCastException e) {
-            throw new PersistenciaException("El archivo no es un respaldo valido de AlphaSport", e);
+            throw new PersistenciaException("Ese archivo no es una copia de seguridad de AlphaSport o está dañado. Elija un archivo .dat guardado con «Guardar copia de seguridad».", e);
         }
     }
 

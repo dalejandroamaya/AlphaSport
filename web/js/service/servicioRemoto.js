@@ -2,6 +2,9 @@
 
 /* Servicio que delega en el programa Java (capa service) a traves de su API local. */
 
+/** Error con un mensaje escrito para el usuario (se muestra tal cual). */
+class ErrorUsuario extends Error {}
+
 function crearServicioRemoto() {
   /*
    * Codigo del campeonato que muestra esta pestaña: viaja en la cabecera X-AlphaSport-Campeonato de cada
@@ -29,7 +32,12 @@ function crearServicioRemoto() {
 
   const descargar = async ruta => {
     const respuesta = await fetch('/api/' + ruta, { headers: cabeceras() });
-    if (!respuesta.ok) throw new Error('No se pudo descargar el archivo.');
+    // Si el servidor responde JSON, es un error (por ejemplo PERMISO): se muestra en vez de bajar un archivo.
+    if ((respuesta.headers.get('Content-Type') || '').includes('application/json')) {
+      const r = await respuesta.json();
+      throw new ErrorUsuario(r.error || 'No se pudo descargar el archivo. Intente de nuevo.');
+    }
+    if (!respuesta.ok) throw new ErrorUsuario('No se pudo descargar el archivo. Intente de nuevo.');
     const disposicion = respuesta.headers.get('Content-Disposition') || '';
     const nombre = decodeURIComponent((/filename\*=UTF-8''([^;]+)/.exec(disposicion) || [, 'archivo'])[1]);
     return { nombre, contenido: await respuesta.blob() };
@@ -47,9 +55,11 @@ function crearServicioRemoto() {
     detalle: id => pedir('partido/' + id + '/' + encodeURIComponent(Almacen.dispositivo())),
     votaciones: () => pedir('votaciones/' + encodeURIComponent(Almacen.dispositivo())),
     noticias: () => pedir('noticias'),
+    perfil: () => pedir('perfil'),
     /** Con el programa Java la foto es un archivo de datos/imagenes/ que se sirve en /api/imagen/{nombre}. */
     urlImagen: imagen => (imagen ? '/api/imagen/' + encodeURIComponent(imagen) : ''),
-    urlFoto: foto => (foto ? '/api/foto/' + encodeURIComponent(foto) : ''),
+    // Una foto recién elegida (data URL) todavía no está en el servidor: se muestra tal cual hasta guardar.
+    urlFoto: foto => (!foto ? '' : foto.startsWith('data:') ? foto : '/api/foto/' + encodeURIComponent(foto)),
     ejecutar: (ruta, cuerpo = {}) => pedir(ruta, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
     }),

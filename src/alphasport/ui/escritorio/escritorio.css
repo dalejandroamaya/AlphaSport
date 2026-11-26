@@ -3,30 +3,30 @@
    El mismo sistema de DESIGN.md traducido a JavaFX: reglas base de los
    componentes y, al final, la capa que los deja planos y compactos;
    Inter para títulos, cifras e interfaz.
-   Verde = acción y juego. Dorado = logros.
+   Azul = acción y juego. Ámbar = logros. Rojo = peligro y tarjetas.
    ===================================================================== */
 .raiz {
-    -fondo: #05080f;
-    -vidrio: rgba(14, 22, 38, 0.66);
-    -vidrio-alto: rgba(24, 34, 56, 0.74);
-    -vidrio-denso: rgba(10, 16, 28, 0.94);
+    -fondo: #0f1b29;
+    -vidrio: rgba(22, 39, 58, 0.66);
+    -vidrio-alto: rgba(28, 49, 70, 0.74);
+    -vidrio-denso: rgba(15, 27, 41, 0.94);
     -vidrio-borde: rgba(255, 255, 255, 0.13);
     -vidrio-luz: rgba(255, 255, 255, 0.18);
-    -campo: rgba(4, 8, 16, 0.6);
-    -pantalla: rgba(2, 5, 10, 0.72);
+    -campo: rgba(8, 16, 26, 0.6);
+    -pantalla: rgba(6, 12, 20, 0.72);
     -borde: rgba(255, 255, 255, 0.1);
-    -texto: #eef4ff;
-    -sutil: #a3b2ca;
-    -cesped: #2ee598;
-    -cesped-2: #10b36c;
-    -cesped-suave: rgba(46, 229, 152, 0.15);
-    -oro: #f7c75a;
-    -oro-2: #d39a22;
-    -oro-texto: #f7c75a;
-    -rojo: #ff6b81;
-    -rojo-suave: #ffa3b1;
-    -ambar: #ffb950;
-    -cian: #74dcff;
+    -texto: #eaf0f6;
+    -sutil: #a2aebc;
+    -cesped: #5b9ad4;
+    -cesped-2: #4187c5;
+    -cesped-suave: rgba(91, 154, 212, 0.15);
+    -oro: #ffba07;
+    -oro-2: #d99a00;
+    -oro-texto: #ffba07;
+    -rojo: #ff5a5a;
+    -rojo-suave: #ff9a9a;
+    -ambar: #ffba07;
+    -cian: #7db3e6;
     -haz: rgba(225, 242, 255, 0.34);
     -fx-font-family: "Inter", "Segoe UI", sans-serif;
     -fx-font-size: 14px;
@@ -38,47 +38,47 @@
 }
 
 .raiz.claro {
-    -fondo: #eaf1f7;
+    -fondo: #e8edf2;
     -vidrio: rgba(255, 255, 255, 0.72);
     -vidrio-alto: rgba(255, 255, 255, 0.84);
     -vidrio-denso: rgba(255, 255, 255, 0.97);
     -vidrio-borde: rgba(255, 255, 255, 0.9);
     -vidrio-luz: rgba(255, 255, 255, 1);
     -campo: rgba(255, 255, 255, 0.86);
-    -pantalla: #0e1a2b;
-    -borde: rgba(11, 23, 38, 0.11);
-    -texto: #0b1726;
-    -sutil: #4b5b73;
-    -cesped: #057545;
-    -cesped-2: #04603a;
-    -cesped-suave: rgba(5, 117, 69, 0.13);
-    -oro: #e0a62a;
-    -oro-2: #b07a0a;
-    -oro-texto: #865c00;
-    -rojo: #c8243f;
-    -rojo-suave: #c8243f;
-    -ambar: #a86400;
-    -cian: #08739f;
+    -pantalla: #1c3146;
+    -borde: rgba(28, 49, 70, 0.11);
+    -texto: #1c3146;
+    -sutil: #52627a;
+    -cesped: #2f6fae;
+    -cesped-2: #245a8d;
+    -cesped-suave: rgba(47, 111, 174, 0.13);
+    -oro: #f0a500;
+    -oro-2: #b07d00;
+    -oro-texto: #8a5f00;
+    -rojo: #d00000;
+    -rojo-suave: #d00000;
+    -ambar: #8a5f00;
+    -cian: #2f6fae;
     -haz: rgba(255, 250, 236, 0.75);
 }
-.raiz.coronacion { -haz: rgba(255, 214, 120, 0.5); }
+.raiz.coronacion { -haz: rgba(255, 204, 77, 0.5); }
 
 /* ------------------------------------------------------------------ escenario: foto, velo y focos */
 .foto-fondo { -fx-background-color: -fondo; }
 .velo {
     -fx-background-color:
-        linear-gradient(to bottom, rgba(4, 8, 16, 0.55) 0%, rgba(4, 8, 16, 0.7) 45%, rgba(3, 10, 8, 0.84) 100%),
-        radial-gradient(center 50% 115%, radius 60%, rgba(46, 229, 152, 0.16), transparent);
+        linear-gradient(to bottom, rgba(8, 16, 26, 0.55) 0%, rgba(8, 16, 26, 0.7) 45%, rgba(8, 14, 22, 0.84) 100%),
+        radial-gradient(center 50% 115%, radius 60%, rgba(91, 154, 212, 0.16), transparent);
 }
 .raiz.claro .velo {
     -fx-background-color:
-        linear-gradient(to bottom, rgba(240, 246, 252, 0.52) 0%, rgba(240, 246, 252, 0.68) 50%, rgba(236, 246, 240, 0.78) 100%),
-        radial-gradient(center 50% 115%, radius 60%, rgba(7, 138, 82, 0.12), transparent);
+        linear-gradient(to bottom, rgba(240, 246, 252, 0.52) 0%, rgba(240, 246, 252, 0.68) 50%, rgba(232, 237, 242, 0.78) 100%),
+        radial-gradient(center 50% 115%, radius 60%, rgba(47, 111, 174, 0.12), transparent);
 }
 .raiz.coronacion .velo {
     -fx-background-color:
-        linear-gradient(to bottom, rgba(4, 8, 16, 0.55) 0%, rgba(4, 8, 16, 0.7) 45%, rgba(10, 8, 3, 0.84) 100%),
-        radial-gradient(center 50% 110%, radius 65%, rgba(247, 199, 90, 0.26), transparent);
+        linear-gradient(to bottom, rgba(8, 16, 26, 0.55) 0%, rgba(8, 16, 26, 0.7) 45%, rgba(10, 8, 3, 0.84) 100%),
+        radial-gradient(center 50% 110%, radius 65%, rgba(255, 186, 7, 0.26), transparent);
 }
 .haz { -fx-fill: linear-gradient(to bottom, -haz 0%, rgba(255, 255, 255, 0.06) 55%, transparent 100%); -fx-blend-mode: screen; }
 .raiz.claro .haz { -fx-blend-mode: src-over; }
@@ -96,8 +96,8 @@
 .h3 { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 19px; }
 .titulo { -fx-font-family: "Inter Bold"; -fx-font-size: 40px; }
 .campo-titulo { -fx-text-fill: -sutil; -fx-font-size: 13px; -fx-font-family: "Inter SemiBold"; }
-.credito-foto { -fx-text-fill: rgba(238, 244, 255, 0.72); -fx-font-size: 11px; }
-.raiz.claro .credito-foto { -fx-text-fill: rgba(11, 23, 38, 0.7); }
+.credito-foto { -fx-text-fill: rgba(234, 240, 246, 0.72); -fx-font-size: 11px; }
+.raiz.claro .credito-foto { -fx-text-fill: rgba(28, 49, 70, 0.7); }
 
 /* ------------------------------------------------------------------ vidrio */
 .vidrio {
@@ -108,7 +108,7 @@
     -fx-border-radius: 22;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.42), 30, 0, 0, 12);
 }
-.raiz.claro .vidrio { -fx-effect: dropshadow(gaussian, rgba(20, 40, 70, 0.18), 30, 0, 0, 12); }
+.raiz.claro .vidrio { -fx-effect: dropshadow(gaussian, rgba(28, 49, 70, 0.18), 30, 0, 0, 12); }
 
 /* ------------------------------------------------------------------ iconos */
 .icono { -fx-fill: transparent; -fx-stroke: -texto; -fx-stroke-width: 1.9; -fx-stroke-line-cap: round; -fx-stroke-line-join: round; }
@@ -133,32 +133,32 @@
 .btn:pressed { -fx-scale-x: 0.97; -fx-scale-y: 0.97; }
 .btn:focused { -fx-border-color: -cian; }
 .btn:disabled { -fx-opacity: 0.42; }
-.raiz.claro .btn { -fx-background-color: rgba(255, 255, 255, 0.7); -fx-border-color: rgba(11, 23, 38, 0.13); }
-.raiz.claro .btn:hover { -fx-background-color: rgba(255, 255, 255, 0.95); -fx-border-color: rgba(11, 23, 38, 0.24); }
+.raiz.claro .btn { -fx-background-color: rgba(255, 255, 255, 0.7); -fx-border-color: rgba(28, 49, 70, 0.13); }
+.raiz.claro .btn:hover { -fx-background-color: rgba(255, 255, 255, 0.95); -fx-border-color: rgba(28, 49, 70, 0.24); }
 /* El principal brilla como el césped bajo los focos. */
 .btn.primario, .raiz.claro .btn.primario {
-    -fx-background-color: rgba(255, 255, 255, 0.5), linear-gradient(to bottom, #5af0b0, -cesped 45%, -cesped-2);
+    -fx-background-color: rgba(255, 255, 255, 0.5), linear-gradient(to bottom, #8dbde6, -cesped 45%, -cesped-2);
     -fx-background-insets: 0, 1 0 0 0;
     -fx-border-color: transparent;
     -fx-text-fill: -sobre-cesped;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 16, 0, 0, 6);
 }
-.btn.primario:hover { -fx-background-color: rgba(255, 255, 255, 0.6), linear-gradient(to bottom, #7af5c2, #44eca4 45%, -cesped); }
-.raiz.claro .btn.primario { -fx-background-color: rgba(255, 255, 255, 0.35), linear-gradient(to bottom, #19a86b, -cesped 50%, -cesped-2); -fx-text-fill: white; }
+.btn.primario:hover { -fx-background-color: rgba(255, 255, 255, 0.6), linear-gradient(to bottom, #a9cbeb, #6fa8dc 45%, -cesped); }
+.raiz.claro .btn.primario { -fx-background-color: rgba(255, 255, 255, 0.35), linear-gradient(to bottom, #4187c5, -cesped 50%, -cesped-2); -fx-text-fill: white; }
 .btn.dorado, .raiz.claro .btn.dorado, .btn.primario.dorado {
-    -fx-background-color: rgba(255, 255, 255, 0.55), linear-gradient(to bottom, #ffe39a, #f7c75a 45%, #d39a22);
+    -fx-background-color: rgba(255, 255, 255, 0.55), linear-gradient(to bottom, #ffd978, #ffba07 45%, #d99a00);
     -fx-background-insets: 0, 1 0 0 0;
     -fx-border-color: transparent;
-    -fx-text-fill: #2a1900;
+    -fx-text-fill: #1c3146;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 16, 0, 0, 6);
 }
-.btn.dorado:hover { -fx-background-color: rgba(255, 255, 255, 0.65), linear-gradient(to bottom, #fff0c0, #ffd477 45%, #e0a62a); }
+.btn.dorado:hover { -fx-background-color: rgba(255, 255, 255, 0.65), linear-gradient(to bottom, #fff0c2, #ffcc4d 45%, #f0a500); }
 .btn.fantasma { -fx-background-color: transparent; }
 .btn.sobre-foto { -fx-text-fill: white; -fx-border-color: rgba(255, 255, 255, 0.3); }
 .btn.sobre-foto:hover { -fx-background-color: rgba(255, 255, 255, 0.12); }
 /* Las acciones destructivas pesan menos: texto rojo sin relleno hasta que se señalan. */
 .btn.peligro, .raiz.claro .btn.peligro { -fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: -rojo-suave; }
-.btn.peligro:hover, .raiz.claro .btn.peligro:hover { -fx-background-color: rgba(255, 107, 129, 0.16); }
+.btn.peligro:hover, .raiz.claro .btn.peligro:hover { -fx-background-color: rgba(255, 90, 90, 0.16); }
 .btn.mini { -fx-padding: 5 12; -fx-font-size: 13px; -fx-min-height: 32; }
 .btn.grande { -fx-padding: 13 26; -fx-font-size: 15px; -fx-min-height: 50; }
 .btn.icono-solo { -fx-padding: 0; -fx-min-width: 44; -fx-min-height: 44; -fx-pref-width: 44; -fx-pref-height: 44; }
@@ -186,7 +186,7 @@
     -fx-border-color: -borde;
     -fx-border-radius: 12;
     -fx-text-fill: -texto;
-    -fx-prompt-text-fill: #8796ae;
+    -fx-prompt-text-fill: #8b97a8;
     -fx-min-height: 44;
 }
 .text-field, .password-field { -fx-padding: 10 14; }
@@ -209,6 +209,10 @@
 .logo-login { -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 22, 0, 0, 12); }
 /* Registro: pista bajo el campo y tarjetas Organizador / Aficionado (estilo de .tarjeta-formato). */
 .pista-campo { -fx-font-size: 12px; }
+.reglas-clave { -fx-padding: -4 0 0 0; }
+.regla-clave { -fx-font-size: 12px; -fx-text-fill: -sutil; }
+.regla-clave.cumplida { -fx-text-fill: -cesped; }
+.regla-clave.error-campo { -fx-text-fill: -rojo; }
 .pestanas-acceso .tarjeta-formato .formato-nombre { -fx-font-size: 15px; }
 
 /* ------------------------------------------------------------------ estructura */
@@ -231,12 +235,12 @@
 }
 .nav:hover { -fx-background-color: rgba(128, 140, 160, 0.12); -fx-text-fill: -texto; }
 .nav:selected {
-    -fx-background-color: linear-gradient(to right, rgba(46, 229, 152, 0.22), rgba(46, 229, 152, 0.05));
-    -fx-border-color: rgba(46, 229, 152, 0.3);
+    -fx-background-color: linear-gradient(to right, rgba(91, 154, 212, 0.22), rgba(91, 154, 212, 0.05));
+    -fx-border-color: rgba(91, 154, 212, 0.3);
     -fx-text-fill: -texto;
     -fx-font-family: "Inter SemiBold";
 }
-.raiz.claro .nav:selected { -fx-background-color: linear-gradient(to right, rgba(7, 138, 82, 0.17), rgba(7, 138, 82, 0.04)); -fx-border-color: rgba(7, 138, 82, 0.26); }
+.raiz.claro .nav:selected { -fx-background-color: linear-gradient(to right, rgba(47, 111, 174, 0.17), rgba(47, 111, 174, 0.04)); -fx-border-color: rgba(47, 111, 174, 0.26); }
 .icono-nav { -fx-fill: transparent; -fx-stroke: -sutil; -fx-stroke-width: 1.8; -fx-stroke-line-cap: round; -fx-stroke-line-join: round; }
 .nav:hover .icono-nav { -fx-stroke: -texto; }
 .nav:selected .icono-nav { -fx-stroke: -cesped; }
@@ -250,17 +254,16 @@
     -fx-font-family: "Inter SemiBold";
 }
 .raiz.claro .chip { -fx-background-color: rgba(255, 255, 255, 0.7); }
-.chip-estado { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(46, 229, 152, 0.36); -fx-font-family: "Inter SemiBold"; }
-.marcador-principal.terminado .chip-estado { -fx-text-fill: -oro-texto; -fx-background-color: rgba(247, 199, 90, 0.17); -fx-border-color: rgba(247, 199, 90, 0.55); }
-.chip-modo { -fx-text-fill: -cian; }
+.chip-estado { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(91, 154, 212, 0.36); -fx-font-family: "Inter SemiBold"; }
+.marcador-principal.terminado .chip-estado { -fx-text-fill: -oro-texto; -fx-background-color: rgba(255, 186, 7, 0.17); -fx-border-color: rgba(255, 186, 7, 0.55); }
 .marcador-principal { -fx-padding: 26 30; }
 .marcador-principal.terminado {
-    -fx-background-color: rgba(247, 199, 90, 0.6), linear-gradient(to right, rgba(247, 199, 90, 0.2), -vidrio 55%);
+    -fx-background-color: rgba(255, 186, 7, 0.6), linear-gradient(to right, rgba(255, 186, 7, 0.2), -vidrio 55%);
     -fx-background-insets: 0, 2 0 0 0;
-    -fx-border-color: rgba(247, 199, 90, 0.55);
+    -fx-border-color: rgba(255, 186, 7, 0.55);
 }
 .raiz.claro .marcador-principal.terminado {
-    -fx-background-color: rgba(224, 166, 42, 0.6), radial-gradient(center 0% 0%, radius 45%, rgba(224, 166, 42, 0.14), transparent), linear-gradient(to bottom, -vidrio-alto, -vidrio);
+    -fx-background-color: rgba(240, 165, 0, 0.6), radial-gradient(center 0% 0%, radius 45%, rgba(240, 165, 0, 0.14), transparent), linear-gradient(to bottom, -vidrio-alto, -vidrio);
     -fx-background-insets: 0, 2 0 0 0, 2 0 0 0;
 }
 .estado-vivo { -fx-text-fill: -sutil; -fx-font-size: 14px; }
@@ -288,7 +291,7 @@
 .tarjeta-equipo { -fx-padding: 18; }
 /* Mis campeonatos: una tarjeta por campeonato con su avance; la que se gestiona ahora, con borde verde. */
 .tarjeta-campeonato { -fx-padding: 16 18; }
-.tarjeta-campeonato.actual { -fx-border-color: rgba(46, 229, 152, 0.55); -fx-border-radius: 12; -fx-border-width: 1.5; }
+.tarjeta-campeonato.actual { -fx-border-color: rgba(91, 154, 212, 0.55); -fx-border-radius: 12; -fx-border-width: 1.5; }
 .chip-actual { -fx-text-fill: -cesped; }
 .progreso .bar { -fx-background-color: -cesped; -fx-background-insets: 0; -fx-background-radius: 6; }
 .progreso .track { -fx-background-color: rgba(128, 140, 160, 0.22); -fx-background-insets: 0; -fx-background-radius: 6; }
@@ -315,13 +318,13 @@
     -fx-min-width: 100;
 }
 .cifras { -fx-text-fill: white; -fx-font-family: "Inter Bold"; -fx-font-size: 27px; }
-.vs { -fx-text-fill: #a3b2ca; -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 15px; }
-.penales-texto { -fx-text-fill: #f7c75a; -fx-font-size: 12px; -fx-font-family: "Inter SemiBold"; }
+.vs { -fx-text-fill: #a2aebc; -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 15px; }
+.penales-texto { -fx-text-fill: #ffba07; -fx-font-size: 12px; -fx-font-family: "Inter SemiBold"; }
 .etiqueta { -fx-background-radius: 999; -fx-border-radius: 999; -fx-padding: 2 10; -fx-font-size: 12px; -fx-font-family: "Inter SemiBold"; }
-.etiqueta-jugado { -fx-text-fill: -cesped; -fx-background-color: rgba(46, 229, 152, 0.13); -fx-border-color: rgba(46, 229, 152, 0.32); }
-.etiqueta-pendiente { -fx-text-fill: -cian; -fx-background-color: rgba(116, 220, 255, 0.11); -fx-border-color: rgba(116, 220, 255, 0.3); }
-.etiqueta-aplazado, .etiqueta-suspendido { -fx-text-fill: -ambar; -fx-background-color: rgba(255, 185, 80, 0.13); -fx-border-color: rgba(255, 185, 80, 0.32); }
-.etiqueta-retirado { -fx-text-fill: -rojo; -fx-background-color: rgba(255, 107, 129, 0.12); -fx-border-color: rgba(255, 107, 129, 0.32); }
+.etiqueta-jugado { -fx-text-fill: -cesped; -fx-background-color: rgba(91, 154, 212, 0.13); -fx-border-color: rgba(91, 154, 212, 0.32); }
+.etiqueta-pendiente { -fx-text-fill: -cian; -fx-background-color: rgba(125, 179, 230, 0.11); -fx-border-color: rgba(125, 179, 230, 0.3); }
+.etiqueta-aplazado, .etiqueta-suspendido { -fx-text-fill: -ambar; -fx-background-color: rgba(255, 186, 7, 0.13); -fx-border-color: rgba(255, 186, 7, 0.32); }
+.etiqueta-retirado { -fx-text-fill: -rojo; -fx-background-color: rgba(255, 90, 90, 0.12); -fx-border-color: rgba(255, 90, 90, 0.32); }
 
 /* tablas: la pantalla gigante */
 .table-view {
@@ -333,7 +336,7 @@
     -fx-padding: 8 10;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 30, 0, 0, 12);
 }
-.raiz.claro .table-view { -fx-effect: dropshadow(gaussian, rgba(20, 40, 70, 0.16), 30, 0, 0, 12); }
+.raiz.claro .table-view { -fx-effect: dropshadow(gaussian, rgba(28, 49, 70, 0.16), 30, 0, 0, 12); }
 .table-view .column-header-background { -fx-background-color: transparent; }
 .table-view .column-header, .table-view .filler { -fx-background-color: transparent; -fx-border-color: transparent; -fx-size: 42; }
 .table-view .column-header .label { -fx-text-fill: -sutil; -fx-font-size: 12px; -fx-font-family: "Inter SemiBold"; }
@@ -350,8 +353,8 @@
 .table-row-cell.repechaje .table-column.posicion { -fx-text-fill: -ambar; }
 .table-row-cell.desciende .table-column.posicion { -fx-text-fill: -rojo; }
 /* El líder queda bajo un foco dorado. */
-.table-row-cell.lider { -fx-background-color: linear-gradient(to right, rgba(247, 199, 90, 0.3), rgba(247, 199, 90, 0.05) 70%); -fx-background-insets: 2 0; }
-.raiz.claro .table-row-cell.lider { -fx-background-color: linear-gradient(to right, rgba(224, 166, 42, 0.32), rgba(224, 166, 42, 0.05) 70%); }
+.table-row-cell.lider { -fx-background-color: linear-gradient(to right, rgba(255, 186, 7, 0.3), rgba(255, 186, 7, 0.05) 70%); -fx-background-insets: 2 0; }
+.raiz.claro .table-row-cell.lider { -fx-background-color: linear-gradient(to right, rgba(240, 165, 0, 0.32), rgba(240, 165, 0, 0.05) 70%); }
 .table-row-cell.lider .table-column.puntos, .table-row-cell.lider .table-column.posicion { -fx-text-fill: -oro-texto; }
 .table-view .placeholder .label { -fx-text-fill: -sutil; }
 
@@ -360,16 +363,16 @@
 .cruce { -fx-background-color: -pantalla; -fx-background-radius: 14; -fx-border-color: rgba(255, 255, 255, 0.1); -fx-border-radius: 14; }
 .lado { -fx-padding: 10 13; }
 .lado-nombre, .lado-goles { -fx-text-fill: white; }
-.lado-goles { -fx-text-fill: #a3b2ca; -fx-font-family: "Inter Bold"; }
-.lado.gana { -fx-background-color: linear-gradient(to right, rgba(46, 229, 152, 0.22), transparent); -fx-background-radius: 14; }
-.lado.gana .label { -fx-text-fill: #2ee598; -fx-font-family: "Inter Bold"; }
+.lado-goles { -fx-text-fill: #a2aebc; -fx-font-family: "Inter Bold"; }
+.lado.gana { -fx-background-color: linear-gradient(to right, rgba(91, 154, 212, 0.22), transparent); -fx-background-radius: 14; }
+.lado.gana .label { -fx-text-fill: #5b9ad4; -fx-font-family: "Inter Bold"; }
 .lado.gana .lado-goles { -fx-font-family: "Inter Bold"; }
 .campeon-caja {
     -fx-padding: 22 26;
-    -fx-background-color: rgba(247, 199, 90, 0.6), linear-gradient(to right, rgba(247, 199, 90, 0.3), -vidrio 62%);
+    -fx-background-color: rgba(255, 186, 7, 0.6), linear-gradient(to right, rgba(255, 186, 7, 0.3), -vidrio 62%);
     -fx-background-insets: 0, 2 0 0 0;
     -fx-background-radius: 22;
-    -fx-border-color: rgba(247, 199, 90, 0.55);
+    -fx-border-color: rgba(255, 186, 7, 0.55);
     -fx-border-radius: 22;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 30, 0, 0, 12);
 }
@@ -386,7 +389,7 @@
 /* ------------------------------------------------------------------ ventanas suaves */
 .dialogo-sombra { -fx-background-color: transparent; }
 .dialogo-panel {
-    -fx-background-color: rgba(255, 255, 255, 0.16), linear-gradient(to bottom, #172338, #0a1120);
+    -fx-background-color: rgba(255, 255, 255, 0.16), linear-gradient(to bottom, #1c3146, #132234);
     -fx-background-insets: 0, 1 0 0 0;
     -fx-background-radius: 28;
     -fx-border-color: rgba(255, 255, 255, 0.13);
@@ -395,8 +398,8 @@
 }
 .raiz.claro .dialogo-panel {
     -fx-background-color: white, linear-gradient(to bottom, #ffffff, #f2f6fa);
-    -fx-border-color: rgba(11, 23, 38, 0.1);
-    -fx-effect: dropshadow(gaussian, rgba(20, 40, 70, 0.32), 24, 0, 0, 10);
+    -fx-border-color: rgba(28, 49, 70, 0.1);
+    -fx-effect: dropshadow(gaussian, rgba(28, 49, 70, 0.32), 24, 0, 0, 10);
 }
 .msg-texto { -fx-text-fill: -texto; -fx-font-size: 15px; }
 .grupo { -fx-border-color: -borde; -fx-border-radius: 18; -fx-background-color: rgba(255, 255, 255, 0.025); -fx-background-radius: 18; -fx-padding: 16; }
@@ -411,29 +414,29 @@
 }
 .raiz.claro .tarjeta-formato { -fx-background-color: rgba(255, 255, 255, 0.7); }
 .tarjeta-formato:hover { -fx-border-color: rgba(128, 140, 160, 0.45); }
-.tarjeta-formato:selected { -fx-background-color: linear-gradient(to bottom right, rgba(46, 229, 152, 0.22), rgba(46, 229, 152, 0.04)); -fx-border-color: -cesped; }
+.tarjeta-formato:selected { -fx-background-color: linear-gradient(to bottom right, rgba(91, 154, 212, 0.22), rgba(91, 154, 212, 0.04)); -fx-border-color: -cesped; }
 .formato-nombre { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 16px; }
 .tarjeta-formato:selected .formato-nombre { -fx-text-fill: -cesped; }
 .formato-desc { -fx-text-fill: -sutil; -fx-font-size: 13px; }
 /* Marcador del partido: la pantalla gigante. */
 .marcador-partido {
     -fx-padding: 22;
-    -fx-background-color: radial-gradient(center 50% 0%, radius 80%, rgba(46, 229, 152, 0.16), transparent), -pantalla;
+    -fx-background-color: radial-gradient(center 50% 0%, radius 80%, rgba(91, 154, 212, 0.16), transparent), -pantalla;
     -fx-background-radius: 22;
     -fx-border-color: rgba(255, 255, 255, 0.1);
     -fx-border-radius: 22;
 }
-.raiz.claro .marcador-partido { -fx-background-color: radial-gradient(center 50% 0%, radius 80%, rgba(46, 229, 152, 0.14), transparent), #0e1a2b; }
+.raiz.claro .marcador-partido { -fx-background-color: radial-gradient(center 50% 0%, radius 80%, rgba(91, 154, 212, 0.14), transparent), #1c3146; }
 .equipo-nombre { -fx-font-family: "Inter Bold"; -fx-font-size: 22px; -fx-text-fill: white; }
 .led-campo { -fx-pref-width: 100; -fx-background-color: rgba(0, 0, 0, 0.45); }
 .text-field.led-gol {
     -fx-pref-width: 86; -fx-pref-height: 70; -fx-background-color: rgba(0, 0, 0, 0.45); -fx-border-color: rgba(255, 255, 255, 0.18); -fx-border-radius: 16; -fx-background-radius: 16;
-    -fx-text-fill: white; -fx-prompt-text-fill: #5d6b82; -fx-font-size: 40px; -fx-font-family: "Inter Bold"; -fx-alignment: center;
+    -fx-text-fill: white; -fx-prompt-text-fill: #5a6a80; -fx-font-size: 40px; -fx-font-family: "Inter Bold"; -fx-alignment: center;
 }
 .text-field.led-gol:focused { -fx-border-color: -cesped; }
 .text-field.campo-invalido { -fx-border-color: -rojo; }
-.led-campo .text-field { -fx-text-fill: #f7c75a; -fx-font-size: 22px; -fx-font-family: "Inter Bold"; -fx-alignment: center; }
-.led-separador { -fx-font-size: 30px; -fx-text-fill: #a3b2ca; -fx-font-family: "Inter Bold"; }
+.led-campo .text-field { -fx-text-fill: #ffba07; -fx-font-size: 22px; -fx-font-family: "Inter Bold"; -fx-alignment: center; }
+.led-separador { -fx-font-size: 30px; -fx-text-fill: #a2aebc; -fx-font-family: "Inter Bold"; }
 .tab-pane .tab-header-background { -fx-background-color: transparent; }
 .tab-pane .tab { -fx-background-color: transparent; -fx-background-radius: 999; -fx-border-color: -borde; -fx-border-radius: 999; -fx-padding: 5 14; }
 .tab-pane .tab:selected { -fx-background-color: -cesped; -fx-border-color: -cesped; }
@@ -444,7 +447,7 @@
 .lista-historial .list-cell:selected { -fx-background-color: -cesped-suave; }
 .lista-historial .list-cell:empty { -fx-background-color: transparent; }
 .puesto { -fx-padding: 15; -fx-background-radius: 18; -fx-border-radius: 18; }
-.puesto.oro { -fx-background-color: linear-gradient(to bottom, rgba(247, 199, 90, 0.24), rgba(247, 199, 90, 0.05)); -fx-border-color: rgba(247, 199, 90, 0.55); -fx-padding: 22 15; }
+.puesto.oro { -fx-background-color: linear-gradient(to bottom, rgba(255, 186, 7, 0.24), rgba(255, 186, 7, 0.05)); -fx-border-color: rgba(255, 186, 7, 0.55); -fx-padding: 22 15; }
 .puesto.plata { -fx-background-color: rgba(211, 219, 232, 0.08); -fx-border-color: rgba(211, 219, 232, 0.4); }
 .puesto.bronce { -fx-background-color: rgba(220, 154, 98, 0.1); -fx-border-color: rgba(220, 154, 98, 0.45); }
 .puesto.oro .label { -fx-text-fill: -oro-texto; }
@@ -457,20 +460,20 @@
 .cruce .lado-nombre { -fx-text-fill: white; }
 
 /* ------------------------------------------------------------------ coronación */
-.dialogo-campeon { -fx-border-color: rgba(247, 199, 90, 0.55); }
-.raiz.claro .dialogo-campeon { -fx-background-color: #0a1120; -fx-border-color: rgba(247, 199, 90, 0.55); }
-.foto-campeon { -fx-background-color: #070d18; }
+.dialogo-campeon { -fx-border-color: rgba(255, 186, 7, 0.55); }
+.raiz.claro .dialogo-campeon { -fx-background-color: #132234; -fx-border-color: rgba(255, 186, 7, 0.55); }
+.foto-campeon { -fx-background-color: #0d1826; }
 .velo-campeon {
     -fx-background-color:
-        radial-gradient(center 50% 22%, radius 60%, rgba(247, 199, 90, 0.34), transparent),
-        linear-gradient(to bottom, rgba(10, 14, 24, 0.55), rgba(6, 10, 18, 0.9));
+        radial-gradient(center 50% 22%, radius 60%, rgba(255, 186, 7, 0.34), transparent),
+        linear-gradient(to bottom, rgba(12, 22, 34, 0.55), rgba(10, 18, 28, 0.9));
 }
-.campeon-titulo { -fx-font-family: "Inter Bold"; -fx-font-size: 54px; -fx-text-fill: #f7c75a; }
+.campeon-titulo { -fx-font-family: "Inter Bold"; -fx-font-size: 54px; -fx-text-fill: #ffba07; }
 .campeon-torneo { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 20px; -fx-text-fill: white; }
-.campeon-dt { -fx-text-fill: #c3cfe2; }
+.campeon-dt { -fx-text-fill: #c9d3de; }
 .campeon-tablero { -fx-background-color: rgba(255, 255, 255, 0.09); -fx-background-radius: 16; -fx-border-color: rgba(255, 255, 255, 0.15); -fx-border-radius: 16; -fx-padding: 9 4; }
 .campeon-cifra { -fx-font-family: "Inter Bold"; -fx-font-size: 28px; -fx-text-fill: white; }
-.campeon-cifra-texto { -fx-font-size: 12px; -fx-text-fill: #c3cfe2; }
+.campeon-cifra-texto { -fx-font-size: 12px; -fx-text-fill: #c9d3de; }
 .campeon-division-nombre { -fx-font-family: "Inter"; -fx-font-weight: bold; -fx-font-size: 16px; -fx-text-fill: white; }
 
 /* ------------------------------------------------------------------ detalles */
@@ -481,15 +484,15 @@
 .date-picker .text-field { -fx-background-color: transparent; -fx-border-color: transparent; }
 
 /* ------------------------------------------------------------------ partido en juego, cambios y minutos */
-.etiqueta-en_juego { -fx-text-fill: -rojo; -fx-background-color: rgba(255, 107, 129, 0.13); -fx-border-color: rgba(255, 107, 129, 0.34); }
-.partido.en-vivo, .ficha.en-vivo { -fx-border-color: rgba(255, 107, 129, 0.42); }
+.etiqueta-en_juego { -fx-text-fill: -rojo; -fx-background-color: rgba(255, 90, 90, 0.13); -fx-border-color: rgba(255, 90, 90, 0.34); }
+.partido.en-vivo, .ficha.en-vivo { -fx-border-color: rgba(255, 90, 90, 0.42); }
 .incidencias { -fx-border-color: -borde transparent transparent transparent; -fx-border-width: 1 0 0 0; -fx-padding: 8 0 0 0; }
 .minuto, .minuto-eje {
     -fx-background-color: -pantalla; -fx-background-radius: 8; -fx-text-fill: white; -fx-padding: 2 7;
     -fx-font-family: "Inter SemiBold"; -fx-font-size: 13px;
 }
 .minuto-eje { -fx-background-radius: 10; -fx-border-color: rgba(255, 255, 255, 0.14); -fx-border-radius: 10; -fx-padding: 4 8; -fx-font-size: 14px; }
-.raiz.claro .minuto, .raiz.claro .minuto-eje { -fx-background-color: #0e1a2b; }
+.raiz.claro .minuto, .raiz.claro .minuto-eje { -fx-background-color: #1c3146; }
 .entra-texto { -fx-text-fill: -cesped; -fx-font-family: "Inter SemiBold"; }
 .sale-texto { -fx-text-fill: -sutil; }
 .icono-entra { -fx-stroke: -cesped; -fx-stroke-width: 2.4; }
@@ -498,32 +501,32 @@
 /* Advertencia «previa sin registrar»: círculo ámbar con «!» */
 .icono-advertencia {
     -fx-min-width: 34; -fx-min-height: 34; -fx-max-width: 34; -fx-max-height: 34; -fx-alignment: center;
-    -fx-background-color: rgba(255, 184, 77, 0.16); -fx-background-radius: 17; -fx-border-color: -ambar; -fx-border-radius: 17;
+    -fx-background-color: rgba(255, 186, 7, 0.16); -fx-background-radius: 17; -fx-border-color: -ambar; -fx-border-radius: 17;
     -fx-text-fill: -ambar; -fx-font-family: "Inter SemiBold"; -fx-font-size: 17px;
 }
 /* «Registrar resultados»: alineación que viene de la previa (plegada cuando el XI está completo) */
-.resumen-previa { -fx-border-color: -borde; -fx-border-radius: 18; -fx-background-color: rgba(46, 229, 152, 0.06); -fx-background-radius: 18; -fx-padding: 12 16; }
+.resumen-previa { -fx-border-color: -borde; -fx-border-radius: 18; -fx-background-color: rgba(91, 154, 212, 0.06); -fx-background-radius: 18; -fx-padding: 12 16; }
 .grupo-lista {-fx-text-fill: -cesped; -fx-font-family: "Inter SemiBold"; -fx-font-size: 12px; -fx-opacity: 1; -fx-background-color: transparent; }
 
 /* ------------------------------------------------------------------ ficha del partido */
 .ficha { -fx-padding: 20 22; }
 .ficha-goles { -fx-text-fill: white; -fx-font-family: "Inter Bold"; -fx-font-size: 40px; }
-.marcador-partido .equipo-nombre.ganador { -fx-text-fill: #2ee598; }
+.marcador-partido .equipo-nombre.ganador { -fx-text-fill: #5b9ad4; }
 .cifra-duelo { -fx-font-family: "Inter Bold"; -fx-font-size: 19px; -fx-text-fill: -texto; }
 .barra-fondo { -fx-background-color: rgba(255, 255, 255, 0.09); -fx-background-radius: 99; }
-.raiz.claro .barra-fondo { -fx-background-color: rgba(11, 23, 38, 0.09); }
+.raiz.claro .barra-fondo { -fx-background-color: rgba(28, 49, 70, 0.09); }
 .barra-local { -fx-background-color: -cesped; -fx-background-radius: 99; }
 .barra-visitante { -fx-background-color: -cian; -fx-background-radius: 99; }
 .evento {
     -fx-background-color: -campo; -fx-background-radius: 14; -fx-border-color: -borde; -fx-border-radius: 14; -fx-padding: 9 13;
 }
 .carton { -fx-background-radius: 2; -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 2, 0, 0, 1); }
-.carton-amarilla { -fx-background-color: #ffd233; }
-.carton-roja { -fx-background-color: #ff3b5c; }
+.carton-amarilla { -fx-background-color: #ffba07; }
+.carton-roja { -fx-background-color: #fe0000; }
 
 /* ------------------------------------------------------------------ XI inicial */
 .xi-jugador { -fx-background-color: -campo; -fx-background-radius: 11; -fx-padding: 6 10; -fx-border-color: transparent; -fx-border-radius: 11; }
-.xi-jugador.titular { -fx-background-color: -cesped-suave; -fx-border-color: rgba(46, 229, 152, 0.38); }
+.xi-jugador.titular { -fx-background-color: -cesped-suave; -fx-border-color: rgba(91, 154, 212, 0.38); }
 .xi-jugador:disabled { -fx-opacity: 0.55; }
 .xi-jugador.titular:disabled { -fx-opacity: 0.85; }
 .fila-alineacion { -fx-background-color: -campo; -fx-background-radius: 10; -fx-padding: 5 10; }
@@ -550,27 +553,27 @@
 .detalle-rotulo { -fx-padding: 14 16; }
 
 /* Racha: la letra va siempre dentro del cuadro (no depender solo del color) */
-.forma { -fx-background-radius: 6; -fx-font-family: "Inter SemiBold"; -fx-font-size: 13px; -fx-text-fill: #05080f; }
-.forma-V { -fx-background-color: #2ee598; }
-.forma-E { -fx-background-color: #f7c75a; }
-.forma-D { -fx-background-color: #ff6b81; }
+.forma { -fx-background-radius: 6; -fx-font-family: "Inter SemiBold"; -fx-font-size: 13px; -fx-text-fill: #0f1b29; }
+.forma-V { -fx-background-color: #5b9ad4; }
+.forma-E { -fx-background-color: #ffba07; }
+.forma-D { -fx-background-color: #ff5a5a; }
 
 /* Cancha horizontal: el local a la izquierda y el visitante a la derecha */
 .cancha {
-    -fx-background-color: linear-gradient(from 0% 0% to 12.5% 0%, repeat, #1d7a49 50%, #1a6e42 50%);
+    -fx-background-color: linear-gradient(from 0% 0% to 12.5% 0%, repeat, #2f6fae 50%, #245a8d 50%);
     -fx-background-radius: 14;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 24, 0, 0, 8);
 }
 .cancha-linea { -fx-fill: transparent; -fx-stroke: rgba(255, 255, 255, 0.55); -fx-stroke-width: 2; }
 .ficha-dorsal { -fx-background-radius: 999; -fx-font-family: "Inter Bold"; -fx-font-size: 14px; -fx-border-radius: 999; -fx-border-width: 2; }
-.ficha-local { -fx-background-color: #eef4ff; -fx-text-fill: #0b1726; -fx-border-color: #2ee598; }
-.ficha-visitante { -fx-background-color: #0b1726; -fx-text-fill: #eef4ff; -fx-border-color: #f7c75a; }
+.ficha-local { -fx-background-color: #eaf0f6; -fx-text-fill: #1c3146; -fx-border-color: #5b9ad4; }
+.ficha-visitante { -fx-background-color: #1c3146; -fx-text-fill: #eaf0f6; -fx-border-color: #ffba07; }
 .ficha-nombre { -fx-text-fill: white; -fx-font-size: 11px; -fx-font-family: "Inter SemiBold"; -fx-alignment: center; -fx-text-alignment: center;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 4, 0.5, 0, 1); }
 /* Suplentes, debajo de la cancha */
 .suplente { -fx-background-color: -campo; -fx-background-radius: 6; -fx-padding: 3 8 3 4; }
 /* Cambio sobre la cancha: minuto en que salió el jugador */
-.ficha-sale { -fx-text-fill: #ffb3c0; -fx-font-size: 10px; -fx-font-family: "Inter SemiBold";
+.ficha-sale { -fx-text-fill: #ffb0b0; -fx-font-size: 10px; -fx-font-family: "Inter SemiBold";
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 4, 0.5, 0, 1); }
 
 /* Goles: el balón en la línea de tiempo y en el editor */
@@ -584,7 +587,7 @@
 
 /* Noticias */
 .tarjeta-noticia { -fx-padding: 18 20; }
-.noticias-pendientes { -fx-padding: 18 20; -fx-border-color: rgba(247, 199, 90, 0.45); -fx-border-radius: 22; }
+.noticias-pendientes { -fx-padding: 18 20; -fx-border-color: rgba(255, 186, 7, 0.45); -fx-border-radius: 22; }
 .noticia-cuerpo { -fx-text-fill: -texto; -fx-font-size: 15px; -fx-line-spacing: 2; }
 
 /* Noticias del administrador: pestañas «Pendientes» y «Publicadas» */
@@ -594,40 +597,40 @@
 
 /* [REQ-07] Calificaciones de jugadores: estado de la votación, MVP y filas con su nota */
 .calificacion-estado { -fx-padding: 10 14; -fx-background-radius: 14; -fx-border-radius: 14; -fx-font-family: "Inter SemiBold"; }
-.calificacion-abierta { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(46, 229, 152, 0.36); }
+.calificacion-abierta { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; -fx-border-color: rgba(91, 154, 212, 0.36); }
 .calificacion-cerrada { -fx-text-fill: -sutil; -fx-background-color: rgba(255, 255, 255, 0.05); -fx-border-color: -borde; }
 .tarjeta-mvp {
     -fx-padding: 14 18;
-    -fx-border-color: rgba(247, 199, 90, 0.6);
-    -fx-background-color: rgba(247, 199, 90, 0.55), linear-gradient(to right, rgba(247, 199, 90, 0.2), -vidrio 60%);
+    -fx-border-color: rgba(255, 186, 7, 0.6);
+    -fx-background-color: rgba(255, 186, 7, 0.55), linear-gradient(to right, rgba(255, 186, 7, 0.2), -vidrio 60%);
     -fx-background-insets: 0, 2 0 0 0;
 }
 .mvp-titulo { -fx-text-fill: -oro-texto; -fx-font-family: "Inter SemiBold"; -fx-font-size: 12px; }
 .fila-calificacion { -fx-padding: 8 10; -fx-background-radius: 14; -fx-border-radius: 14; -fx-border-color: -borde; -fx-background-color: rgba(255, 255, 255, 0.03); }
 .raiz.claro .fila-calificacion { -fx-background-color: rgba(255, 255, 255, 0.6); }
-.fila-calificacion.fila-mvp { -fx-border-color: rgba(247, 199, 90, 0.65); -fx-background-color: rgba(247, 199, 90, 0.08); }
+.fila-calificacion.fila-mvp { -fx-border-color: rgba(255, 186, 7, 0.65); -fx-background-color: rgba(255, 186, 7, 0.08); }
 /* Votaciones (visitante): una tarjeta por partido; editor del tiempo (administrador) */
 .tarjeta-votacion { -fx-padding: 14 18; }
-.fila-calificacion.fila-votada { -fx-border-color: rgba(46, 229, 152, 0.36); }
+.fila-calificacion.fila-votada { -fx-border-color: rgba(91, 154, 212, 0.36); }
 .chip-votacion, .raiz.claro .chip-votacion { -fx-text-fill: -cesped; -fx-background-color: -cesped-suave; }
 .votacion-abierta { -fx-text-fill: -cesped; -fx-font-family: "Inter SemiBold"; }
 /* La nota: pastilla con el número; verde alta, neutra media, rojo baja (el número siempre va escrito) */
 .nota { -fx-min-width: 52; -fx-alignment: center; -fx-padding: 5 10; -fx-background-radius: 10; -fx-font-family: "Inter Bold"; -fx-font-size: 17px; }
-.nota-alta { -fx-text-fill: #05080f; -fx-background-color: -cesped; }
+.nota-alta { -fx-text-fill: #0f1b29; -fx-background-color: -cesped; }
 .nota-media { -fx-text-fill: -texto; -fx-background-color: rgba(255, 255, 255, 0.1); }
-.raiz.claro .nota-media { -fx-background-color: rgba(11, 23, 38, 0.08); }
-.nota-baja { -fx-text-fill: #05080f; -fx-background-color: -rojo; }
+.raiz.claro .nota-media { -fx-background-color: rgba(28, 49, 70, 0.08); }
+.nota-baja { -fx-text-fill: #0f1b29; -fx-background-color: -rojo; }
 .raiz.claro .nota-baja, .raiz.claro .nota-alta { -fx-text-fill: white; }
-.nota-mvp { -fx-text-fill: #2a1900; -fx-background-color: -oro; -fx-font-size: 22px; }
+.nota-mvp { -fx-text-fill: #1c3146; -fx-background-color: -oro; -fx-font-size: 22px; }
 .chip-portero { -fx-text-fill: -cian; -fx-padding: 1 8; -fx-font-size: 11px; }
-.chip-mvp { -fx-text-fill: -oro-texto; -fx-border-color: rgba(247, 199, 90, 0.6); -fx-padding: 1 8; -fx-font-size: 11px; }
-.chip-voto { -fx-text-fill: -cesped; -fx-border-color: rgba(46, 229, 152, 0.36); }
+.chip-mvp { -fx-text-fill: -oro-texto; -fx-border-color: rgba(255, 186, 7, 0.6); -fx-padding: 1 8; -fx-font-size: 11px; }
+.chip-voto { -fx-text-fill: -cesped; -fx-border-color: rgba(91, 154, 212, 0.36); }
 /* ------------------------------------------------------------------ fotos de jugadores (tipo cédula) y escudos */
 /* Toda foto de jugador es vertical 3:4, como una cédula; sin foto se ve la persona «NN». */
 .foto-cedula { -fx-background-color: #dfe6ef; }
-.nn-fondo { -fx-background-color: #2a3a52; }
+.nn-fondo { -fx-background-color: #2a3d55; }
 .nn-figura { -fx-fill: #8fa3bf; }
-.nn-texto { -fx-text-fill: #2a3a52; -fx-font-family: "Inter Bold"; -fx-padding: 0; }
+.nn-texto { -fx-text-fill: #2a3d55; -fx-font-family: "Inter Bold"; -fx-padding: 0; }
 .raiz.claro .nn-fondo { -fx-background-color: #d5dde8; }
 .raiz.claro .nn-figura { -fx-fill: #8b9bb2; }
 .raiz.claro .nn-texto { -fx-text-fill: #f2f5f9; }
@@ -636,8 +639,8 @@
 /* Fotos y escudos que se tocan para cambiarlos (sin botones extra). */
 .foto-tocable:hover { -fx-scale-x: 1.06; -fx-scale-y: 1.06; }
 .foto-tocable:focused { -fx-effect: dropshadow(gaussian, -cian, 10, 0.5, 0, 0); }
-.foto-boton { -fx-content-display: top; -fx-graphic-text-gap: 4; -fx-padding: 4 8; -fx-border-style: segments(4, 3); -fx-border-color: rgba(116, 220, 255, 0.5);
-  -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: rgba(116, 220, 255, 0.06); }
+.foto-boton { -fx-content-display: top; -fx-graphic-text-gap: 4; -fx-padding: 4 8; -fx-border-style: segments(4, 3); -fx-border-color: rgba(125, 179, 230, 0.5);
+  -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: rgba(125, 179, 230, 0.06); }
 
 /* En la cancha: la foto con el borde del color del equipo y el dorsal encima, en la esquina. */
 .ficha-foto { -fx-border-width: 2; -fx-border-radius: 7; -fx-background-radius: 7; -fx-padding: 0; }
@@ -653,37 +656,37 @@
    (Esta capa va al final: redefine los colores base y ajusta los componentes.)
    ===================================================================== */
 .raiz {
-    -fondo: #050a12;
-    -sobre-cesped: #03170d;
-    -superficie: #0b1522;
-    -superficie-2: #12233a;
-    -linea: rgba(150, 185, 230, 0.1);
+    -fondo: #0f1b29;
+    -sobre-cesped: #0e1824;
+    -superficie: #16273a;
+    -superficie-2: #1c3146;
+    -linea: rgba(162, 174, 188, 0.1);
     -fila-hover: rgba(255, 255, 255, 0.045);
     -vidrio: -superficie;
     -vidrio-alto: -superficie;
     -vidrio-denso: -superficie;
     -vidrio-borde: transparent;
     -vidrio-luz: transparent;
-    -campo: #070f1a;
-    -pantalla: #050c16;
+    -campo: #0f1d2c;
+    -pantalla: #0b1522;
     -borde: -linea;
     -fx-font-family: "Inter", "Segoe UI", sans-serif;
     -fx-font-size: 13.5px;
 }
 .raiz.claro {
-    -fondo: #e7ecf2;
+    -fondo: #e8edf2;
     -sobre-cesped: white;
     -superficie: #ffffff;
     -superficie-2: #dfe7f1;
-    -linea: rgba(11, 23, 38, 0.09);
-    -fila-hover: rgba(11, 23, 38, 0.04);
+    -linea: rgba(28, 49, 70, 0.09);
+    -fila-hover: rgba(28, 49, 70, 0.04);
     -vidrio: -superficie;
     -vidrio-alto: -superficie;
     -vidrio-denso: -superficie;
     -vidrio-borde: transparent;
     -vidrio-luz: transparent;
     -campo: #f3f6f9;
-    -pantalla: #0e1a2b;
+    -pantalla: #1c3146;
     -borde: -linea;
 }
 
@@ -727,15 +730,15 @@
 .btn:focused { -fx-border-color: -cian; }
 .btn.primario, .raiz.claro .btn.primario { -fx-background-color: -cesped; -fx-text-fill: -sobre-cesped; -fx-effect: null; }
 .raiz.claro .btn.primario { -fx-text-fill: white; }
-.btn.primario:hover { -fx-background-color: #5af0b0; }
+.btn.primario:hover { -fx-background-color: #8dbde6; }
 .raiz.claro .btn.primario:hover { -fx-background-color: -cesped-2; }
-.btn.dorado, .raiz.claro .btn.dorado, .btn.primario.dorado { -fx-background-color: #f7c75a; -fx-text-fill: #2a1900; -fx-effect: null; }
-.btn.dorado:hover { -fx-background-color: #ffd77d; }
+.btn.dorado, .raiz.claro .btn.dorado, .btn.primario.dorado { -fx-background-color: #ffba07; -fx-text-fill: #1c3146; -fx-effect: null; }
+.btn.dorado:hover { -fx-background-color: #ffcc4d; }
 .btn.fantasma, .raiz.claro .btn.fantasma { -fx-background-color: transparent; }
 .btn.fantasma:hover, .raiz.claro .btn.fantasma:hover { -fx-background-color: -fila-hover; }
 .btn.peligro, .raiz.claro .btn.peligro { -fx-background-color: transparent; }
 .btn.mini { -fx-padding: 4 10; -fx-font-size: 12px; -fx-min-height: 28; }
-.btn.foto-boton, .raiz.claro .btn.foto-boton { -fx-border-color: rgba(116, 220, 255, 0.55); -fx-border-style: segments(4, 3); -fx-background-color: rgba(116, 220, 255, 0.06); }
+.btn.foto-boton, .raiz.claro .btn.foto-boton { -fx-border-color: rgba(125, 179, 230, 0.55); -fx-border-style: segments(4, 3); -fx-background-color: rgba(125, 179, 230, 0.06); }
 .btn.grande { -fx-padding: 10 20; -fx-font-size: 14px; -fx-min-height: 42; }
 .btn.icono-solo { -fx-min-width: 36; -fx-min-height: 36; -fx-pref-width: 36; -fx-pref-height: 36; }
 
@@ -778,7 +781,7 @@
 /* Cabeceras: más bajas. */
 .marcador-principal { -fx-padding: 16 20; }
 .marcador-principal.terminado, .raiz.claro .marcador-principal.terminado {
-    -fx-background-color: #f7c75a, -superficie;
+    -fx-background-color: #ffba07, -superficie;
     -fx-background-insets: 0, 0 0 0 3;
     -fx-border-color: transparent;
 }
@@ -837,7 +840,7 @@
 }
 .table-row-cell:hover { -fx-background-color: -linea, -superficie, -fila-hover; -fx-background-insets: 0, 0 0 1 0, 0 0 1 0; }
 .table-row-cell:selected { -fx-background-color: -linea, -superficie, -cesped-suave; -fx-background-insets: 0, 0 0 1 0, 0 0 1 0; }
-.table-row-cell.lider, .raiz.claro .table-row-cell.lider { -fx-background-color: -linea, -superficie, rgba(247, 199, 90, 0.12); -fx-background-insets: 0, 0 0 1 0, 0 0 1 0; }
+.table-row-cell.lider, .raiz.claro .table-row-cell.lider { -fx-background-color: -linea, -superficie, rgba(255, 186, 7, 0.12); -fx-background-insets: 0, 0 0 1 0, 0 0 1 0; }
 .table-row-cell:empty { -fx-background-color: -superficie; }
 .table-cell { -fx-font-size: 13.5px; }
 .table-column.puntos { -fx-font-size: 15px; }
@@ -846,7 +849,7 @@
 /* Llaves, campeón, reglas y listas: mismas esquinas. */
 .cruce { -fx-background-radius: 8; -fx-border-color: transparent; -fx-border-radius: 8; }
 .lado.gana { -fx-background-radius: 8; }
-.campeon-caja { -fx-background-color: #f7c75a, -superficie; -fx-background-insets: 0, 0 0 0 3; -fx-background-radius: 8; -fx-border-color: transparent; -fx-effect: null; }
+.campeon-caja { -fx-background-color: #ffba07, -superficie; -fx-background-insets: 0, 0 0 0 3; -fx-background-radius: 8; -fx-border-color: transparent; -fx-effect: null; }
 .criterio, .fila-lista { -fx-background-radius: 6; -fx-border-radius: 6; -fx-border-color: -linea; -fx-padding: 6 10; }
 .dorsal { -fx-background-radius: 4; -fx-min-width: 30; -fx-min-height: 26; }
 
@@ -883,8 +886,8 @@
 
 /* El MVP conserva su borde dorado sobre el panel plano. */
 .vidrio.tarjeta-mvp, .raiz.claro .vidrio.tarjeta-mvp {
-    -fx-background-color: linear-gradient(to right, rgba(247, 199, 90, 0.2), transparent 60%);
-    -fx-border-color: rgba(247, 199, 90, 0.6);
+    -fx-background-color: linear-gradient(to right, rgba(255, 186, 7, 0.2), transparent 60%);
+    -fx-border-color: rgba(255, 186, 7, 0.6);
 }
 
 /* Menú «Cambiar / Eliminar» de fotos. */
@@ -895,25 +898,54 @@
    «Could not resolve '-texto'». Por eso el menú trae sus propios colores base (oscuros) y, ya
    enganchado a una ventana en modo claro, toma los claros. */
 .context-menu {
-    -texto: #eef4ff;
-    -sutil: #a3b2ca;
-    -rojo: #ff6b81;
-    -cesped-suave: rgba(46, 229, 152, 0.15);
-    -superficie: #0b1522;
-    -linea: rgba(150, 185, 230, 0.1);
+    -texto: #eaf0f6;
+    -sutil: #a2aebc;
+    -rojo: #ff5a5a;
+    -cesped-suave: rgba(91, 154, 212, 0.15);
+    -superficie: #16273a;
+    -linea: rgba(162, 174, 188, 0.1);
     -vidrio-denso: -superficie;
     -vidrio-borde: transparent;
     -borde: -linea;
 }
 .raiz.claro .context-menu, .context-menu.claro {
-    -texto: #0b1726;
-    -sutil: #4b5b73;
-    -rojo: #c8243f;
-    -cesped-suave: rgba(5, 117, 69, 0.13);
+    -texto: #1c3146;
+    -sutil: #52627a;
+    -rojo: #d00000;
+    -cesped-suave: rgba(47, 111, 174, 0.13);
     -superficie: #ffffff;
-    -linea: rgba(11, 23, 38, 0.09);
+    -linea: rgba(28, 49, 70, 0.09);
 }
 .context-menu .menu-item .label { -fx-font-family: "Inter"; -fx-font-weight: normal; -fx-font-size: 13.5px; }
 
 /* El campeonato que se gestiona conserva su borde sobre los paneles planos (tambien en modo claro). */
 .vidrio.tarjeta-campeonato.actual, .raiz.claro .vidrio.tarjeta-campeonato.actual { -fx-border-color: -cesped; -fx-border-width: 1.5; -fx-border-radius: 8; }
+
+/* Mi perfil */
+.insignia-verificado { -fx-text-fill: -cesped; }
+.insignia-sin-verificar { -fx-text-fill: #ffba07; }
+.aviso-demo { -fx-text-fill: #ffba07; -fx-wrap-text: true; }
+
+/* =====================================================================
+   Paleta AlphaSport: azul marino #1C3146, azul #4187C5, ámbar #FFBA07,
+   gris #A2AEBC y rojo #FE0000 (igual que la web). En modo oscuro el panel
+   de opciones va en el gris de la paleta, donde resalta el logo.
+   ===================================================================== */
+.raiz .barra-lateral {
+    -superficie: #a2aebc; -texto: #1c3146; -sutil: #22405e; -cesped: #1c3146; -cesped-suave: rgba(28, 49, 70, 0.14);
+    -fila-hover: rgba(28, 49, 70, 0.1); -linea: rgba(28, 49, 70, 0.2); -borde: rgba(28, 49, 70, 0.2);
+}
+.raiz.claro .barra-lateral {
+    -superficie: #ffffff; -texto: #1c3146; -sutil: #52627a; -cesped: #2f6fae; -cesped-suave: rgba(47, 111, 174, 0.12);
+    -fila-hover: rgba(28, 49, 70, 0.04); -linea: rgba(28, 49, 70, 0.09); -borde: rgba(28, 49, 70, 0.09);
+}
+.raiz .barra-lateral .nav:selected { -fx-background-color: #1c3146; -fx-text-fill: white; }
+.raiz .barra-lateral .nav:selected .icono-nav { -fx-stroke: #a9cbeb; }
+.raiz.claro .barra-lateral .nav:selected { -fx-background-color: -cesped-suave; -fx-text-fill: -cesped; }
+.raiz.claro .barra-lateral .nav:selected .icono-nav { -fx-stroke: -cesped; }
+/* El contorno azul marino del lobo se perdería en modo oscuro: un filo claro lo resalta. */
+.logo-login { -fx-effect: dropshadow(gaussian, #dce6f0, 3, 1, 0, 0); }
+.raiz.claro .logo-login { -fx-effect: null; }
+.texto-modo-claro { visibility: hidden; }
+.raiz.claro .texto-modo-claro { visibility: visible; }
+.raiz.claro .texto-modo-oscuro { visibility: hidden; }
