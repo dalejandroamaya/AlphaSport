@@ -899,7 +899,7 @@ public class Aplicacion extends Application {
             pestanaPartidos = "previa";
             mostrarLogin();
         });
-        soloAdmin(nuevo, itemSiguiente, cambiar, terminar, cancelar, abrir);
+        soloAdmin(nuevo, itemSiguiente, cambiar, terminar, cancelar, respaldo, abrir); // el respaldo, solo el Organizador dueño
         MenuItem salir = new MenuItem("Salir");
         salir.setOnAction(e -> stage.close());
         menu.getItems().addAll(nuevo, itemSiguiente, cambiar, terminar, cancelar, new SeparatorMenuItem(), respaldo, abrir, exportar,

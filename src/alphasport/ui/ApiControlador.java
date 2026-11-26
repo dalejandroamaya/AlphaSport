@@ -428,10 +428,14 @@ public class ApiControlador {
     public record Descarga(byte[] datos, String tipo, String nombre) {
     }
 
-    /** Respaldo del campeonato elegido (.dat). Lo puede descargar cualquiera que lo vea. */
+    /**
+     * Respaldo del campeonato elegido (.dat): solo el Organizador dueño (GestorCampeonatos.paraGestionar). Un
+     * Aficionado u otro Organizador recibe PERMISO aunque llame la ruta directamente. El archivo es el campeonato
+     * (equipos, partidos y votos anónimos por dispositivo): no lleva cuentas, correos ni contraseñas.
+     */
     public Descarga respaldo() throws Exception {
-        exigir(Permiso.VER);
-        CampeonatoService servicio = espacio(Permiso.VER, true).servicio();
+        exigir(Permiso.GESTIONAR_CAMPEONATO);
+        CampeonatoService servicio = espacio(Permiso.GESTIONAR_CAMPEONATO, true).servicio();
         return new Descarga(servicio.historial().respaldo(), "application/octet-stream", nombreArchivo(servicio) + ".dat");
     }
 

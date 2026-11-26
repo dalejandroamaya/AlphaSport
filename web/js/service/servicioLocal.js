@@ -1050,8 +1050,9 @@ function crearServicioLocal() {
     },
     async respaldo() {
       exigirSesion();
-      exigir();
-      return { nombre: nombreArchivo(c.nombre) + '.json', contenido: new Blob([JSON.stringify(c, null, 2)], { type: 'application/json' }) };
+      exigirDueno(); // solo el Organizador dueño, como en Java (el respaldo no lleva cuentas ni claves)
+      // Sin el usuario dueño: al abrirlo, el campeonato queda de quien lo abre.
+      return { nombre: nombreArchivo(c.nombre) + '.json', contenido: new Blob([JSON.stringify(Object.assign({}, c, { propietario: undefined }), null, 2)], { type: 'application/json' }) };
     },
     async exportarHistorial() {
       exigirSesion();

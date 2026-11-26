@@ -29,6 +29,11 @@ function crearServicioRemoto() {
 
   const descargar = async ruta => {
     const respuesta = await fetch('/api/' + ruta, { headers: cabeceras() });
+    // Si el servidor responde JSON, es un error (por ejemplo PERMISO): se muestra en vez de bajar un archivo.
+    if ((respuesta.headers.get('Content-Type') || '').includes('application/json')) {
+      const r = await respuesta.json();
+      throw new Error(r.error || 'No se pudo descargar el archivo.');
+    }
     if (!respuesta.ok) throw new Error('No se pudo descargar el archivo.');
     const disposicion = respuesta.headers.get('Content-Disposition') || '';
     const nombre = decodeURIComponent((/filename\*=UTF-8''([^;]+)/.exec(disposicion) || [, 'archivo'])[1]);

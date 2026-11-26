@@ -965,6 +965,17 @@ public class SimulacionFormatos {
                     && "PERMISO".equals(codigoDe(() -> ana.ejecutar("campeonato/terminar", java.util.Map.of("codigo", ligaBeto))))
                     && equipos.apply(ligaBeto).size() == 4 && equipos.apply(ligaAna).size() == 4
                     && !"PERMISO".equals(codigoDe(() -> anaEnBeto.consultar("estado"))); // ver el estado no falla: vuelve a lo suyo
+            // Respaldo: solo el Organizador dueño. El Aficionado y otro Organizador reciben PERMISO aunque llamen la ruta
+            // directamente; abrir respaldos tampoco es del Aficionado; y el archivo no lleva cuentas, correos ni claves.
+            alphasport.ui.ApiControlador anaEnSuLiga = base.cliente(ana.getToken(), ligaAna);
+            byte[] respaldoAna = anaEnSuLiga.respaldo().datos();
+            String textoRespaldo = new String(respaldoAna, java.nio.charset.StandardCharsets.ISO_8859_1);
+            permisos &= "PERMISO".equals(codigoDe(() -> base.cliente(luis.getToken(), ligaAna).respaldo()))
+                    && "PERMISO".equals(codigoDe(() -> base.cliente(ana.getToken(), ligaBeto).respaldo())) // otro Organizador
+                    && "PERMISO".equals(codigoDe(() -> base.cliente(luis.getToken(), ligaAna).abrirRespaldo(respaldoAna)))
+                    && respaldoAna.length > 0 && !textoRespaldo.contains("pbkdf2") && !textoRespaldo.contains("clave-ana1")
+                    && !textoRespaldo.contains("@") && !textoRespaldo.contains("CuentaUsuario")
+                    && base.cliente(luis.getToken(), ligaAna).historialEnTexto().datos().length > 0; // el historial en texto sí se puede ver
             // Elegir: Luis elige la de Beto y la ve; Beto, con uno solo, lo tiene sin elegir; Maria, con tres, tiene que elegir.
             luis.ejecutar("campeonato/elegir", java.util.Map.of("codigo", ligaBeto));
             alphasport.ui.ApiControlador betoOtraVez = entrar.apply("beto", "clave-beto1"), maria = entrar.apply("maria", "clave-maria1");
