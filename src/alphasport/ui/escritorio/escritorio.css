@@ -920,3 +920,8 @@
 
 /* El campeonato que se gestiona conserva su borde sobre los paneles planos (tambien en modo claro). */
 .vidrio.tarjeta-campeonato.actual, .raiz.claro .vidrio.tarjeta-campeonato.actual { -fx-border-color: -cesped; -fx-border-width: 1.5; -fx-border-radius: 8; }
+
+/* Mi perfil */
+.insignia-verificado { -fx-text-fill: -cesped; }
+.insignia-sin-verificar { -fx-text-fill: #f5b942; }
+.aviso-demo { -fx-text-fill: #f5b942; -fx-wrap-text: true; }

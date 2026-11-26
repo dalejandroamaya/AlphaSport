@@ -73,14 +73,14 @@ import javafx.util.Duration;
  */
 public class Aplicacion extends Application {
 
-    static final String[] VISTAS = {"campeonatos", "equipos", "partidos", "votaciones", "posiciones", "llaves", "sanciones", "noticias", "reglas"};
+    static final String[] VISTAS = {"campeonatos", "equipos", "partidos", "votaciones", "posiciones", "llaves", "sanciones", "noticias", "reglas", "perfil"};
     /** Vistas que el visitante no ve (no le aportan: son de gestión). */
     static final java.util.Set<String> VISTAS_SOLO_ADMIN = java.util.Set.of("campeonatos", "equipos", "reglas");
     /** Vistas que solo ve el visitante: el administrador no vota [REQ-07]. */
     static final java.util.Set<String> VISTAS_SOLO_VISITANTE = java.util.Set.of("votaciones");
     /** Vista con la que entra el visitante. */
     static final String VISTA_INICIAL_VISITANTE = "partidos";
-    static final String[] NOMBRES_VISTAS = {"Mis campeonatos", "Equipos", "Partidos", "Votaciones", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas"};
+    static final String[] NOMBRES_VISTAS = {"Mis campeonatos", "Equipos", "Partidos", "Votaciones", "Posiciones", "Llaves", "Estadísticas", "Noticias", "Reglas", "Mi perfil"};
     static final String[] ICONOS_VISTAS = {
         "M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z",
         "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z",
@@ -90,7 +90,8 @@ public class Aplicacion extends Application {
         "M3 4h5v6H3M3 14h5v6H3M8 7h4v10H8M12 12h5M17 9h4v6h-4",
         "M6.5 4h6a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 5 15.5v-10A1.5 1.5 0 0 1 6.5 4ZM15 7h3a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5h-6a1.5 1.5 0 0 1-1.5-1.5V18",
         "M4 5h13v14H6a2 2 0 0 1-2-2V5ZM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4",
-        "M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7"};
+        "M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7",
+        "M12 4a4 4 0 1 1 0 8a4 4 0 0 1 0-8ZM4 21a8 8 0 0 1 16 0"};
     /* Iconos de trazo (24x24) en lugar de emojis. */
     static final String ICONO_TROFEO = "M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z";
     static final String ICONO_LUNA = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z";
@@ -163,6 +164,10 @@ public class Aplicacion extends Application {
         });
         catalogo = api.consultar("catalogo");
         dialogos = new Dialogos(this);
+        // MODO DEMOSTRACIÓN: el código para verificar el correo se muestra en una ventana (además de la consola).
+        alphasport.service.EnviadorCorreoDemostracion.alEnviar((correo, codigo) -> javafx.application.Platform.runLater(() ->
+                dialogos.mensaje("Código de verificación (modo demostración)", "No se envió un correo real. El código para "
+                        + correo + " es: " + codigo + ". Vence en 15 minutos y tiene 5 intentos.")));
         Fotos.usar(this);
         cargarFuentes();
         scene = new Scene(new StackPane(), 1280, 820);
@@ -1103,7 +1108,7 @@ public class Aplicacion extends Application {
         }
         // Sin campeonato elegido las demás vistas tendrían datos viejos: el Organizador va a «Mis campeonatos».
         // Las noticias no dependen de tener uno elegido: se ven las generales.
-        if (!b(E, "hay") && !nombre.equals("noticias") && puedeEditar()) {
+        if (!b(E, "hay") && !nombre.equals("noticias") && !nombre.equals("perfil") && puedeEditar()) {
             nombre = "campeonatos";
         }
         vista = nombre;
@@ -1111,7 +1116,7 @@ public class Aplicacion extends Application {
         if (b != null) {
             b.setSelected(true);
         }
-        if (!b(E, "hay") && !nombre.equals("noticias") && !nombre.equals("campeonatos")) {
+        if (!b(E, "hay") && !nombre.equals("noticias") && !nombre.equals("campeonatos") && !nombre.equals("perfil")) {
             // El Aficionado no crea campeonatos: en cualquier vista ve el mismo aviso.
             contenido.getChildren().setAll(vacio("Todavía no hay un campeonato en curso. Vuelva más tarde."));
             return;
@@ -1125,6 +1130,7 @@ public class Aplicacion extends Application {
             case "sanciones" -> vistaEstadisticas();
             case "reglas" -> vistaReglas();
             case "noticias" -> vistaNoticias();
+            case "perfil" -> vistaPerfil();
             default -> vistaEquipos();
         };
         contenido.getChildren().setAll(nodo);
@@ -1182,6 +1188,117 @@ public class Aplicacion extends Application {
             return api.consultar("campeonatos");
         } catch (ReglaNegocioException e) {
             return mapa("ok", false, "error", e.getMessage(), "campeonatos", List.of(), "sinOrganizador", List.of());
+        }
+    }
+
+    /* ---------------------------------------------------------------- Mi perfil */
+
+    /**
+     * «Mi perfil» (Organizador y Aficionado): datos (nombre y correo), verificar el correo y cambiar la
+     * contraseña. La cuenta es la de la sesión: las peticiones no dicen de quién es.
+     */
+    private Node vistaPerfil() {
+        VBox caja = seccion("Mi perfil", "Sus datos de acceso. El nombre de usuario no se puede cambiar.");
+        Map<String, Object> p;
+        try {
+            p = m(api.consultar("perfil"), "perfil");
+        } catch (RuntimeException e) {
+            caja.getChildren().add(vacio(e.getMessage()));
+            return caja;
+        }
+        boolean verificado = b(p, "correoVerificado");
+        // ---- Mis datos
+        TextField nombre = new TextField(s(p, "nombre"));
+        TextField correo = new TextField(s(p, "correo"));
+        PasswordField claveCorreo = new PasswordField();
+        claveCorreo.setPromptText("Solo si cambia el correo");
+        Label insignia = etiqueta(verificado ? "Correo verificado" : "Correo sin verificar", "chip", verificado ? "insignia-verificado" : "insignia-sin-verificar");
+        Label estadoCorreo = pistaEstado();
+        VBox campoClaveCorreo = campoAcceso("Contraseña actual (para cambiar el correo)", claveCorreo);
+        campoClaveCorreo.managedProperty().bind(campoClaveCorreo.visibleProperty());
+        Runnable revisarCorreo = () -> {
+            boolean otro = !correo.getText().trim().equalsIgnoreCase(s(p, "correo"));
+            campoClaveCorreo.setVisible(otro);
+            estadoCampo(estadoCorreo, otro, alphasport.service.AutenticacionService.problemaCorreo(correo.getText()), "Correo válido. Quedará sin verificar.");
+        };
+        correo.textProperty().addListener((o, a, n) -> revisarCorreo.run());
+        revisarCorreo.run();
+        Label errorDatos = errorAcceso();
+        Button guardar = boton("Guardar datos", "primario");
+        guardar.setOnAction(e -> accionPerfil(errorDatos, "perfil/datos", mapa("nombre", nombre.getText(), "correo", correo.getText(),
+                "claveActual", claveCorreo.getText())));
+        VBox datos = bloquePerfil("Mis datos", etiqueta("Usuario: " + s(p, "usuario") + " · " + s(p, "rol"), "sutil"),
+                campoAcceso("Nombre", nombre), new HBox(8, etiqueta("Correo", "campo-titulo"), insignia), correo, estadoCorreo,
+                campoClaveCorreo, errorDatos, guardar);
+        // ---- Verificar correo (solo si falta)
+        VBox verificar = null;
+        if (!verificado) {
+            TextField codigo = new TextField();
+            codigo.setPromptText("6 dígitos");
+            Label errorCodigo = errorAcceso();
+            Button enviar = boton("Enviar código", "fantasma");
+            enviar.setOnAction(e -> accionPerfil(errorCodigo, "perfil/codigo", mapa()));
+            Button comprobar = boton("Verificar", "primario");
+            comprobar.setOnAction(e -> accionPerfil(errorCodigo, "perfil/verificar", mapa("codigo", codigo.getText())));
+            verificar = bloquePerfil("Verificar correo",
+                    b(p, "demostracion") ? etiqueta("Modo demostración: no se envían correos reales. El código aparece en una ventana.", "chip", "aviso-demo") : new Region(),
+                    etiqueta(b(p, "codigoPendiente") ? "Ya pidió un código: escríbalo abajo. Puede pedir otro si no le llegó."
+                            : "Pida un código de 6 dígitos. Vence en 15 minutos y tiene 5 intentos.", "sutil"),
+                    enviar, campoAcceso("Código", codigo), errorCodigo, comprobar);
+        }
+        // ---- Cambiar contraseña
+        PasswordField actual = new PasswordField(), nueva = new PasswordField(), confirmacion = new PasswordField();
+        VBox reglas = listaReglas();
+        Label estadoConfirmacion = pistaEstado();
+        Label errorClave = errorAcceso();
+        Button cambiar = boton("Cambiar contraseña", "primario");
+        Runnable revisarClave = () -> {
+            boolean claveBien = marcarReglas(reglas, alphasport.service.AutenticacionService.reglasClave(nueva.getText()));
+            boolean igual = estadoCampo(estadoConfirmacion, !confirmacion.getText().isEmpty(),
+                    nueva.getText().equals(confirmacion.getText()) ? null : "Las contraseñas no coinciden.", "Las contraseñas coinciden.");
+            cambiar.setDisable(!(claveBien && igual && !actual.getText().isEmpty()));
+        };
+        for (PasswordField campo : List.of(actual, nueva, confirmacion)) {
+            campo.textProperty().addListener((o, a, n) -> revisarClave.run());
+        }
+        revisarClave.run();
+        cambiar.setOnAction(e -> {
+            accionPerfil(errorClave, "perfil/clave", mapa("claveActual", actual.getText(), "clave", nueva.getText(), "confirmacion", confirmacion.getText()));
+            actual.clear();
+            nueva.clear();
+            confirmacion.clear();
+        });
+        VBox clave = bloquePerfil("Cambiar contraseña", campoAcceso("Contraseña actual", actual), campoAcceso("Contraseña nueva", nueva), reglas,
+                campoAcceso("Confirmar contraseña nueva", confirmacion), estadoConfirmacion, errorClave, cambiar);
+        javafx.scene.layout.FlowPane bloques = new javafx.scene.layout.FlowPane(16, 16);
+        bloques.getChildren().add(datos);
+        if (verificar != null) {
+            bloques.getChildren().add(verificar);
+        }
+        bloques.getChildren().add(clave);
+        caja.getChildren().add(bloques);
+        return caja;
+    }
+
+    private static VBox bloquePerfil(String titulo, Node... nodos) {
+        VBox bloque = new VBox(10, etiqueta(titulo, "h3"));
+        bloque.getChildren().addAll(nodos);
+        bloque.getStyleClass().addAll("vidrio", "tarjeta");
+        bloque.setPadding(new Insets(16));
+        bloque.setPrefWidth(340);
+        return bloque;
+    }
+
+    /** Envía una acción del perfil; si sale bien avisa y vuelve a dibujar el perfil, si no muestra el error en el bloque. */
+    private void accionPerfil(Label error, String ruta, Map<String, Object> datos) {
+        try {
+            Map<String, Object> r = api.ejecutar(ruta, datos);
+            aviso(s(r, "mensaje"));
+            mostrarVista("perfil");
+        } catch (Exception ex) {
+            error.setText(ex.getMessage());
+            error.setWrapText(true);
+            error.setVisible(true);
         }
     }
 
