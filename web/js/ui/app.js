@@ -329,7 +329,6 @@ function aplicarPermisos() {
   }
   $('chipRol').textContent = S ? S.rolNombre + (admin ? '' : ' · solo lectura') : '';
   $('chipRol').hidden = !S;
-  $('chipLectura').hidden = !S || admin;
   $('btnAvanzar').hidden = !admin || !E.hay; // sin campeonato elegido no hay nada que iniciar
   // «Cerrar programa» solo en el programa local (publicado en internet no se cierra).
   $('menuCerrar').hidden = servicio.modo !== 'java' || !admin || !['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
@@ -1181,7 +1180,8 @@ function dibujarListaPartidos() {
       (estado === 'aplazados' && (p.estado === 'APLAZADO' || p.estado === 'SUSPENDIDO'))));
   const cont = $('listaPartidos');
   if (!lista.length) {
-    cont.innerHTML = vacioHtml(!E.campeonato.iniciado ? 'El fixture se genera automáticamente al pulsar «Iniciar campeonato».'
+    cont.innerHTML = vacioHtml(!E.campeonato.iniciado ? (puedeEditar() ? 'El fixture se genera automáticamente al pulsar «Iniciar campeonato».'
+      : 'El calendario aparece cuando el organizador inicie el campeonato.')
       : previa && !E.partidos.some(p => !p.jugado) ? 'Todos los partidos ya se jugaron.'
       : previa ? 'No hay partidos por jugar con estos filtros.' : 'No hay partidos con estos filtros.');
     return;
@@ -2111,7 +2111,7 @@ async function renderNoticias(datos) {
   const admin = puedeEditar();
   $('ayudaNoticias').textContent = admin
     ? 'Publique noticias oficiales y apruebe o rechace las que envían los visitantes.'
-    : 'Noticias del torneo. Puede comentar o proponer una noticia: el administrador la revisa antes de publicarla.';
+    : 'Comente o proponga una noticia: el organizador la revisa antes de publicarla.';
   $('btnNuevaNoticia').textContent = admin ? '+ Nueva noticia' : 'Proponer una noticia';
   if (admin) {
     // Administrador: «Pendientes por aprobar» y «Publicadas y oficiales» en pestañas separadas.

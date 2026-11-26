@@ -620,7 +620,6 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 
 /* ------------------------------------------------------------------ roles: chip del rol y del visitante */
 .chip-rol { justify-content: center; }
-.chip-lectura { color: var(--cian); border-color: rgba(116, 220, 255, .3); }
 
 /* ------------------------------------------------------------------ detalle del partido */
 .dlg-detalle .cabecera-dlg h3 { font-size: 1.3rem; }

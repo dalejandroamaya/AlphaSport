@@ -677,6 +677,9 @@ public class Aplicacion extends Application {
             if ((puedeEditar() ? VISTAS_SOLO_VISITANTE : VISTAS_SOLO_ADMIN).contains(clave)) {
                 continue; // el visitante no ve Equipos ni Reglas; el administrador no ve Votaciones
             }
+            if (clave.equals("votaciones") && !vista.equals("votaciones") && (E == null || l(E, "partidos").stream().noneMatch(p -> b(m(p, "votacion"), "abierta")))) {
+                continue; // sin votaciones abiertas, la sección solo tendría un aviso vacío: no se muestra en el menú
+            }
             SVGPath icono = new SVGPath();
             icono.setContent(ICONOS_VISTAS[i]);
             icono.getStyleClass().add("icono-nav");
@@ -1638,7 +1641,7 @@ public class Aplicacion extends Application {
             VBox caja = seccion("Partidos", "Calendario y resultados. Toque cualquier partido para ver la previa, el cara a cara, la racha y las alineaciones.",
                     cFase, cEstado, cEquipo);
             caja.getChildren().add(bloquesPartidos(todos.stream().filter(faseYEquipo.and(porEstado)).toList(), false,
-                    iniciado ? "No hay partidos con estos filtros." : sinFixture));
+                    iniciado ? "No hay partidos con estos filtros." : "El calendario aparece cuando el organizador inicie el campeonato."));
             return caja;
         }
         // Administrador: dos pasos separados, como en Noticias. Primero la previa (antes del pitazo), después el resultado.
@@ -2210,7 +2213,7 @@ public class Aplicacion extends Application {
         nueva.setOnAction(e -> dialogos.noticia(null, !admin));
         VBox caja = seccion("Noticias", admin
                 ? "Publique noticias oficiales y apruebe o rechace las que envían los visitantes."
-                : "Noticias del torneo. Puede comentar o proponer una noticia: el administrador la revisa antes de publicarla.", nueva);
+                : "Comente o proponga una noticia: el organizador la revisa antes de publicarla.", nueva);
         List<Map<String, Object>> publicadas = l(datos, "publicadas");
         if (!admin) {
             // Visitante: solo el feed público (aprobado = true).
