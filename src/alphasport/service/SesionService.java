@@ -55,6 +55,11 @@ public class SesionService {
      * @return el token de la sesion
      * @throws ReglaNegocioException si algun dato no sirve o el usuario o el correo ya estan en uso.
      */
+    /** «Mi perfil» de las cuentas de este servicio. */
+    public PerfilService perfil() {
+        return autenticacion.perfil();
+    }
+
     public String registrar(AutenticacionService.SolicitudRegistro datos) throws alphasport.persistence.PersistenciaException {
         return abrir(autenticacion.registrar(datos));
     }

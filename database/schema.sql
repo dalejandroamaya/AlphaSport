@@ -11,7 +11,7 @@ CREATE TABLE esquema_version (
     version      INTEGER PRIMARY KEY,
     aplicada_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO esquema_version (version) VALUES (8);
+INSERT INTO esquema_version (version) VALUES (9);
 
 -- ---------------------------------------------------------------- usuarios
 -- Cuentas creadas con «Registrarse»: usuario y correo en minusculas (unicos sin importar mayusculas).
@@ -23,6 +23,11 @@ CREATE TABLE usuarios (
     password_hash   VARCHAR(255) NOT NULL,
     rol             VARCHAR(12)  NOT NULL DEFAULT 'AFICIONADO' CONSTRAINT usuarios_rol_check CHECK (rol IN ('ORGANIZADOR', 'AFICIONADO')),
     fecha_registro  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Mi perfil: correo verificado con un codigo de 6 digitos (se guarda su hash) que vence a los 15 minutos.
+    correo_verificado   BOOLEAN      NOT NULL DEFAULT FALSE,
+    codigo_verificacion VARCHAR(255),
+    codigo_vence        TIMESTAMP,
+    codigo_intentos     INTEGER      NOT NULL DEFAULT 0,
     CONSTRAINT usuarios_minusculas CHECK (username = LOWER(username) AND (email IS NULL OR email = LOWER(email)))
 );
 

@@ -62,7 +62,7 @@ public class ApiControlador {
             this.noticias = noticias;
             this.fotos = fotos;
             this.plantilla = crearEspacio(new CampeonatoService(new RepositorioCampeonatosEnMemoria().nuevo(), HISTORIAL_VACIO));
-            for (ModuloRutas modulo : List.of(new RutasSesion(sesion), new RutasCampeonatos(gestor, plantilla.presentador()), new RutasNoticias())) {
+            for (ModuloRutas modulo : List.of(new RutasSesion(sesion), new RutasPerfil(sesion), new RutasCampeonatos(gestor, plantilla.presentador()), new RutasNoticias())) {
                 modulo.registrar(consultas, acciones);
             }
         }

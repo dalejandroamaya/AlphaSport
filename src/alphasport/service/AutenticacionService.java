@@ -64,11 +64,18 @@ public class AutenticacionService {
     private final VerificadorClaves verificador;
     /** Hash de una clave que nadie usa: con un usuario que no existe se hace el mismo trabajo (no se nota en el tiempo). */
     private final String hashFicticio;
+    /** «Mi perfil» con las mismas cuentas; el codigo de verificacion va por el enviador de demostracion. */
+    private final PerfilService perfil;
+
+    public PerfilService perfil() {
+        return perfil;
+    }
 
     public AutenticacionService(RepositorioUsuarios usuarios, VerificadorClaves verificador) {
         this.usuarios = usuarios;
         this.verificador = verificador;
         this.hashFicticio = verificador.hash(java.util.UUID.randomUUID().toString());
+        this.perfil = new PerfilService(usuarios, verificador, new EnviadorCorreoDemostracion(), java.time.Clock.systemUTC());
     }
 
     /** Solo para pruebas: las cuentas de prueba en memoria (admin y visitante) y PBKDF2. */
