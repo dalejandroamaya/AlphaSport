@@ -69,6 +69,11 @@ public final class ContextoCampeonato {
         return reloj.millis();
     }
 
+    /** Fecha de hoy según el reloj del servicio. */
+    public java.time.LocalDate hoy() {
+        return java.time.LocalDate.now(reloj);
+    }
+
     RepositorioCampeonato repositorio() {
         return repositorio;
     }

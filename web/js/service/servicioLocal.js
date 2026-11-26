@@ -188,6 +188,7 @@ function crearServicioLocal() {
         formatoDescripcion: FORMATOS[c.formato].descripcion, iniciado: m.iniciado(), terminado: m.terminado(),
         estado: m.describirEstado(), campeon: c.campeon, campeonNombre: m.terminado() ? m.nombre(c.campeon) : null,
         reglas: resumenReglas(c), criterios: c.config.criterios.slice(), equiposActivos: m.activos().length,
+        fechaMinima: Cronograma.minimo(c), hoy: Cronograma.hoy(),
         puedeSiguiente: c.formato === 'TORNEO_CORTO' || c.formato === 'LIGA',
         textoSiguiente: c.formato === 'LIGA' ? 'Nueva temporada' + (tieneDivisiones(c) ? ' (ascensos y descensos)…' : '…') : 'Siguiente torneo corto (Clausura)…',
         // Sin llaves (formato Liga) la interfaz oculta la sección «Llaves».
@@ -304,6 +305,15 @@ function crearServicioLocal() {
       if (usados.has(j.dorsal)) throw new ErrorRegla(`El dorsal ${j.dorsal} ya está en uso.`);
       usados.add(j.dorsal);
     }
+    // Solo números, de 5 a 12 dígitos (como ReglasPlantilla.validarFormatoDocumentos en Java).
+    const malDt = d.dt && Plantilla.problemaDocumento(d.dt.documento);
+    if (malDt) throw new ErrorRegla(`El documento del director técnico ${malDt}.`);
+    for (const j of d.jugadores) {
+      const mal = Plantilla.problemaDocumento(j.documento);
+      if (mal) throw new ErrorRegla(`El documento de ${describir(j)} ${mal}.`);
+      j.documento = Plantilla.soloDigitos(j.documento);
+    }
+    if (d.dt) d.dt.documento = Plantilla.soloDigitos(d.dt.documento);
     validarDocumentos(existente, d.jugadores); // un documento, un jugador (como ReglasPlantilla en Java)
     let equipo = existente;
     if (!equipo) { exigirNoIniciado(); const division = divisionConMenosEquipos(c); equipo = m.agregarEquipo(nombre); equipo.division = division; }
@@ -576,6 +586,7 @@ function crearServicioLocal() {
       datos.formacionVisitante = leerFormacion(d.formacionVisitante);
     }
     datos.fecha = d.fecha || 'Por definir';
+    Cronograma.validarFecha(c, Object.assign({}, datos, { estado: d.estado }), ErrorRegla);
     datos.hora = d.hora || '';
     datos.sede = String(d.sede || '').trim();
     datos.obs = String(d.obs || '').trim();
@@ -778,6 +789,7 @@ function crearServicioLocal() {
       if (!nombre) throw new ErrorRegla('Escriba el nombre del campeonato.');
       if (!d.config.criterios.length) throw new ErrorRegla('Escoja al menos un criterio de desempate.');
       const nuevo = nuevoCampeonato(nombre, d.formato, Object.assign(configuracionPorDefecto(), d.config));
+      nuevo.fechaCreacion = Cronograma.hoy(); // ningún partido puede ir antes de esta fecha
       nuevo.movimientos = [];
       nuevo.propietario = usuario.usuario;
       if (d.mismosEquipos && c && c.propietario === usuario.usuario) { // los equipos del elegido, si es suyo
@@ -853,7 +865,7 @@ function crearServicioLocal() {
       archivarActual();
       const anterior = c.codigo;
       const copia = JSON.parse(JSON.stringify(c));
-      Object.assign(copia, { nombre, partidos: [], fases: [], paso: 0, campeon: -1, semilla: Math.floor(Math.random() * 2147483647), codigo: nuevoCodigo(), fechaArchivo: null });
+      Object.assign(copia, { nombre, partidos: [], fases: [], paso: 0, campeon: -1, semilla: Math.floor(Math.random() * 2147483647), codigo: nuevoCodigo(), fechaArchivo: null, fechaCreacion: Cronograma.hoy() });
       copia.equipos = copia.equipos.filter(e => !e.retirado);
       // La copia conserva los ids de los equipos; queda constancia de por qué cada uno está en su división.
       movimientos.forEach(mv => { const e = copia.equipos.find(x => x.id === mv.idEquipo); if (e) e.division = mv.divisionNueva; });
@@ -888,6 +900,11 @@ function crearServicioLocal() {
     },
     avanzar: () => {
       exigir();
+      if (!m.iniciado()) {
+        const corto = c.equipos.filter(e => !e.retirado).find(e => e.jugadores.length < Plantilla.MINIMO_JUGADORES);
+        if (corto) throw new ErrorRegla(`«${corto.nombre}» tiene ${corto.jugadores.length === 1 ? '1 jugador' : corto.jugadores.length + ' jugadores'}. `
+          + `Cada equipo necesita al menos ${Plantilla.MINIMO_JUGADORES} para iniciar el campeonato (su XI titular). Complete la plantilla en «Equipos».`);
+      }
       let mensaje;
       try { mensaje = m.avanzar(); } catch (e) { throw new ErrorRegla(e.message); }
       if (m.terminado()) archivarActual();
@@ -927,6 +944,11 @@ function crearServicioLocal() {
       return m.retirarEquipo(e);
     },
     partido: d => { exigir(); guardarPartido(d); },
+    'partidos/programar': d => {
+      exigir();
+      if (!m.iniciado()) throw new ErrorRegla('Primero inicie el campeonato: así se genera el fixture que se va a programar.');
+      return Cronograma.programar(c, d, ErrorRegla);
+    },
     criterios: d => {
       exigir();
       if (!d.criterios.length) throw new ErrorRegla('Debe haber al menos un criterio de desempate.');
@@ -940,10 +962,10 @@ function crearServicioLocal() {
       Almacen.historial.eliminar(d.codigo);
     },
     // Noticias del campeonato elegido (mismas rutas y mensajes que ApiControlador)
-    'noticia/proponer': d => { exigir(); noticias.proponer(d, c.codigo); return '¡Gracias! Su noticia quedó pendiente: se publicará cuando el administrador la apruebe.'; },
+    'noticia/proponer': d => { exigir(); noticias.proponer(d, c.codigo); return '¡Gracias! Su noticia quedó pendiente: cuando el organizador del campeonato la apruebe, la verán todas las personas que lo siguen.'; },
     'noticia/comentar': d => { exigir(); noticias.comentar(d.id, d.autor, d.texto, c.codigo); return 'Comentario publicado.'; },
-    'noticia/guardar': d => { noticias.publicar(d, c.codigo); return d.id == null ? 'Noticia publicada.' : 'Noticia guardada.'; },
-    'noticia/aprobar': d => { noticias.aprobar(d.id, c.codigo); return 'Noticia aprobada: ya aparece en el feed.'; },
+    'noticia/guardar': d => { noticias.publicar(d, c.codigo); return d.id == null ? 'Noticia publicada: ya la ven todas las personas que siguen este campeonato.' : 'Noticia guardada.'; },
+    'noticia/aprobar': d => { noticias.aprobar(d.id, c.codigo); return 'Noticia aprobada: ya la ven todas las personas que siguen este campeonato.'; },
     'noticia/eliminar': d => { noticias.eliminar(d.id, c.codigo); return d.rechazo ? 'Propuesta rechazada.' : 'Noticia eliminada.'; },
     'comentario/eliminar': d => { noticias.eliminarComentario(d.noticia, d.id, c.codigo); return 'Comentario eliminado.'; },
     // [REQ-07] Voto del público: solo los visitantes (el administrador ya influye en la nota del sistema).

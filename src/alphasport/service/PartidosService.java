@@ -26,6 +26,7 @@ public class PartidosService {
         Partido partido = ctx.buscarPartido(idPartido);
         // Si al editar un W.O. se registra lo que paso en la cancha, deja de ser W.O.
         datos.setWalkover(datos.isWalkover() && datos.tieneResultadoDeWalkover());
+        Cronograma.validarFecha(ctx.campeonato(), datos, ctx.hoy()); // ni antes de crear el campeonato ni jugado en el futuro
         ReglasPartido.validar(ctx.campeonato(), partido, datos);
         if (datos.isJugado()) {
             boolean necesitaPenales = ctx.motor().requierePenales(partido, datos.getGolesLocal(), datos.getGolesVisitante());
@@ -62,6 +63,17 @@ public class PartidosService {
         }
         MotorCampeonato.darWalkover(datos, original.getIdLocal(), idGanador, "W.O. a favor de " + ctx.campeonato().nombreDe(idGanador));
         guardarPartido(idPartido, datos, confirmado);
+    }
+
+    /** Cronograma automático: fecha, hora y sede para los partidos pendientes (ver {@link Cronograma}). */
+    public String programar(Cronograma.Pedido pedido) throws PersistenciaException {
+        ctx.exigirCampeonato();
+        if (!ctx.campeonato().isIniciado()) {
+            throw new ReglaNegocioException("Primero inicie el campeonato: así se genera el fixture que se va a programar.");
+        }
+        String mensaje = Cronograma.programar(ctx.campeonato(), pedido, ctx.hoy());
+        ctx.guardar();
+        return mensaje;
     }
 
     /** Detalle de un partido (cara a cara, racha y alineaciones). Solo lectura. */

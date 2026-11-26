@@ -18,7 +18,7 @@ final class RutasNoticias implements ModuloRutas {
         acciones.con(Permiso.PROPONER_NOTICIA, "noticia/proponer", p -> {
             p.api().noticiasParaParticipar().proponer(p.texto("titulo"), p.texto("cuerpo"), p.texto("autor"),
                     NoticiasService.imagenDesdeDataUrl(p.texto("imagen")));
-            return respuesta(p, "¡Gracias! Su noticia quedó pendiente: se publicará cuando el administrador la apruebe.");
+            return respuesta(p, "¡Gracias! Su noticia quedó pendiente: cuando el organizador del campeonato la apruebe, la verán todas las personas que lo siguen.");
         }).con(Permiso.COMENTAR, "noticia/comentar", p -> {
             p.api().noticiasParaParticipar().comentar(p.entero("id"), p.texto("autor"), p.texto("texto"));
             return respuesta(p, "Comentario publicado.");
@@ -26,10 +26,10 @@ final class RutasNoticias implements ModuloRutas {
             Integer id = p.cuerpo().get("id") == null ? null : p.entero("id");
             p.api().noticiasParaModerar().publicar(id, p.texto("titulo"), p.texto("cuerpo"), NoticiasService.imagenDesdeDataUrl(p.texto("imagen")),
                     p.si("quitarImagen"));
-            return respuesta(p, id == null ? "Noticia publicada." : "Noticia guardada.");
+            return respuesta(p, id == null ? "Noticia publicada: ya la ven todas las personas que siguen este campeonato." : "Noticia guardada.");
         }).con(Permiso.MODERAR_NOTICIAS, "noticia/aprobar", p -> {
             p.api().noticiasParaModerar().aprobar(p.entero("id"));
-            return respuesta(p, "Noticia aprobada: ya aparece en el feed.");
+            return respuesta(p, "Noticia aprobada: ya la ven todas las personas que siguen este campeonato.");
         }).con(Permiso.MODERAR_NOTICIAS, "noticia/eliminar", p -> {
             p.api().noticiasParaModerar().eliminar(p.entero("id"));
             return respuesta(p, p.si("rechazo") ? "Propuesta rechazada." : "Noticia eliminada.");

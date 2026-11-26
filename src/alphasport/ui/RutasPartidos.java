@@ -49,6 +49,22 @@ final class RutasPartidos implements ModuloRutas {
         acciones.con(Permiso.GESTIONAR_CAMPEONATO, "partido", p -> {
             guardarPartido(p.cuerpo());
             return p.listo(null);
+        }).con(Permiso.GESTIONAR_CAMPEONATO, "partidos/programar", p -> {
+            // Cronograma automático: inicio (AAAA-MM-DD), dias (1 = lunes … 7 = domingo), horas, sedes y todos.
+            java.util.Set<java.time.DayOfWeek> dias = new java.util.HashSet<>();
+            for (Object d : lista(p.cuerpo(), "dias")) {
+                dias.add(java.time.DayOfWeek.of(entero(d)));
+            }
+            java.time.LocalDate inicio;
+            try {
+                inicio = java.time.LocalDate.parse(texto(p.cuerpo(), "inicio"));
+            } catch (RuntimeException e) {
+                throw new alphasport.service.ReglaNegocioException("Escoja la fecha de inicio.");
+            }
+            java.util.List<String> horas = lista(p.cuerpo(), "horas").stream().map(String::valueOf).toList();
+            java.util.List<String> sedes = lista(p.cuerpo(), "sedes").stream().map(String::valueOf).toList();
+            return p.listo(servicio.partidos().programar(new alphasport.service.Cronograma.Pedido(inicio, dias, horas, sedes,
+                    Boolean.TRUE.equals(p.cuerpo().get("todos")))));
         });
     }
 

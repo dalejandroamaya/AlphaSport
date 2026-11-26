@@ -151,6 +151,7 @@ public class CampeonatoService {
             throw new ReglaNegocioException("Escoja al menos un criterio de desempate.");
         }
         Campeonato nuevo = new Campeonato(nombre.trim(), formato, configuracion);
+        nuevo.setFechaCreacion(ctx.hoy().toString()); // ningún partido puede ir antes de esta fecha
         List<MovimientoDivision> movimientos = new ArrayList<>();
         if (anterior != null) {
             boolean mismaLiga = formato == TipoFormato.LIGA && configuracion.getDivisiones() == anterior.getConfiguracion().getDivisiones();
@@ -281,6 +282,7 @@ public class CampeonatoService {
         }
         Campeonato copia = Serializacion.copiaProfunda(ctx.campeonato());
         copia.setNombreCampeonato(nombre.trim());
+        copia.setFechaCreacion(ctx.hoy().toString());
         copia.getPartidos().clear();
         copia.getFases().clear();
         copia.setPasoActual(0);
@@ -296,6 +298,9 @@ public class CampeonatoService {
     public String avanzar() throws PersistenciaException {
         ctx.exigirCampeonato();
         String mensaje;
+        if (!ctx.campeonato().isIniciado()) {
+            ReglasPlantilla.validarParaIniciar(ctx.campeonato()); // cada equipo con su XI completo
+        }
         try {
             mensaje = ctx.campeonato().isIniciado() ? ctx.motor().avanzar() : ctx.motor().iniciar();
         } catch (IllegalStateException e) {

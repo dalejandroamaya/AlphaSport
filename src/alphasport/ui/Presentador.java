@@ -113,6 +113,9 @@ public class Presentador {
                         .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList()),
                 "criterios", c.getConfiguracion().getCriterios().stream().map(Enum::name).collect(Collectors.toList()),
                 "equiposActivos", c.getEquiposActivos().size(),
+                // Para las fechas de los partidos: no antes de la creación; un partido jugado, no después de hoy.
+                "fechaMinima", alphasport.service.Cronograma.minimoPermitido(c, java.time.LocalDate.now()).toString(),
+                "hoy", java.time.LocalDate.now().toString(),
                 "puedeSiguiente", c.getFormato() == TipoFormato.TORNEO_CORTO || c.getFormato() == TipoFormato.LIGA,
                 "textoSiguiente", c.getFormato() == TipoFormato.LIGA ? "Nueva temporada" + (c.tieneDivisiones() ? " (ascensos y descensos)…" : "…")
                         : "Siguiente torneo corto (Clausura)…",

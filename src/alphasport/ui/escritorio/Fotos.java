@@ -171,7 +171,7 @@ final class Fotos {
         try {
             archivo = Dialogos.elegirArchivo(selector, (Stage) desde.getScene().getWindow());
         } catch (RuntimeException e) {
-            alError.accept("No se pudo abrir el selector de archivos: " + e.getMessage());
+            alError.accept("No se pudo abrir el selector de archivos. Intente de nuevo.");
             return null;
         }
         return archivo == null ? null : desdeArchivo(archivo, alError);
@@ -193,7 +193,7 @@ final class Fotos {
             String tipo = nombre.endsWith(".png") ? "png" : nombre.endsWith(".gif") ? "gif" : "jpeg";
             return "data:image/" + tipo + ";base64," + Base64.getEncoder().encodeToString(bytes);
         } catch (java.io.IOException | RuntimeException e) {
-            alError.accept("No se pudo abrir el archivo: " + e.getMessage());
+            alError.accept("No se pudo abrir el archivo. Revise que sea una imagen JPG o PNG y que no esté abierta en otro programa.");
             return null;
         }
     }
