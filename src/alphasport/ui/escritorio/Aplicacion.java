@@ -630,7 +630,7 @@ public class Aplicacion extends Application {
             // El administrador gestiona los partidos (previa y resultados); el visitante solo los consulta.
             // El Organizador ve «Mis campeonatos»; el Aficionado, todos los campeonatos en curso.
             String nombre = clave.equals("partidos") && puedeEditar() ? "Gestionar partidos"
-                    : clave.equals("campeonatos") && !puedeEditar() ? "Campeonatos" : NOMBRES_VISTAS[i];
+                    : clave.equals("campeonatos") && !puedeEditar() ? "Campeonatos activos" : NOMBRES_VISTAS[i];
             ToggleButton b = new ToggleButton(nombre, icono);
             b.setGraphicTextGap(12);
             b.setToggleGroup(grupo);
@@ -718,7 +718,12 @@ public class Aplicacion extends Application {
         raiz.getStyleClass().add("fondo-app");
         ponerRaiz(raiz);
         scene.getRoot().getStyleClass().add("plano"); // la aplicación va sobre fondo liso; la foto queda en la entrada
-        volverAlSeguido();
+        boolean seguido = volverAlSeguido();
+        if (!puedeEditar()) {
+            // El Aficionado vuelve directo al campeonato que seguía; si no seguía ninguno, empieza en «Campeonatos
+            // activos» para elegir cuál seguir, aunque haya uno solo (como en la web).
+            vista = seguido ? VISTA_INICIAL_VISITANTE : "campeonatos";
+        }
         render(); // sin campeonato elegido, render() muestra la lista de campeonatos
         iniciarActualizacion();
     }
@@ -726,23 +731,29 @@ public class Aplicacion extends Application {
     /**
      * Aficionado: al entrar vuelve al campeonato que seguía en este equipo. Si ya no está en curso lo olvida y
      * avisa; queda la lista para elegir otro.
+     *
+     * @return true si quedó elegido el campeonato que seguía
      */
-    private void volverAlSeguido() {
+    private boolean volverAlSeguido() {
         Usuario u = api.getUsuarioActual();
         String codigo = u == null || puedeEditar() ? null : CampeonatoSeguido.de(u.getNombre());
-        if (codigo == null || (b(E, "hay") && codigo.equals(s(m(E, "campeonato"), "codigo")))) {
-            return;
+        if (codigo == null) {
+            return false;
+        }
+        if (b(E, "hay") && codigo.equals(s(m(E, "campeonato"), "codigo"))) {
+            return true;
         }
         boolean sigue = l(consultarCampeonatos(), "campeonatos").stream().anyMatch(x -> codigo.equals(s(x, "codigo")));
         if (!sigue) {
             CampeonatoSeguido.recordar(u.getNombre(), null);
             aviso("El campeonato que seguía ya no está en curso. Elija otro.");
-            return;
+            return false;
         }
         try {
             E = m(api.ejecutar("campeonato/elegir", mapa("codigo", codigo)), "estado");
+            return true;
         } catch (Exception e) {
-            // no se pudo volver a él: queda la lista para elegir
+            return false; // no se pudo volver a él: queda la lista para elegir
         }
     }
 
@@ -824,7 +835,7 @@ public class Aplicacion extends Application {
             // Después del aviso general de «actualizado» (que se muestra al terminar de dibujar), para que no lo tape.
             javafx.application.Platform.runLater(() -> aviso("El campeonato que seguía ya no está en curso. Elija otro."));
         }
-        titulo.setText(organizador ? "Mis campeonatos" : "Campeonatos");
+        titulo.setText(organizador ? "Mis campeonatos" : "Campeonatos activos");
         stage.setTitle("AlphaSport · Gestor de campeonatos");
         // Sin campeonato no hay formato, equipos, estado ni campeón que mostrar en la cabecera.
         mostrarDatosCabecera(false);
@@ -1183,8 +1194,8 @@ public class Aplicacion extends Application {
         List<Map<String, Object>> lista = l(r, "campeonatos"), sin = l(r, "sinOrganizador");
         String actual = b(E, "hay") ? s(m(E, "campeonato"), "codigo") : "";
         if (!puedeEditar()) {
-            VBox caja = seccion("Campeonatos", "Cada campeonato tiene sus propios equipos, partidos y resultados. "
-                    + "Elija cuál seguir: verá sus partidos, posiciones, votaciones y noticias.");
+            VBox caja = seccion("Campeonatos activos", "Elija el campeonato que quiere seguir. "
+                    + "Puede cambiar cuando quiera desde aquí o desde la cabecera.");
             if (lista.isEmpty()) {
                 caja.getChildren().add(vacio("Todavía no hay campeonatos en curso. Cuando un organizador cree uno, aparecerá aquí."));
             } else {
@@ -1228,7 +1239,7 @@ public class Aplicacion extends Application {
         HBox cabecera = new HBox(8, titulo);
         boolean organizador = puedeEditar();
         if (actual) {
-            cabecera.getChildren().add(etiqueta(organizador ? "Gestionando" : "Siguiendo", "chip", "chip-actual"));
+            cabecera.getChildren().add(etiqueta(organizador ? "Gestionando" : "Viendo", "chip", "chip-actual"));
         }
         FlowPane chips = new FlowPane(6, 6, etiqueta(s(x, "formatoNombre"), "chip"), etiqueta(s(x, "estado"), "chip"),
                 etiqueta(n(x, "equipos") + " equipos", "chip"));
@@ -1240,7 +1251,7 @@ public class Aplicacion extends Application {
         Label avance = etiqueta(total == 0 ? "Todavía sin fixture" : jugados + " de " + total + " partidos jugados", "sutil");
         HBox botones = new HBox(8);
         if (!organizador) {
-            Button seguir = actual ? boton("Ver campeonato") : boton("Seguir", "primario");
+            Button seguir = actual ? boton("Seguir viendo") : boton("Entrar", "primario");
             seguir.setOnAction(e -> elegirCampeonato(codigo, VISTA_INICIAL_VISITANTE));
             botones.getChildren().add(seguir);
         } else if (paraTomar) {

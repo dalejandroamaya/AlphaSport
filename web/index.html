@@ -14,6 +14,10 @@
 
   <section id="login" class="login" hidden>
     <button class="btn fantasma icono tema-login" data-tema-alternar aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
+    <div class="login-escena">
+    <!-- Al registrarse, dos lobitos salen de detrás del panel, uno por cada lado, saludando. -->
+    <div class="lobito-lado izq" aria-hidden="true"><div class="lobito-asoma"><img src="img/mascota.webp" alt=""><span class="mano">👋</span></div></div>
+    <div class="lobito-lado der" aria-hidden="true"><div class="lobito-asoma"><img src="img/mascota.webp" alt=""><span class="mano">👋</span></div></div>
     <div class="login-tarjeta vidrio">
       <img class="logo-login" src="img/logo-texto.png" alt="AlphaSport">
       <p class="login-lema">Gestión profesional de campeonatos de fútbol</p>
@@ -53,12 +57,16 @@
         <p class="login-cambio">¿Ya tiene cuenta? <button type="button" class="enlace-acceso" data-acceso="entrar">Inicie sesión</button></p>
       </form>
     </div>
+    </div>
+    <!-- Lobito pequeño que aparece en distintos sitios a los lados del panel, patea el balón y desaparece. -->
+    <div class="lobito-patea" aria-hidden="true"><div class="lobito-giro"><img class="lobito" src="img/lobito-patea.webp" alt=""><img class="lobito-balon" src="img/balon-lobito.webp" alt=""></div></div>
     <p class="credito-foto"><span class="noche">Foto: <a href="https://unsplash.com/photos/an-empty-stadium-with-a-soccer-field-at-night-pitDMdAjynU" target="_blank" rel="noopener">Josemar Duarte · Unsplash</a></span><span class="dia">Foto: <a href="https://unsplash.com/photos/green-and-brown-football-stadium-under-blue-sky-during-daytime-wbdrpnbn_DE" target="_blank" rel="noopener">Miguel Ramírez · Unsplash</a></span></p>
   </section>
 
   <div id="app" class="app" hidden>
     <aside class="barra-lateral vidrio">
-      <div class="marca-lateral"><img src="img/logo.png" alt=""><span>Alpha<b>Sport</b></span><small>Gestor de campeonatos</small></div>
+      <div class="marca-lateral"><img src="img/logo.png" alt=""><span>Alpha<b>Sport</b></span><small>Gestor de campeonatos</small>
+        <div id="perfil" class="perfil" hidden><span id="perfilInicial" class="perfil-avatar" aria-hidden="true"></span><span class="perfil-texto"><small>Bienvenido</small><strong id="perfilUsuario"></strong></span></div></div>
       <nav class="navegacion" id="navegacionSecciones" aria-label="Secciones">
         <button data-vista="campeonatos" hidden><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z"/></svg><span id="navCampeonatos">Mis campeonatos</span></button>
         <button data-vista="equipos" class="activa"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg><span>Equipos</span></button>
@@ -117,7 +125,7 @@
       <section id="vista-campeonatos" class="vista" hidden>
         <div class="cabecera-vista">
           <div><h2 id="tituloCampeonatos">Mis campeonatos</h2><p id="ayudaCampeonatos" class="sutil">Cada campeonato tiene sus propios equipos, partidos y resultados. Elija cuál gestionar.</p></div>
-          <button type="button" id="btnNuevoCampeonato" class="btn">+ Nuevo campeonato</button>
+          <button type="button" id="btnNuevoCampeonato" class="btn" data-solo-admin>+ Nuevo campeonato</button>
         </div>
         <div id="listaCampeonatos" class="grid-campeonatos"></div>
         <div id="bloqueSinOrganizador" hidden>
