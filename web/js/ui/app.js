@@ -5,7 +5,7 @@
 const CLAVE_PESTANA = 'alphasport.pestana';
 const ESTADOS_TEXTO = { PENDIENTE: 'Pendiente', EN_JUEGO: 'En juego', JUGADO: 'Jugado', APLAZADO: 'Aplazado', SUSPENDIDO: 'Suspendido' };
 /** Vistas que el visitante no ve (son de gestión), la que solo ve el visitante [REQ-07] y vista con la que entra. */
-const VISTAS_SOLO_ADMIN = ['campeonatos', 'equipos', 'reglas'];
+const VISTAS_SOLO_ADMIN = ['equipos', 'reglas']; // «campeonatos»: Mis campeonatos (Organizador) o Campeonatos activos (Aficionado)
 const VISTAS_SOLO_VISITANTE = ['votaciones'];
 const VISTA_INICIAL_VISITANTE = 'partidos';
 
@@ -209,6 +209,7 @@ function limpiarAcceso() {
 /** Muestra «Iniciar sesión» o «Registrarse». */
 function mostrarAcceso(cual) {
   const registro = cual === 'registro';
+  $('login').classList.toggle('registrando', registro); // al registrarse saludan los lobitos que salen del panel
   $('formLogin').hidden = registro;
   $('formRegistro').hidden = !registro;
   $('tabEntrar').classList.toggle('activa', !registro);
@@ -218,6 +219,41 @@ function mostrarAcceso(cual) {
   $('avisoCuentasLocales').hidden = !servicio || servicio.modo === 'java';
   (registro ? document.querySelector('input[name="tipoCuenta"]') : $('loginUsuario')).focus();
 }
+
+/*
+ * Lobito que patea: cada vuelta de su animación (aparece, patea, desaparece) sale en otro sitio, alternando el
+ * lado del panel y siempre pateando hacia afuera. Si no hay espacio a los lados (celular), sale arriba del panel.
+ */
+(function lobitoQuePatea() {
+  const lobito = document.querySelector('.lobito-patea'), login = $('login');
+  if (!lobito || !window.ResizeObserver) return;
+  let lado = 'der';
+  const ubicar = () => {
+    const t = document.querySelector('.login-tarjeta').getBoundingClientRect(), base = login.getBoundingClientRect();
+    const ancho = 146, alto = 150, margen = 28, vw = document.documentElement.clientWidth, vh = innerHeight;
+    const zonas = { izq: [margen, t.left - ancho - margen], der: [t.right + margen, vw - ancho - margen] };
+    const libres = Object.keys(zonas).filter(k => zonas[k][1] >= zonas[k][0]);
+    lobito.classList.toggle('arriba', !libres.length);
+    if (!libres.length) { // sin espacio a los lados: pequeño, arriba del panel
+      lobito.style.left = (vw / 2 - 48 - base.left) + 'px';
+      lobito.style.top = (t.top - 100 - base.top) + 'px';
+      lobito.classList.remove('espejo');
+      return;
+    }
+    const otro = lado === 'izq' ? 'der' : 'izq';
+    lado = libres.includes(otro) ? otro : libres[0];
+    const [x0, x1] = zonas[lado];
+    lobito.style.left = (x0 + Math.random() * (x1 - x0) - base.left) + 'px';
+    lobito.style.top = (60 + Math.random() * Math.max(0, vh - alto - 120) - base.top) + 'px';
+    lobito.classList.toggle('espejo', lado === 'izq'); // a la izquierda mira (y patea) hacia la izquierda
+  };
+  lobito.addEventListener('animationiteration', e => { if (e.target === lobito) ubicar(); });
+  new ResizeObserver(() => {
+    if (!login.offsetHeight) return;
+    ubicar();
+    lobito.classList.add('activo');
+  }).observe(login);
+})();
 
 function volverAlLogin(motivo) {
   S = null;
@@ -245,6 +281,16 @@ function aplicarPermisos() {
     // (las noticias no dependen del campeonato: siguen disponibles)
     b.hidden = !puedeVer(b.dataset.vista) || (!E.hay && !['campeonatos', 'partidos', 'noticias'].includes(b.dataset.vista));
   });
+  // El Aficionado elige qué campeonato seguir entre los activos; el Organizador gestiona los suyos.
+  $('navCampeonatos').textContent = admin ? 'Mis campeonatos' : 'Campeonatos activos';
+  $('tituloCampeonatos').textContent = admin ? 'Mis campeonatos' : 'Campeonatos activos';
+  // Perfil bajo el logo: inicial y «Bienvenido» con el usuario que eligió al registrarse.
+  $('perfil').hidden = !S;
+  if (S) {
+    $('perfilUsuario').textContent = S.usuario;
+    $('perfilInicial').textContent = (S.usuario || '?').charAt(0).toUpperCase();
+    $('perfil').title = S.nombre && S.nombre !== S.usuario ? S.nombre : '';
+  }
   $('chipRol').textContent = S ? S.rolNombre + (admin ? '' : ' · solo lectura') : '';
   $('chipRol').hidden = !S;
   $('chipLectura').hidden = !S || admin;
@@ -296,7 +342,8 @@ async function mostrarApp() {
     return;
   }
   render();
-  mostrarVista(leerPreferencia(CLAVE_PESTANA) || (puedeEditar() ? 'equipos' : VISTA_INICIAL_VISITANTE));
+  // El Aficionado empieza en «Campeonatos activos» para elegir cuál seguir, aunque haya uno solo.
+  mostrarVista(puedeEditar() ? leerPreferencia(CLAVE_PESTANA) || 'equipos' : 'campeonatos');
 }
 
 /**
@@ -305,11 +352,11 @@ async function mostrarApp() {
  */
 function renderSinCampeonato() {
   const organizador = puedeEditar();
-  $('titulo').textContent = organizador ? 'Mis campeonatos' : 'Sin campeonato activo';
+  $('titulo').textContent = organizador ? 'Mis campeonatos' : 'Campeonatos activos';
   document.title = 'AlphaSport · Gestor de campeonatos';
   ['sobreEstado', 'chipFormato', 'chipEquipos'].forEach(id => { $(id).hidden = true; });
   $('filaSelector').hidden = true;
-  $('estado').textContent = organizador ? 'Elija el campeonato que quiere gestionar o cree uno nuevo.' : '';
+  $('estado').textContent = organizador ? 'Elija el campeonato que quiere gestionar o cree uno nuevo.' : 'Elija el campeonato que quiere seguir.';
   $('btnCampeon').hidden = true;
   // Si estaba en Noticias se queda ahí (las generales se siguen viendo); si no, a su vista de inicio.
   const enNoticias = !$('vista-noticias').hidden;
@@ -322,9 +369,9 @@ function renderSinCampeonato() {
   $('ayudaPartidos').textContent = 'Calendario y resultados del campeonato en curso.';
   $('pestanasPartidos').hidden = true;
   $('ayudaPestanaPartidos').hidden = true;
-  $('listaPartidos').innerHTML = vacioHtml('Todavía no hay un campeonato en curso. Vuelva más tarde.');
+  $('listaPartidos').innerHTML = vacioHtml('Elija un campeonato en «Campeonatos activos».');
   aplicarPermisos();
-  mostrarVista(enNoticias ? 'noticias' : 'partidos');
+  mostrarVista(enNoticias ? 'noticias' : 'campeonatos');
 }
 
 /* ---------------------------------------------------------------- mis campeonatos (Organizador) */
@@ -342,6 +389,15 @@ async function cargarCampeonatos() {
 async function renderCampeonatos() {
   await cargarCampeonatos();
   const actual = E.hay ? E.campeonato.codigo : null, lista = misCampeonatos.campeonatos || [], sin = misCampeonatos.sinOrganizador || [];
+  if (!puedeEditar()) { // Aficionado: todos los campeonatos en curso, para elegir cuál seguir
+    $('ayudaCampeonatos').hidden = false;
+    $('ayudaCampeonatos').textContent = lista.length ? 'Elija el campeonato que quiere seguir. Puede cambiar cuando quiera desde aquí.' : '';
+    $('listaCampeonatos').innerHTML = lista.length ? lista.map(x => tarjetaCampeonatoHtml(x, x.codigo === actual, false, true)).join('')
+      : vacioHtml('Todavía no hay campeonatos en curso. Vuelva más tarde.');
+    $('bloqueSinOrganizador').hidden = true;
+    return;
+  }
+  $('ayudaCampeonatos').textContent = 'Cada campeonato tiene sus propios equipos, partidos y resultados. Elija cuál gestionar.';
   $('ayudaCampeonatos').hidden = !lista.length;
   // Con campeonatos, lo principal es gestionarlos (la cabecera); crear otro es secundario. Sin ninguno, crear es lo principal.
   $('btnNuevoCampeonato').classList.toggle('primario', !lista.length);
@@ -352,9 +408,11 @@ async function renderCampeonatos() {
   $('listaSinOrganizador').innerHTML = sin.map(x => tarjetaCampeonatoHtml(x, false, true)).join('');
 }
 
-function tarjetaCampeonatoHtml(x, actual, paraTomar = false) {
+function tarjetaCampeonatoHtml(x, actual, paraTomar = false, paraSeguir = false) {
   const pct = x.partidos ? Math.round(100 * x.partidosJugados / x.partidos) : 0, codigo = esc(x.codigo);
-  const acciones = paraTomar
+  const acciones = paraSeguir
+    ? `<button type="button" class="btn${actual ? '' : ' primario'}" data-gestionar="${codigo}">${actual ? 'Seguir viendo' : 'Entrar'}</button>`
+    : paraTomar
     ? `<button type="button" class="btn primario" data-tomar="${codigo}">Tomar y gestionar</button>`
     : `<button type="button" class="btn" data-gestionar="${codigo}">${actual ? 'Seguir gestionando' : 'Gestionar'}</button>
        <span class="acciones-tarjeta">
@@ -362,11 +420,12 @@ function tarjetaCampeonatoHtml(x, actual, paraTomar = false) {
          <button type="button" class="btn mini peligro" data-eliminar="${codigo}">Eliminar…</button>
        </span>`;
   return `<article class="tarjeta-campeonato vidrio${actual ? ' actual' : ''}" aria-label="${esc(x.nombre)}">
-    <header><h3>${esc(x.nombre)}</h3>${actual ? '<span class="chip chip-actual">Gestionando</span>' : ''}</header>
+    <header><h3>${esc(x.nombre)}</h3>${actual ? `<span class="chip chip-actual">${paraSeguir ? 'Viendo' : 'Gestionando'}</span>` : ''}</header>
     <div class="chips"><span class="chip">${esc(x.formatoNombre)}</span><span class="chip">${esc(x.estado)}</span><span class="chip">${x.equipos} equipos</span></div>
     <p class="sutil">${esc(x.fase)}</p>
     <div class="progreso" role="progressbar" aria-label="Partidos jugados" aria-valuemin="0" aria-valuemax="${x.partidos}" aria-valuenow="${x.partidosJugados}"><span style="width:${pct}%"></span></div>
     <p class="sutil pequeno">${x.partidos ? `${x.partidosJugados} de ${x.partidos} partidos jugados` : 'Todavía sin fixture'}</p>
+    ${paraSeguir && x.organizador ? `<p class="sutil pequeno">Organiza: ${esc(x.organizador)}</p>` : ''}
     <footer>${acciones}</footer>
   </article>`;
 }
@@ -382,7 +441,7 @@ async function clicCampeonatos(e) {
   const b = e.target.closest('button');
   if (!b) return;
   if (b.hasAttribute('data-crear-campeonato')) { abrirNuevo(false); return; }
-  if (b.dataset.gestionar) { gestionarCampeonato(b.dataset.gestionar); return; }
+  if (b.dataset.gestionar) { gestionarCampeonato(b.dataset.gestionar, puedeEditar() ? 'equipos' : VISTA_INICIAL_VISITANTE); return; }
   const x = [...misCampeonatos.campeonatos, ...(misCampeonatos.sinOrganizador || [])].find(y => y.codigo === (b.dataset.tomar || b.dataset.terminar || b.dataset.eliminar));
   if (!x) return;
   if (b.dataset.tomar) {
@@ -482,7 +541,7 @@ function render() {
  */
 const NAV_PRINCIPALES = {
   organizador: ['partidos', 'posiciones', 'equipos', 'campeonatos'],
-  aficionado: ['partidos', 'votaciones', 'posiciones', 'noticias']
+  aficionado: ['campeonatos', 'partidos', 'posiciones', 'noticias']
 };
 const NAV_CORTOS = { campeonatos: 'Torneos', partidos: 'Partidos', sanciones: 'Estadísticas' };
 function ajustarNavMovil() {
