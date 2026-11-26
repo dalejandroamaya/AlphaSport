@@ -1767,7 +1767,7 @@ class Dialogos {
             mensaje("No se pudo abrir el partido", e.getMessage() == null ? "Todavía no hay información de este partido." : e.getMessage());
             return;
         }
-        Button cerrar = boton("Cerrar", "primario");
+        Button cerrar = boton("← Volver", "primario"); // vuelve a la pantalla de antes
         cerrar.setDefaultButton(true);
         // El ancho de la cancha horizontal (960) más los márgenes; nunca más ancho que la pantalla.
         double ancho = Math.min(1024, javafx.stage.Screen.getPrimary().getVisualBounds().getWidth() - 126);
@@ -1864,7 +1864,7 @@ class Dialogos {
             {"PJ", "pj", "60"}, {"G", "g", "55"}, {"E", "e", "55"}, {"P", "p", "55"}, {"GF", "gf", "60"}, {"GC", "gc", "60"}, {"Pts", "pts", "65"}});
         TabPane pestanas = new TabPane(new Tab("Campeonatos", pestanaCampeonatos), new Tab("Palmarés histórico", palmares));
         pestanas.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        Button cerrar = boton("Cerrar", "fantasma");
+        Button cerrar = boton("← Volver", "fantasma");
         ventana[0] = ventana("Historial de campeonatos", cuerpo("Historial de campeonatos", pestanas, acciones(cerrar)), 1100);
         cerrar.setOnAction(e -> ventana[0].close());
         if (!lista.isEmpty()) {

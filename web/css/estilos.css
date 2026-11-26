@@ -190,8 +190,14 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .perfil-texto { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .perfil-texto small { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--sutil); }
 .perfil-texto strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.enlace-acceso { border: 0; background: none; padding: 0; color: var(--cesped); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .pista-campo { color: var(--sutil); font-size: .78rem; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.pista-campo.mal { color: var(--rojo); }
+.pista-campo.bien { color: var(--cesped); }
+.reglas-clave { list-style: none; margin: .35rem 0 0; padding: 0; display: grid; gap: .15rem; font-size: .78rem; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--sutil); }
+.reglas-clave li::before { content: "○"; display: inline-block; width: 1.2em; }
+.reglas-clave li.cumplida { color: var(--cesped); }
+.reglas-clave li.cumplida::before { content: "✓"; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .tipos-cuenta { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
 .tipos-cuenta legend { grid-column: 1 / -1; padding: 0; margin-bottom: .35rem; }
 .tipo-cuenta { position: relative; display: block; cursor: pointer; }
@@ -238,7 +244,6 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .logo-movil { display: none; }
 .tema-movil { display: none; }
 .tema-login { position: absolute; top: 18px; right: 18px; z-index: 2; }
-.chip.modo { justify-content: center; color: var(--cian); border-color: rgba(116, 220, 255, .3); }
 
 /* ------------------------------------------------------------------ cabecera del torneo */
 .marcador-principal {
@@ -615,7 +620,6 @@ fieldset:disabled .lista-tarjetas { opacity: .55; }
 
 /* ------------------------------------------------------------------ roles: chip del rol y del visitante */
 .chip-rol { justify-content: center; }
-.chip-lectura { color: var(--cian); border-color: rgba(116, 220, 255, .3); }
 
 /* ------------------------------------------------------------------ detalle del partido */
 .dlg-detalle .cabecera-dlg h3 { font-size: 1.3rem; }
@@ -1327,3 +1331,27 @@ button.partido:hover { background: var(--fila-hover); transform: none; }
   .nav-mas.activa svg, .nav-mas[aria-expanded="true"] svg { stroke: var(--cesped); }
   .nav-mas:focus-visible { outline: 2px solid var(--cian); outline-offset: 2px; }
 }
+
+/* Inicio del Aficionado: bloques con lo más reciente del campeonato que sigue */
+.inicio-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
+.inicio-bloque { padding: 1rem; border-radius: var(--radio, 16px); display: grid; gap: .6rem; align-content: start; }
+.inicio-bloque header { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.inicio-bloque h3 { margin: 0; font-size: 1rem; }
+.inicio-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
+.inicio-fila { width: 100%; display: grid; gap: .1rem; text-align: left; border: 1px solid var(--borde, rgba(255,255,255,.12)); background: transparent; color: inherit; font: inherit; padding: .5rem .7rem; border-radius: 10px; cursor: pointer; }
+.inicio-fila:hover, .inicio-fila:focus-visible { border-color: var(--cesped); }
+.inicio-equipos b { color: var(--cesped); margin: 0 .3rem; }
+.inicio-lider { margin: 0; font-size: 1.05rem; }
+.inicio-vacio { padding: 1.5rem; border-radius: var(--radio, 16px); display: grid; justify-items: center; gap: .8rem; text-align: center; }
+.boton-volver { white-space: nowrap; }
+
+/* Mi perfil */
+.perfil-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 1rem; align-items: start; }
+.perfil-bloque { padding: 1rem; border-radius: var(--radio, 16px); display: grid; gap: .7rem; }
+.perfil-bloque h3 { margin: 0; font-size: 1.05rem; }
+.insignia-correo { display: inline-block; margin-left: .4rem; padding: .05rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.insignia-correo.verificado { color: var(--cesped); border: 1px solid var(--cesped); }
+.insignia-correo.sin-verificar { color: var(--ambar, #f5b942); border: 1px solid var(--ambar, #f5b942); }
+.aviso-demo { margin: 0; padding: .4rem .6rem; border-radius: 8px; border: 1px dashed var(--ambar, #f5b942); color: var(--ambar, #f5b942); font-size: .82rem; font-weight: 600; }
+button.perfil { border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 0; }
+button.perfil:hover .perfil-texto strong, button.perfil:focus-visible .perfil-texto strong { text-decoration: underline; }

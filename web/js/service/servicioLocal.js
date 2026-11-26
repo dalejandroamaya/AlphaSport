@@ -628,6 +628,53 @@ function crearServicioLocal() {
     if (!usuario) throw new ErrorRegla('Inicie sesión para continuar.', 'LOGIN');
   }
 
+  /* ---------------------------------------------------------------- Mi perfil (cuentas de este navegador) */
+
+  /** La cuenta de la sesión: nunca la que diga el cuerpo de la petición. */
+  function cuentaDeSesion() {
+    exigirSesion();
+    const cuenta = Almacen.cuentas.listar().find(x => x.usuario === usuario.usuario);
+    if (!cuenta) throw new ErrorRegla('Inicie sesión para continuar.', 'LOGIN');
+    return cuenta;
+  }
+
+  function guardarCuenta(nueva) {
+    Almacen.cuentas.guardar(Almacen.cuentas.listar().map(x => (x.usuario === nueva.usuario ? nueva : x)));
+  }
+
+  /** perfil/datos, perfil/clave, perfil/codigo y perfil/verificar con las reglas de cuentas.js (sin correo real). */
+  async function accionPerfil(ruta, d) {
+    try {
+      const cuenta = cuentaDeSesion(), ahora = Date.now();
+      let mensaje;
+      if (ruta === 'perfil/datos') {
+        const enUso = correo => Almacen.cuentas.listar().some(x => x.usuario !== cuenta.usuario && x.correo === correo);
+        const r = await Cuentas.actualizarDatos(cuenta, d, enUso).catch(e => { throw new ErrorRegla(e.message); });
+        guardarCuenta(r.cuenta);
+        mensaje = r.mensaje;
+      } else if (ruta === 'perfil/clave') {
+        guardarCuenta(await Cuentas.cambiarClave(cuenta, d).catch(e => { throw new ErrorRegla(e.message); }));
+        mensaje = 'Contraseña cambiada.';
+      } else if (ruta === 'perfil/codigo') {
+        const r = await Cuentas.crearCodigo(cuenta, ahora).catch(e => { throw new ErrorRegla(e.message); });
+        guardarCuenta(r.cuenta);
+        // MODO DEMOSTRACIÓN: no hay servidor ni correo; el código se muestra en la consola del navegador.
+        console.info(`[MODO DEMOSTRACIÓN] Código para verificar ${r.cuenta.correo}: ${r.codigo} (vence en 15 minutos)`);
+        mensaje = 'Modo demostración: no se envió un correo real. El código está en la consola del navegador (F12). Vence en 15 minutos.';
+      } else if (ruta === 'perfil/verificar') {
+        const r = await Cuentas.verificarCodigo(cuenta, d.codigo, ahora);
+        guardarCuenta(r.cuenta);
+        if (r.error) throw new ErrorRegla(r.error);
+        mensaje = '¡Correo verificado!';
+      } else {
+        return { ok: false, codigo: 'ERROR', error: 'Acción desconocida: ' + ruta };
+      }
+      return { ok: true, mensaje, perfil: Cuentas.verPerfil(cuentaDeSesion(), Date.now()) };
+    } catch (e) {
+      return fallo(e);
+    }
+  }
+
   function exigirAdministrador() {
     exigirSesion();
     if (!ROLES[usuario.rol].puedeEditar) {
@@ -1017,7 +1064,17 @@ function crearServicioLocal() {
         return fallo(e);
       }
     },
+    /** «Mi perfil» de la cuenta de la sesión (mismo JSON que GET /api/perfil). */
+    async perfil() {
+      try {
+        exigirSesion();
+        return { ok: true, perfil: Cuentas.verPerfil(cuentaDeSesion(), Date.now()) };
+      } catch (e) {
+        return fallo(e);
+      }
+    },
     async ejecutar(ruta, cuerpo = {}) {
+      if (ruta.startsWith('perfil/')) return accionPerfil(ruta, cuerpo);
       const comando = comandos[ruta];
       if (!comando) return { ok: false, codigo: 'ERROR', error: 'Acción desconocida: ' + ruta };
       try {
@@ -1050,8 +1107,9 @@ function crearServicioLocal() {
     },
     async respaldo() {
       exigirSesion();
-      exigir();
-      return { nombre: nombreArchivo(c.nombre) + '.json', contenido: new Blob([JSON.stringify(c, null, 2)], { type: 'application/json' }) };
+      exigirDueno(); // solo el Organizador dueño, como en Java (el respaldo no lleva cuentas ni claves)
+      // Sin el usuario dueño: al abrirlo, el campeonato queda de quien lo abre.
+      return { nombre: nombreArchivo(c.nombre) + '.json', contenido: new Blob([JSON.stringify(Object.assign({}, c, { propietario: undefined }), null, 2)], { type: 'application/json' }) };
     },
     async exportarHistorial() {
       exigirSesion();
