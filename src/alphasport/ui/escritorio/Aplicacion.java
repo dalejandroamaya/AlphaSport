@@ -468,7 +468,7 @@ public class Aplicacion extends Application {
         TextField correo = new TextField();
         correo.setPromptText("nombre@correo.com");
         PasswordField nuevaClave = new PasswordField();
-        nuevaClave.setPromptText("Mínimo 8 caracteres, con letras y números");
+        nuevaClave.setPromptText("Su contraseña");
         PasswordField confirmacion = new PasswordField();
         confirmacion.setPromptText("Repita la contraseña");
         Label errorRegistro = errorAcceso();
@@ -482,6 +482,22 @@ public class Aplicacion extends Application {
         });
         Button crear = boton("Crear cuenta", "primario", "ancho");
         crear.setMaxWidth(Double.MAX_VALUE);
+        // Las 5 reglas de la contraseña se marcan mientras se escribe; «Crear cuenta» espera a que se cumplan todas.
+        // Solo en el registro: el inicio de sesión no revisa la fuerza (las cuentas antiguas siguen entrando).
+        VBox reglasClave = new VBox(2);
+        reglasClave.getStyleClass().add("reglas-clave");
+        Runnable marcarReglas = () -> {
+            List<alphasport.service.AutenticacionService.ReglaClave> reglas = alphasport.service.AutenticacionService.reglasClave(nuevaClave.getText());
+            reglasClave.getChildren().clear();
+            for (alphasport.service.AutenticacionService.ReglaClave r : reglas) {
+                Label regla = etiqueta((r.cumple() ? "✓  " : "○  ") + r.texto(), "regla-clave", r.cumple() ? "cumplida" : "pendiente");
+                regla.setAccessibleText(r.texto() + (r.cumple() ? ": cumplida" : ": pendiente"));
+                reglasClave.getChildren().add(regla);
+            }
+            crear.setDisable(!reglas.stream().allMatch(alphasport.service.AutenticacionService.ReglaClave::cumple));
+        };
+        nuevaClave.textProperty().addListener((o, antes, ahora) -> marcarReglas.run());
+        marcarReglas.run();
         // El tipo elegido viaja tal cual: el servicio solo acepta ORGANIZADOR o AFICIONADO y valida todo lo demás.
         crear.setOnAction(e -> entrarConCuenta(errorRegistro, "registro", mapa(
                 "tipo", tipos.getSelectedToggle() == null ? "" : tipos.getSelectedToggle().getUserData(),
@@ -489,7 +505,7 @@ public class Aplicacion extends Application {
                 "clave", nuevaClave.getText(), "confirmacion", confirmacion.getText()), nuevaClave, confirmacion));
         VBox formRegistro = formularioAcceso(campoAcceso("Tipo de cuenta", opcionesTipo), campoAcceso("Nombre", nombre),
                 campoAcceso("Usuario", nuevoUsuario, "De 3 a 30 caracteres: letras sin tilde, números, punto, guion o guion bajo."),
-                campoAcceso("Correo", correo), campoAcceso("Contraseña", nuevaClave), campoAcceso("Confirmar contraseña", confirmacion),
+                campoAcceso("Correo", correo), campoAcceso("Contraseña", nuevaClave), reglasClave, campoAcceso("Confirmar contraseña", confirmacion),
                 errorRegistro, crear);
 
         javafx.scene.control.Tab tabEntrar = new javafx.scene.control.Tab("Iniciar sesión", formEntrar);

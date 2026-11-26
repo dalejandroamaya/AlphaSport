@@ -191,6 +191,11 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .perfil-texto small { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--sutil); }
 .perfil-texto strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pista-campo { color: var(--sutil); font-size: .78rem; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.reglas-clave { list-style: none; margin: .35rem 0 0; padding: 0; display: grid; gap: .15rem; font-size: .78rem; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--sutil); }
+.reglas-clave li::before { content: "○"; display: inline-block; width: 1.2em; }
+.reglas-clave li.cumplida { color: var(--cesped); }
+.reglas-clave li.cumplida::before { content: "✓"; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .tipos-cuenta { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
 .tipos-cuenta legend { grid-column: 1 / -1; padding: 0; margin-bottom: .35rem; }
 .tipo-cuenta { position: relative; display: block; cursor: pointer; }

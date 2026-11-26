@@ -48,7 +48,7 @@
           <small class="pista-campo">De 3 a 30 caracteres: letras sin tilde, números, punto, guion o guion bajo.</small></label>
         <label class="campo">Correo<input id="regCorreo" type="email" autocomplete="email" maxlength="254" required></label>
         <label class="campo">Contraseña<input id="regClave" type="password" autocomplete="new-password" maxlength="128" required>
-          <small class="pista-campo">Mínimo 8 caracteres, con letras y números.</small></label>
+          <ul id="reglasClave" class="reglas-clave" aria-live="polite" aria-label="Requisitos de la contraseña"></ul></label>
         <label class="campo">Confirmar contraseña<input id="regConfirmacion" type="password" autocomplete="new-password" maxlength="128" required></label>
         <p id="registroError" class="error" role="alert" hidden></p>
         <button class="btn primario ancho" type="submit">Crear cuenta</button>

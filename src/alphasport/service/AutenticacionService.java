@@ -6,6 +6,8 @@ import alphasport.model.Usuario;
 import alphasport.persistence.PersistenciaException;
 import alphasport.persistence.RepositorioUsuarios;
 import alphasport.persistence.RepositorioUsuariosEnMemoria;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -215,16 +217,103 @@ public class AutenticacionService {
     }
 
     static String validarClave(String clave, String confirmacion) {
-        if (clave == null || clave.length() < CLAVE_MINIMA || clave.length() > CLAVE_MAXIMA) {
-            throw new ReglaNegocioException("La contraseña debe tener entre " + CLAVE_MINIMA + " y " + CLAVE_MAXIMA + " caracteres.");
-        }
-        if (!clave.codePoints().anyMatch(Character::isLetter) || !clave.codePoints().anyMatch(Character::isDigit)) {
-            throw new ReglaNegocioException("La contraseña debe tener letras y números.");
+        String problema = problemaClave(clave);
+        if (problema != null) {
+            throw new ReglaNegocioException(problema);
         }
         if (!clave.equals(confirmacion)) {
             throw new ReglaNegocioException("Las contraseñas no coinciden.");
         }
         return clave;
+    }
+
+    /**
+     * Una regla de la contraseña para la lista que se marca mientras se escribe.
+     *
+     * @param texto lo que muestra la lista (por ejemplo «Una letra mayúscula»)
+     * @param falta como se nombra en el mensaje «Falta: …» (por ejemplo «una mayúscula»)
+     */
+    public record ReglaClave(String texto, String falta, boolean cumple) {
+    }
+
+    /** Lo que se encontro al recorrer la clave carácter por carácter. */
+    private record RevisionClave(List<ReglaClave> reglas, boolean espacios, boolean control, boolean larga) {
+    }
+
+    /**
+     * Recorre la clave carácter por carácter (igual que cuentas.js) y anota que tiene: mayuscula, minuscula,
+     * numero, caracter especial (ni letra, ni numero, ni espacio), espacios y caracteres de control.
+     */
+    private static RevisionClave revisarClave(String clave) {
+        String c = clave == null ? "" : clave;
+        boolean mayuscula = false, minuscula = false, numero = false, especial = false, espacios = false, control = false;
+        for (int i = 0; i < c.length(); ) {
+            int cp = c.codePointAt(i);
+            i += Character.charCount(cp);
+            int tipo = Character.getType(cp);
+            if (Character.isSpaceChar(cp) || Character.isWhitespace(cp)) {
+                espacios = true;
+            } else if (tipo == Character.CONTROL) {
+                control = true;
+            } else if (tipo == Character.UPPERCASE_LETTER) {
+                mayuscula = true;
+            } else if (tipo == Character.LOWERCASE_LETTER) {
+                minuscula = true;
+            } else if (tipo == Character.DECIMAL_DIGIT_NUMBER) {
+                numero = true;
+            } else if (!Character.isLetter(cp)) {
+                especial = true;
+            }
+        }
+        List<ReglaClave> reglas = List.of(
+                new ReglaClave("Entre " + CLAVE_MINIMA + " y " + CLAVE_MAXIMA + " caracteres", "al menos " + CLAVE_MINIMA + " caracteres",
+                        c.length() >= CLAVE_MINIMA && c.length() <= CLAVE_MAXIMA),
+                new ReglaClave("Una letra mayúscula", "una mayúscula", mayuscula),
+                new ReglaClave("Una letra minúscula", "una minúscula", minuscula),
+                new ReglaClave("Un número", "un número", numero),
+                new ReglaClave("Un carácter especial (por ejemplo ! # $ % *)", "un carácter especial", especial));
+        return new RevisionClave(reglas, espacios, control, c.length() > CLAVE_MAXIMA);
+    }
+
+    /** Las 5 reglas de la contraseña y si esta clave las cumple, para marcarlas en la pantalla de registro. */
+    public static List<ReglaClave> reglasClave(String clave) {
+        return revisarClave(clave).reglas();
+    }
+
+    /**
+     * Por que no sirve la clave, nombrando todo lo que falta (por ejemplo «Falta: un número y un carácter
+     * especial.»), o null si sirve. No revisa la confirmacion. El mismo texto que cuentas.js.
+     */
+    public static String problemaClave(String clave) {
+        RevisionClave r = revisarClave(clave);
+        List<String> partes = new ArrayList<>();
+        if (r.larga()) {
+            partes.add("La contraseña no puede tener más de " + CLAVE_MAXIMA + " caracteres.");
+        }
+        if (r.espacios()) {
+            partes.add("La contraseña no puede tener espacios.");
+        }
+        if (r.control()) {
+            partes.add("La contraseña no puede tener caracteres de control.");
+        }
+        List<String> faltan = new ArrayList<>();
+        for (ReglaClave regla : r.reglas()) {
+            if (!regla.cumple() && !(r.larga() && regla == r.reglas().get(0))) {
+                faltan.add(regla.falta());
+            }
+        }
+        if (!faltan.isEmpty()) {
+            partes.add("Falta: " + enLista(faltan) + ".");
+        }
+        return partes.isEmpty() ? null : String.join(" ", partes);
+    }
+
+    /** «a», «a y b», «a, b y c». */
+    private static String enLista(List<String> cosas) {
+        if (cosas.size() == 1) {
+            return cosas.get(0);
+        }
+        return String.join(", ", cosas.subList(0, cosas.size() - 1)) + " y " + cosas.get(cosas.size() - 1);
     }
 
     /** Solo ORGANIZADOR o AFICIONADO: un valor enviado por el cliente nunca puede dar otro rol. */

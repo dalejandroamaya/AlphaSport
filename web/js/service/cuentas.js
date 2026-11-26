@@ -20,7 +20,55 @@ const Cuentas = (() => {
   /** Usuario o correo como se guardan: sin espacios alrededor y en minúsculas. */
   const normalizar = texto => String(texto == null ? '' : texto).trim().toLowerCase();
 
-  const letraONumero = c => (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+  /**
+   * Recorre la clave carácter por carácter (igual que AutenticacionService en Java) y anota qué tiene:
+   * mayúscula, minúscula, número, carácter especial (ni letra, ni número, ni espacio), espacios y caracteres
+   * de control. Devuelve las 5 reglas con su estado para la lista que se marca mientras se escribe.
+   */
+  function revisarClave(clave) {
+    const c = typeof clave === 'string' ? clave : '';
+    let mayuscula = false, minuscula = false, numero = false, especial = false, espacios = false, control = false;
+    for (const ch of c) {
+      if (/[\p{Z}\t\n\v\f\r\u001c-\u001f]/u.test(ch)) espacios = true;
+      else if (/\p{Cc}/u.test(ch)) control = true;
+      else if (/\p{Lu}/u.test(ch)) mayuscula = true;
+      else if (/\p{Ll}/u.test(ch)) minuscula = true;
+      else if (/\p{Nd}/u.test(ch)) numero = true;
+      else if (!/\p{L}/u.test(ch)) especial = true;
+    }
+    const reglas = [
+      { id: 'largo', texto: `Entre ${CLAVE_MINIMA} y ${CLAVE_MAXIMA} caracteres`, falta: `al menos ${CLAVE_MINIMA} caracteres`,
+        cumple: c.length >= CLAVE_MINIMA && c.length <= CLAVE_MAXIMA },
+      { id: 'mayuscula', texto: 'Una letra mayúscula', falta: 'una mayúscula', cumple: mayuscula },
+      { id: 'minuscula', texto: 'Una letra minúscula', falta: 'una minúscula', cumple: minuscula },
+      { id: 'numero', texto: 'Un número', falta: 'un número', cumple: numero },
+      { id: 'especial', texto: 'Un carácter especial (por ejemplo ! # $ % *)', falta: 'un carácter especial', cumple: especial }
+    ];
+    return { reglas, espacios, control, larga: c.length > CLAVE_MAXIMA };
+  }
+
+  /** Las 5 reglas de la contraseña y si esta clave las cumple. */
+  const reglasClave = clave => revisarClave(clave).reglas;
+
+  /** «a», «a y b», «a, b y c». */
+  const enLista = cosas => cosas.length === 1 ? cosas[0] : `${cosas.slice(0, -1).join(', ')} y ${cosas[cosas.length - 1]}`;
+
+  /**
+   * Por qué no sirve la clave, nombrando todo lo que falta (por ejemplo «Falta: un número y un carácter
+   * especial.»), o null si sirve. No revisa la confirmación. El mismo texto que Java.
+   */
+  function problemaClave(clave) {
+    const r = revisarClave(clave);
+    const partes = [];
+    if (r.larga) partes.push(`La contraseña no puede tener más de ${CLAVE_MAXIMA} caracteres.`);
+    if (r.espacios) partes.push('La contraseña no puede tener espacios.');
+    if (r.control) partes.push('La contraseña no puede tener caracteres de control.');
+    const faltan = r.reglas.filter((regla, i) => !regla.cumple && !(r.larga && i === 0)).map(regla => regla.falta);
+    if (faltan.length) partes.push(`Falta: ${enLista(faltan)}.`);
+    return partes.length ? partes.join(' ') : null;
+  }
+
+  const letraONumero = c =>(c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
 
   /**
    * Por qué no sirve el correo (ya normalizado), o null si sirve. Las mismas reglas y textos que
@@ -84,10 +132,8 @@ const Cuentas = (() => {
     const problema = problemaCorreo(correo);
     if (problema) throw new Error(problema);
     const clave = typeof d.clave === 'string' ? d.clave : '';
-    if (clave.length < CLAVE_MINIMA || clave.length > CLAVE_MAXIMA) {
-      throw new Error(`La contraseña debe tener entre ${CLAVE_MINIMA} y ${CLAVE_MAXIMA} caracteres.`);
-    }
-    if (!/\p{L}/u.test(clave) || !/\p{Nd}/u.test(clave)) throw new Error('La contraseña debe tener letras y números.');
+    const problemaDeClave = problemaClave(clave);
+    if (problemaDeClave) throw new Error(problemaDeClave);
     if (clave !== d.confirmacion) throw new Error('Las contraseñas no coinciden.');
     // Solo estos dos: un valor enviado por la pantalla nunca puede dar otro rol.
     if (!ROLES_REGISTRO.includes(d.tipo)) throw new Error('Elija el tipo de cuenta: Organizador o Aficionado.');
@@ -139,5 +185,5 @@ const Cuentas = (() => {
     return diferencia === 0;
   }
 
-  return { normalizar, problemaCorreo, validarRegistro, hash, coincide, ROLES_REGISTRO };
+  return { normalizar, problemaCorreo, problemaClave, reglasClave, validarRegistro, hash, coincide, ROLES_REGISTRO };
 })();

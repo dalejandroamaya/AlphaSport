@@ -132,6 +132,7 @@ async function iniciar() {
   servicio = await crearServicio();
   catalogo = await servicio.catalogo();
   conectarEventos();
+  actualizarReglasClave(); // lista de reglas de la contraseña y «Crear cuenta» desactivado
   $('jgPosicion').innerHTML = catalogo.gruposPosiciones
     ? catalogo.gruposPosiciones.map(g => `<optgroup label="${esc(g.grupo)}">${g.posiciones.map(p => `<option>${esc(p)}</option>`).join('')}</optgroup>`).join('')
     : catalogo.posiciones.map(p => `<option>${esc(p)}</option>`).join('');
@@ -174,6 +175,17 @@ async function registrarse(e) {
   await iniciarSesion('registro', cuerpo, 'registroError');
 }
 
+/**
+ * Marca en vivo las 5 reglas de la contraseña (cumplida / pendiente) y deja «Crear cuenta» desactivado hasta
+ * cumplirlas todas. Solo en el registro: el inicio de sesión no revisa la fuerza (las cuentas antiguas entran).
+ */
+function actualizarReglasClave() {
+  const reglas = Cuentas.reglasClave($('regClave').value);
+  $('reglasClave').innerHTML = reglas.map(r =>
+    `<li class="${r.cumple ? 'cumplida' : 'pendiente'}">${esc(r.texto)}<span class="sr-only">: ${r.cumple ? 'cumplida' : 'pendiente'}</span></li>`).join('');
+  document.querySelector('#formRegistro button[type=submit]').disabled = !reglas.every(r => r.cumple);
+}
+
 async function iniciarSesion(ruta, cuerpo, idError = 'loginError') {
   const boton = document.querySelector(`#${idError === 'loginError' ? 'formLogin' : 'formRegistro'} button[type=submit]`);
   boton.disabled = true; // el hash de la clave tarda un momento: evita enviar dos veces
@@ -181,7 +193,8 @@ async function iniciarSesion(ruta, cuerpo, idError = 'loginError') {
   try {
     r = await servicio.ejecutar(ruta, cuerpo);
   } finally {
-    boton.disabled = false;
+    if (ruta === 'registro') actualizarReglasClave(); // sigue desactivado si la clave no cumple
+    else boton.disabled = false;
   }
   if (!r.ok) {
     mostrarErrorAcceso(idError, r.error);
@@ -204,6 +217,7 @@ function limpiarAcceso() {
   ['loginClave', 'regClave', 'regConfirmacion'].forEach(id => { $(id).value = ''; });
   mostrarErrorAcceso('loginError', '');
   mostrarErrorAcceso('registroError', '');
+  actualizarReglasClave();
 }
 
 /** Muestra «Iniciar sesión» o «Registrarse». */
@@ -2576,6 +2590,7 @@ function conectarEventos() {
     if ($('regCorreo').value.trim()) mostrarErrorAcceso('registroError', Cuentas.problemaCorreo(Cuentas.normalizar($('regCorreo').value)));
   });
   $('formRegistro').addEventListener('submit', registrarse);
+  $('regClave').addEventListener('input', actualizarReglasClave);
   // Mis campeonatos (Organizador): crear, gestionar, terminar, eliminar o tomar; y cambiar desde la cabecera.
   $('btnNuevoCampeonato').addEventListener('click', () => abrirNuevo(false));
   $('listaCampeonatos').addEventListener('click', clicCampeonatos);
