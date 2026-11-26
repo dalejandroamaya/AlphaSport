@@ -2,8 +2,7 @@
 --  Migracion 008 · correos de hasta 254 caracteres
 --  El registro acepta correos de hasta 254 caracteres (el maximo de un
 --  correo); la columna email tenia 120. Solo la ensancha: no cambia ni
---  borra ningun dato, y el programa sigue funcionando sin ella (solo
---  fallaria al guardar un correo de mas de 120 caracteres).
+--  borra ningun dato. El programa la exige (version 8 del esquema).
 --  Va despues de la 007. En una transaccion y se puede repetir.
 -- =====================================================================
 BEGIN;
