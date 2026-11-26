@@ -9,7 +9,7 @@ const VISTAS_SOLO_ADMIN = ['equipos', 'reglas']; // «campeonatos»: Mis campeon
 const VISTAS_SOLO_VISITANTE = ['votaciones', 'inicio'];
 const VISTA_INICIAL_VISITANTE = 'inicio'; // el Aficionado entra a su «Inicio»: hoy, próximos, resultados, líder y noticias
 /** Vistas que tienen sentido sin un campeonato elegido (las demás se ocultan del menú). */
-const VISTAS_SIN_CAMPEONATO = ['campeonatos', 'noticias', 'inicio'];
+const VISTAS_SIN_CAMPEONATO = ['campeonatos', 'noticias', 'inicio', 'perfil'];
 
 let servicio = null;
 let catalogo = null;
@@ -500,6 +500,79 @@ async function renderInicio() {
     : '<p class="sutil">No hay noticias publicadas.</p>');
 }
 
+/* ---------------------------------------------------------------- Mi perfil */
+
+let perfilActual = null;
+
+/** Pide el perfil de la sesión y llena los tres bloques (datos, verificar correo y cambiar contraseña). */
+async function renderPerfil() {
+  const r = await servicio.perfil();
+  if (!r.ok) { if (r.codigo === 'LOGIN') volverAlLogin('Su sesión terminó. Inicie sesión de nuevo.'); else aviso(r.error); return; }
+  mostrarPerfil(r.perfil);
+  ['pfClaveCorreo', 'pfClaveActual', 'pfClaveNueva', 'pfConfirmacion', 'pfCodigo'].forEach(id => { $(id).value = ''; });
+  ['pfErrorDatos', 'pfErrorCodigo', 'pfErrorClave'].forEach(id => mostrarErrorAcceso(id, ''));
+  actualizarFormPerfil();
+}
+
+function mostrarPerfil(p) {
+  perfilActual = p;
+  $('pfUsuario').textContent = p.usuario;
+  $('pfRol').textContent = p.rol;
+  $('pfNombre').value = p.nombre;
+  $('pfCorreo').value = p.correo;
+  $('pfInsignia').textContent = p.correoVerificado ? 'Correo verificado' : 'Correo sin verificar';
+  $('pfInsignia').className = 'insignia-correo ' + (p.correoVerificado ? 'verificado' : 'sin-verificar');
+  $('pfDemo').hidden = !p.demostracion;
+  $('formVerificar').hidden = p.correoVerificado; // ya verificado: no hay nada que hacer aquí
+  $('pfAyudaVerificar').textContent = p.codigoPendiente
+    ? 'Ya pidió un código: escríbalo abajo. Puede pedir otro si no le llegó.'
+    : 'Pida un código de 6 dígitos. Vence en 15 minutos y tiene 5 intentos.';
+}
+
+/** Revisa en vivo el correo y la contraseña nueva (mismas reglas que el registro) y pide la clave si cambia el correo. */
+function actualizarFormPerfil() {
+  const correo = Cuentas.normalizar($('pfCorreo').value);
+  const otroCorreo = !!perfilActual && correo !== Cuentas.normalizar(perfilActual.correo);
+  $('pfCampoClaveCorreo').hidden = !otroCorreo;
+  estadoCampo($('pfEstadoCorreo'), otroCorreo, Cuentas.problemaCorreo(correo), 'Correo válido. Quedará sin verificar.');
+  const clave = listaReglas($('pfReglasClave'), Cuentas.reglasClave($('pfClaveNueva').value));
+  const igual = estadoConfirmacion($('pfEstadoConfirmacion'), $('pfClaveNueva').value, $('pfConfirmacion').value);
+  $('pfCambiarClave').disabled = !(clave && igual && $('pfClaveActual').value);
+}
+
+async function accionPerfil(ruta, cuerpo, idError) {
+  mostrarErrorAcceso(idError, '');
+  const r = await servicio.ejecutar(ruta, cuerpo);
+  if (!r.ok) { mostrarErrorAcceso(idError, r.error); if (r.perfil) mostrarPerfil(r.perfil); return false; }
+  if (r.perfil) mostrarPerfil(r.perfil);
+  if (r.mensaje) aviso(r.mensaje);
+  return true;
+}
+
+function conectarPerfil() {
+  $('perfil').addEventListener('click', () => mostrarVista('perfil'));
+  ['pfCorreo', 'pfClaveActual', 'pfClaveNueva', 'pfConfirmacion'].forEach(id => $(id).addEventListener('input', actualizarFormPerfil));
+  $('formDatos').addEventListener('submit', async e => {
+    e.preventDefault();
+    // Solo nombre, correo y la clave si cambia el correo: la cuenta la pone el servicio desde la sesión.
+    if (await accionPerfil('perfil/datos', { nombre: $('pfNombre').value, correo: $('pfCorreo').value, claveActual: $('pfClaveCorreo').value }, 'pfErrorDatos')) {
+      $('pfClaveCorreo').value = '';
+      actualizarFormPerfil();
+    }
+  });
+  $('formClave').addEventListener('submit', async e => {
+    e.preventDefault();
+    await accionPerfil('perfil/clave', { claveActual: $('pfClaveActual').value, clave: $('pfClaveNueva').value, confirmacion: $('pfConfirmacion').value }, 'pfErrorClave');
+    ['pfClaveActual', 'pfClaveNueva', 'pfConfirmacion'].forEach(id => { $(id).value = ''; });
+    actualizarFormPerfil(); // las claves escritas se borran siempre
+  });
+  $('pfEnviarCodigo').addEventListener('click', () => accionPerfil('perfil/codigo', {}, 'pfErrorCodigo'));
+  $('formVerificar').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (await accionPerfil('perfil/verificar', { codigo: $('pfCodigo').value }, 'pfErrorCodigo')) $('pfCodigo').value = '';
+  });
+}
+
 function clicInicio(e) {
   const ir = e.target.closest('[data-ir]');
   if (ir) { mostrarVista(ir.dataset.ir); return; }
@@ -748,6 +821,7 @@ function mostrarVista(nombre) {
   marcarNavMas(nombre);
   anotarRuta({ vista: nombre }, rutaDe(nombre)); // «atrás» vuelve aquí
   if (nombre === 'inicio') renderInicio();
+  if (nombre === 'perfil') renderPerfil();
   if (nombre === 'votaciones') renderVotaciones();
   if (nombre === 'noticias') renderNoticias(); // las noticias se piden al servicio al abrir la sección
   if (nombre === 'campeonatos') renderCampeonatos();
@@ -2787,6 +2861,7 @@ function conectarEventos() {
   });
   window.addEventListener('popstate', alNavegarHistorial);
   $('panelInicio').addEventListener('click', clicInicio);
+  conectarPerfil();
   $('dpEditar').addEventListener('click', () => {
     const id = detalleActual && detalleActual.partido.id;
     $('dlgDetalle').close();

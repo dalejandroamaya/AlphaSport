@@ -67,7 +67,7 @@
   <div id="app" class="app" hidden>
     <aside class="barra-lateral vidrio">
       <div class="marca-lateral"><img src="img/logo.png" alt=""><span>Alpha<b>Sport</b></span><small>Gestor de campeonatos</small>
-        <div id="perfil" class="perfil" hidden><span id="perfilInicial" class="perfil-avatar" aria-hidden="true"></span><span class="perfil-texto"><small>Bienvenido</small><strong id="perfilUsuario"></strong></span></div></div>
+        <button type="button" id="perfil" class="perfil" data-ir-perfil title="Mi perfil" hidden><span id="perfilInicial" class="perfil-avatar" aria-hidden="true"></span><span class="perfil-texto"><small>Mi perfil</small><strong id="perfilUsuario"></strong></span></button></div>
       <nav class="navegacion" id="navegacionSecciones" aria-label="Secciones">
         <button data-vista="inicio" hidden><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7M5 10v10h5v-6h4v6h5V10"/></svg><span>Inicio</span></button>
         <button data-vista="campeonatos" hidden><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z"/></svg><span id="navCampeonatos">Mis campeonatos</span></button>
@@ -79,6 +79,7 @@
         <button data-vista="sanciones"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="9" height="13" rx="1.5"/><rect x="10" y="7" width="9" height="13" rx="1.5"/></svg><span>Estadísticas</span></button>
         <button data-vista="noticias"><svg viewBox="0 0 24 24"><path d="M4 5h13v14H6a2 2 0 0 1-2-2V5ZM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4"/></svg><span>Noticias</span></button>
         <button data-vista="reglas"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h7"/></svg><span>Reglas</span></button>
+        <button data-vista="perfil"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Mi perfil</span></button>
         <button type="button" class="nav-mas" id="navMas" aria-expanded="false" aria-controls="navegacionSecciones" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Más</span></button>
       </nav>
       <div class="lateral-pie">
@@ -316,6 +317,42 @@
             <div id="criteriosReglas"></div>
             <button id="btnAplicarCriterios" class="btn" data-solo-admin>Aplicar criterios</button>
           </article>
+        </div>
+      </section>
+
+      <!-- Mi perfil (Organizador y Aficionado): datos, verificar el correo y cambiar la contraseña -->
+      <section id="vista-perfil" class="vista" hidden>
+        <div class="cabecera-vista"><div><h2>Mi perfil</h2><p class="sutil">Sus datos de acceso. El nombre de usuario no se puede cambiar.</p></div></div>
+        <div class="perfil-grid">
+          <form id="formDatos" class="perfil-bloque vidrio" novalidate>
+            <h3>Mis datos</h3>
+            <p class="sutil pequeno">Usuario: <b id="pfUsuario"></b> · <span id="pfRol"></span></p>
+            <label class="campo">Nombre<input id="pfNombre" maxlength="80" autocomplete="name"></label>
+            <label class="campo">Correo <span id="pfInsignia" class="insignia-correo"></span><input id="pfCorreo" type="email" maxlength="254" autocomplete="email">
+              <small id="pfEstadoCorreo" class="pista-campo" aria-live="polite"></small></label>
+            <label class="campo" id="pfCampoClaveCorreo" hidden>Contraseña actual (para cambiar el correo)<input id="pfClaveCorreo" type="password" autocomplete="current-password"></label>
+            <p id="pfErrorDatos" class="error" role="alert" hidden></p>
+            <button class="btn primario" type="submit">Guardar datos</button>
+          </form>
+          <form id="formVerificar" class="perfil-bloque vidrio" novalidate>
+            <h3>Verificar correo</h3>
+            <p id="pfDemo" class="aviso-demo">Modo demostración: no se envían correos reales.</p>
+            <p id="pfAyudaVerificar" class="sutil pequeno">Pida un código de 6 dígitos. Vence en 15 minutos y tiene 5 intentos.</p>
+            <button type="button" id="pfEnviarCodigo" class="btn fantasma">Enviar código</button>
+            <label class="campo">Código<input id="pfCodigo" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></label>
+            <p id="pfErrorCodigo" class="error" role="alert" hidden></p>
+            <button class="btn primario" type="submit" id="pfVerificar">Verificar</button>
+          </form>
+          <form id="formClave" class="perfil-bloque vidrio" novalidate>
+            <h3>Cambiar contraseña</h3>
+            <label class="campo">Contraseña actual<input id="pfClaveActual" type="password" autocomplete="current-password"></label>
+            <label class="campo">Contraseña nueva<input id="pfClaveNueva" type="password" maxlength="128" autocomplete="new-password">
+              <ul id="pfReglasClave" class="reglas-clave" aria-label="Requisitos de la contraseña"></ul></label>
+            <label class="campo">Confirmar contraseña nueva<input id="pfConfirmacion" type="password" maxlength="128" autocomplete="new-password">
+              <small id="pfEstadoConfirmacion" class="pista-campo" aria-live="polite"></small></label>
+            <p id="pfErrorClave" class="error" role="alert" hidden></p>
+            <button class="btn primario" type="submit" id="pfCambiarClave">Cambiar contraseña</button>
+          </form>
         </div>
       </section>
     </main>

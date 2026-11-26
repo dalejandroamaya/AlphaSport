@@ -152,20 +152,97 @@ const Cuentas = (() => {
     const usuario = normalizar(d.usuario);
     const problemaDeUsuario = problemaUsuario(usuario);
     if (problemaDeUsuario) throw new Error(problemaDeUsuario);
-    const nombre = String(d.nombre == null ? '' : d.nombre).trim().replace(/\s+/g, ' ');
-    if (nombre.length < NOMBRE_MINIMO || nombre.length > NOMBRE_MAXIMO) {
-      throw new Error(`Escriba su nombre (entre ${NOMBRE_MINIMO} y ${NOMBRE_MAXIMO} caracteres).`);
-    }
-    const correo = normalizar(d.correo);
-    const problema = problemaCorreo(correo);
-    if (problema) throw new Error(problema);
-    const clave = typeof d.clave === 'string' ? d.clave : '';
-    const problemaDeClave = problemaClave(clave);
-    if (problemaDeClave) throw new Error(problemaDeClave);
-    if (clave !== d.confirmacion) throw new Error('Las contraseñas no coinciden.');
+    const nombre = validarNombre(d.nombre);
+    const correo = validarCorreo(d.correo);
+    const clave = validarClave(d.clave, d.confirmacion);
     // Solo estos dos: un valor enviado por la pantalla nunca puede dar otro rol.
     if (!ROLES_REGISTRO.includes(d.tipo)) throw new Error('Elija el tipo de cuenta: Organizador o Aficionado.');
     return { usuario, nombre, correo, clave, rol: d.tipo };
+  }
+
+  function validarNombre(texto) {
+    const nombre = String(texto == null ? '' : texto).trim().replace(/\s+/g, ' ');
+    if (nombre.length < NOMBRE_MINIMO || nombre.length > NOMBRE_MAXIMO) {
+      throw new Error(`Escriba su nombre (entre ${NOMBRE_MINIMO} y ${NOMBRE_MAXIMO} caracteres).`);
+    }
+    return nombre;
+  }
+
+  function validarCorreo(texto) {
+    const correo = normalizar(texto);
+    const problema = problemaCorreo(correo);
+    if (problema) throw new Error(problema);
+    return correo;
+  }
+
+  function validarClave(texto, confirmacion) {
+    const clave = typeof texto === 'string' ? texto : '';
+    const problema = problemaClave(clave);
+    if (problema) throw new Error(problema);
+    if (clave !== confirmacion) throw new Error('Las contraseñas no coinciden.');
+    return clave;
+  }
+
+  /* ---------------------------------------------------------------- Mi perfil (gemelo de PerfilService) */
+
+  const VIGENCIA_CODIGO = 15 * 60 * 1000, MAXIMO_INTENTOS = 5;
+
+  /** Lo que muestra «Mi perfil» de una cuenta guardada en este navegador. */
+  const verPerfil = (cuenta, ahora) => ({
+    usuario: cuenta.usuario, nombre: cuenta.nombre, correo: cuenta.correo || '', rol: cuenta.rol === 'ORGANIZADOR' ? 'Organizador' : 'Aficionado',
+    correoVerificado: !!cuenta.correoVerificado, codigoPendiente: !!cuenta.codigo && cuenta.vence > ahora, demostracion: true
+  });
+
+  async function exigirClaveActual(cuenta, clave, siFalta) {
+    if (!clave) throw new Error(siFalta);
+    if (!(await coincide(clave, cuenta.claveHash))) throw new Error('La contraseña actual no es correcta.');
+  }
+
+  /** Cambia nombre y correo; cambiar el correo pide la contraseña actual y lo deja sin verificar. Devuelve { cuenta, mensaje }. */
+  async function actualizarDatos(cuenta, d, correoEnUso) {
+    const nombre = validarNombre(d.nombre), correo = validarCorreo(d.correo);
+    const otroCorreo = correo !== normalizar(cuenta.correo);
+    if (otroCorreo) await exigirClaveActual(cuenta, d.claveActual, 'Para cambiar el correo escriba su contraseña actual.');
+    if (otroCorreo && correoEnUso(correo)) throw new Error('Ese correo ya está registrado en otra cuenta.');
+    const nueva = Object.assign({}, cuenta, { nombre, correo });
+    if (otroCorreo) Object.assign(nueva, { correoVerificado: false, codigo: null, vence: 0, intentos: 0 });
+    return { cuenta: nueva, mensaje: otroCorreo ? 'Datos guardados. Su correo nuevo queda sin verificar: pida un código para verificarlo.' : 'Datos guardados.' };
+  }
+
+  /** Cambia la contraseña: la actual, y la nueva con las 5 reglas y su confirmación. */
+  async function cambiarClave(cuenta, d) {
+    await exigirClaveActual(cuenta, d.claveActual, 'Escriba su contraseña actual.');
+    const clave = validarClave(d.clave, d.confirmacion);
+    return Object.assign({}, cuenta, { claveHash: await hash(clave) });
+  }
+
+  /** Código de 6 dígitos que vence en 15 minutos (se guarda su hash). Devuelve { cuenta, codigo }. */
+  async function crearCodigo(cuenta, ahora) {
+    if (!cuenta.correo) throw new Error('Primero escriba su correo en «Mis datos».');
+    if (cuenta.correoVerificado) throw new Error('Su correo ya está verificado.');
+    const numero = crypto.getRandomValues(new Uint32Array(1))[0] % 1000000;
+    const codigo = String(numero).padStart(6, '0');
+    return { cuenta: Object.assign({}, cuenta, { codigo: await hash(codigo), vence: ahora + VIGENCIA_CODIGO, intentos: 0 }), codigo };
+  }
+
+  /**
+   * Revisa el código: vencido, intentos agotados o incorrecto dan error; cada error deja la cuenta actualizada
+   * (intentos o código borrado). Devuelve { cuenta, error } con error null si quedó verificado.
+   */
+  async function verificarCodigo(cuenta, codigo, ahora) {
+    const sinCodigo = Object.assign({}, cuenta, { codigo: null, vence: 0, intentos: 0 });
+    if (cuenta.correoVerificado) return { cuenta, error: 'Su correo ya está verificado.' };
+    if (!cuenta.codigo) return { cuenta, error: 'Primero pida un código.' };
+    if (ahora > cuenta.vence) return { cuenta: sinCodigo, error: 'El código venció. Pida uno nuevo.' };
+    const intentos = cuenta.intentos | 0;
+    if (intentos >= MAXIMO_INTENTOS) return { cuenta: sinCodigo, error: `Agotó los ${MAXIMO_INTENTOS} intentos. Pida un código nuevo.` };
+    const escrito = String(codigo == null ? '' : codigo).trim();
+    if (!/^\d{6}$/.test(escrito) || !(await coincide(escrito, cuenta.codigo))) {
+      if (intentos + 1 >= MAXIMO_INTENTOS) return { cuenta: sinCodigo, error: `Código incorrecto. Agotó los ${MAXIMO_INTENTOS} intentos: pida un código nuevo.` };
+      const quedan = MAXIMO_INTENTOS - intentos - 1;
+      return { cuenta: Object.assign({}, cuenta, { intentos: intentos + 1 }), error: `Código incorrecto. Le ${quedan === 1 ? 'queda 1 intento.' : `quedan ${quedan} intentos.`}` };
+    }
+    return { cuenta: Object.assign(sinCodigo, { correoVerificado: true }), error: null };
   }
 
   /* ---------------------------------------------------------------- hash de claves (web sola) */
@@ -213,5 +290,6 @@ const Cuentas = (() => {
     return diferencia === 0;
   }
 
-  return { normalizar, problemaUsuario, reglasUsuario, AYUDA_USUARIO, problemaCorreo, problemaClave, reglasClave, validarRegistro, hash, coincide, ROLES_REGISTRO };
+  return { normalizar, problemaUsuario, reglasUsuario, AYUDA_USUARIO, problemaCorreo, problemaClave, reglasClave, validarRegistro, hash, coincide, ROLES_REGISTRO,
+    verPerfil, actualizarDatos, cambiarClave, crearCodigo, verificarCodigo, VIGENCIA_CODIGO, MAXIMO_INTENTOS };
 })();

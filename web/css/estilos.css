@@ -1344,3 +1344,14 @@ button.partido:hover { background: var(--fila-hover); transform: none; }
 .inicio-lider { margin: 0; font-size: 1.05rem; }
 .inicio-vacio { padding: 1.5rem; border-radius: var(--radio, 16px); display: grid; justify-items: center; gap: .8rem; text-align: center; }
 .boton-volver { white-space: nowrap; }
+
+/* Mi perfil */
+.perfil-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 1rem; align-items: start; }
+.perfil-bloque { padding: 1rem; border-radius: var(--radio, 16px); display: grid; gap: .7rem; }
+.perfil-bloque h3 { margin: 0; font-size: 1.05rem; }
+.insignia-correo { display: inline-block; margin-left: .4rem; padding: .05rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.insignia-correo.verificado { color: var(--cesped); border: 1px solid var(--cesped); }
+.insignia-correo.sin-verificar { color: var(--ambar, #f5b942); border: 1px solid var(--ambar, #f5b942); }
+.aviso-demo { margin: 0; padding: .4rem .6rem; border-radius: 8px; border: 1px dashed var(--ambar, #f5b942); color: var(--ambar, #f5b942); font-size: .82rem; font-weight: 600; }
+button.perfil { border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 0; }
+button.perfil:hover .perfil-texto strong, button.perfil:focus-visible .perfil-texto strong { text-decoration: underline; }

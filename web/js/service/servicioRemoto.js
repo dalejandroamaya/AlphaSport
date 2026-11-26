@@ -52,6 +52,7 @@ function crearServicioRemoto() {
     detalle: id => pedir('partido/' + id + '/' + encodeURIComponent(Almacen.dispositivo())),
     votaciones: () => pedir('votaciones/' + encodeURIComponent(Almacen.dispositivo())),
     noticias: () => pedir('noticias'),
+    perfil: () => pedir('perfil'),
     /** Con el programa Java la foto es un archivo de datos/imagenes/ que se sirve en /api/imagen/{nombre}. */
     urlImagen: imagen => (imagen ? '/api/imagen/' + encodeURIComponent(imagen) : ''),
     urlFoto: foto => (foto ? '/api/foto/' + encodeURIComponent(foto) : ''),
