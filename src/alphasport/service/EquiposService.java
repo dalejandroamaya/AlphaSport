@@ -70,7 +70,11 @@ public class EquiposService {
             throw new ReglaNegocioException("El equipo " + limpio + " ya existe.");
         }
         validarDorsales(jugadores);
-        jugadores.forEach(j -> j.setDocumento(ReglasPlantilla.limpiarDocumento(j.getDocumento())));
+        ReglasPlantilla.validarFormatoDocumentos(dt, jugadores); // solo números, de 5 a 12 dígitos
+        jugadores.forEach(j -> j.setDocumento(ReglasPlantilla.soloDigitos(j.getDocumento())));
+        if (dt != null) {
+            dt.setDocumento(ReglasPlantilla.soloDigitos(dt.getDocumento()));
+        }
         ReglasPlantilla.validarDocumentos(ctx.campeonato(), existente, jugadores); // un documento, un jugador
         Equipo equipo = existente;
         if (equipo == null) {

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#05080f">
   <title>AlphaSport · Gestor de campeonatos</title>
-  <link rel="icon" href="img/logo.png" type="image/png">
+  <link rel="icon" href="img/favicon.png" type="image/png">
   <script>try { if (localStorage.getItem('alphasport.tema') === 'claro') document.documentElement.dataset.tema = 'claro'; } catch (e) {}</script>
   <link rel="stylesheet" href="css/estilos.css">
 </head>
@@ -13,13 +13,13 @@
   <div class="fondo-estadio" aria-hidden="true"><span class="foco izq"></span><span class="foco der"></span></div>
 
   <section id="login" class="login" hidden>
-    <button class="btn fantasma icono tema-login" data-tema-alternar aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
+    <button class="btn fantasma icono tema-login" data-tema-alternar aria-label="Cambiar a modo claro" title="Cambiar a modo claro"><svg class="ico ico-luna" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg class="ico ico-sol" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
     <div class="login-escena">
     <!-- Al registrarse, dos lobitos salen de detrás del panel, uno por cada lado, saludando. -->
     <div class="lobito-lado izq" aria-hidden="true"><div class="lobito-asoma"><img src="img/mascota.webp" alt=""><span class="mano">👋</span></div></div>
     <div class="lobito-lado der" aria-hidden="true"><div class="lobito-asoma"><img src="img/mascota.webp" alt=""><span class="mano">👋</span></div></div>
     <div class="login-tarjeta vidrio">
-      <img class="logo-login" src="img/logo-texto.png" alt="AlphaSport">
+      <div class="marca-login"><img class="logo-login" src="img/logo.png" alt=""><span class="logo-texto" role="img" aria-label="AlphaSport Software"></span></div>
       <p class="login-lema">Gestión profesional de campeonatos de fútbol</p>
       <div class="pestanas-mini pestanas-acceso" role="tablist" aria-label="Acceso">
         <button type="button" role="tab" id="tabEntrar" data-acceso="entrar" class="activa" aria-selected="true" aria-controls="formLogin">Iniciar sesión</button>
@@ -66,7 +66,7 @@
 
   <div id="app" class="app" hidden>
     <aside class="barra-lateral vidrio">
-      <div class="marca-lateral"><img src="img/logo.png" alt=""><span>Alpha<b>Sport</b></span><small>Gestor de campeonatos</small>
+      <div class="marca-lateral"><img src="img/logo.png" alt=""><span class="logo-texto" role="img" aria-label="AlphaSport Software"></span><small>Gestor de campeonatos</small>
         <button type="button" id="perfil" class="perfil" data-ir-perfil title="Mi perfil" hidden><span id="perfilInicial" class="perfil-avatar" aria-hidden="true"></span><span class="perfil-texto"><small>Mi perfil</small><strong id="perfilUsuario"></strong></span></button></div>
       <nav class="navegacion" id="navegacionSecciones" aria-label="Secciones">
         <button data-vista="inicio" hidden><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7M5 10v10h5v-6h4v6h5V10"/></svg><span>Inicio</span></button>
@@ -85,7 +85,7 @@
       <div class="lateral-pie">
         <span id="chipRol" class="chip chip-rol"></span>
         <button id="btnHistorial" class="btn fantasma ancho"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z"/></svg>Historial</button>
-        <button class="btn fantasma ancho boton-tema" data-tema-alternar><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>Modo claro / oscuro</button>
+        
       </div>
     </aside>
 
@@ -101,19 +101,20 @@
         <div class="marcador-acciones">
           <button id="btnAvanzar" class="btn primario grande" data-solo-admin>Iniciar campeonato</button>
           <button id="btnCampeon" class="btn dorado" hidden>Ver campeón</button>
-          <button class="btn fantasma icono tema-movil" data-tema-alternar aria-label="Cambiar entre modo claro y oscuro" title="Modo claro / oscuro"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg></button>
+          <button type="button" id="btnGuia" class="btn fantasma icono" aria-label="Cómo usar AlphaSport" title="Cómo usar AlphaSport"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6M12 17h.01"/></svg></button>
+          <button class="btn fantasma icono tema-movil" data-tema-alternar aria-label="Cambiar a modo claro" title="Cambiar a modo claro"><svg class="ico ico-luna" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg class="ico ico-sol" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg></button>
           <div class="menu">
             <button id="btnMenu" class="btn fantasma" aria-haspopup="menu" aria-expanded="false" aria-controls="menuArchivo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Archivo</button>
             <div id="menuArchivo" class="menu-lista vidrio" role="menu" aria-labelledby="btnMenu" hidden>
               <button role="menuitem" tabindex="-1" data-accion="nuevo" data-solo-admin>Nuevo campeonato…</button>
               <button role="menuitem" tabindex="-1" data-accion="siguiente" id="menuSiguiente" data-solo-admin>Siguiente torneo corto (Clausura)…</button>
-              <button role="menuitem" tabindex="-1" data-accion="cambiarFormato" data-solo-admin>Cambiar formato del campeonato…</button>
-              <button role="menuitem" tabindex="-1" data-accion="terminar" data-solo-admin>Terminar campeonato…</button>
-              <button role="menuitem" tabindex="-1" data-accion="cancelar" class="opcion-peligro" data-solo-admin>Eliminar campeonato…</button>
+              <button role="menuitem" tabindex="-1" data-accion="cambiarFormato" id="menuFormato" data-solo-admin>Cambiar formato del campeonato…</button>
+              <button role="menuitem" tabindex="-1" data-accion="terminar" id="menuTerminar" data-solo-admin>Terminar campeonato…</button>
+              <button role="menuitem" tabindex="-1" data-accion="cancelar" id="menuEliminar" class="opcion-peligro" data-solo-admin>Eliminar campeonato…</button>
               <hr role="separator" data-solo-admin>
-              <button role="menuitem" tabindex="-1" data-accion="exportar" data-solo-admin>Descargar respaldo</button>
-              <button role="menuitem" tabindex="-1" data-accion="importar" data-solo-admin>Abrir respaldo…</button>
-              <button role="menuitem" tabindex="-1" data-accion="historialTxt">Exportar historial (.txt)</button>
+              <button role="menuitem" tabindex="-1" data-accion="exportar" id="menuRespaldo" data-solo-admin>Guardar copia de seguridad</button>
+              <button role="menuitem" tabindex="-1" data-accion="importar" data-solo-admin>Restaurar copia de seguridad…</button>
+              <button role="menuitem" tabindex="-1" data-accion="historialTxt" id="menuHistorialTxt">Exportar historial (.txt)</button>
               <button role="menuitem" tabindex="-1" data-accion="historial">Historial de campeonatos</button>
               <hr role="separator">
               <button role="menuitem" tabindex="-1" data-accion="salir">Cerrar sesión</button>
@@ -150,7 +151,6 @@
             <input id="nombreRapido" placeholder="Nombre del equipo" maxlength="60">
             <button class="btn">Agregar</button>
             <button type="button" id="btnEquipoCompleto" class="btn fantasma">+ Con plantilla</button>
-            <button type="button" id="btnDatosPrueba" class="btn fantasma" title="Crear equipos inventados con plantilla completa a partir de una semilla"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 4 3.5 2.6-1.3 4.1H9.8L8.5 9.6 12 7Z"/></svg>Datos de prueba</button>
           </form>
         </div>
         <div id="barraDivisiones" class="barra-divisiones vidrio" hidden></div>
@@ -161,6 +161,7 @@
         <div class="cabecera-vista">
           <div><h2 id="tituloPartidos">Partidos</h2><p id="ayudaPartidos" class="sutil">Calendario y resultados.</p></div>
           <div class="filtros">
+            <button type="button" id="btnProgramar" data-solo-admin class="btn mini" title="Fecha, hora y cancha para todos los partidos pendientes de una vez"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M8 17h6"/></svg>Programar fechas</button>
             <button type="button" id="btnRapido" data-solo-admin class="btn mini fantasma" aria-pressed="false" title="Escribir los marcadores directamente en la lista"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>Carga rápida</button>
             <select id="filtroFase" aria-label="Fase"></select>
             <select id="filtroEstado" aria-label="Estado">
@@ -358,6 +359,14 @@
     </main>
   </div>
 
+  <dialog id="dlgGuia" class="dialogo" aria-labelledby="guiaTitulo">
+    <h3 id="guiaTitulo">Cómo usar AlphaSport</h3>
+    <p id="guiaIntro" class="sutil"></p>
+    <ol id="guiaPasos" class="guia-pasos"></ol>
+    <p class="sutil pequeno">Puede volver a abrir esta guía cuando quiera con el botón «?» de arriba.</p>
+    <div class="acciones"><button type="button" id="guiaCerrar" class="btn primario">Entendido</button></div>
+  </dialog>
+
   <dialog id="dlgMensaje" class="dialogo pequeno-dlg">
     <h3 id="msgTitulo"></h3>
     <div id="msgTexto" class="msg-texto"></div>
@@ -380,7 +389,7 @@
       <fieldset class="grupo"><legend>Director técnico</legend>
         <div class="rejilla-3">
           <label class="campo">Nombre<input id="dtNombre" maxlength="60"></label>
-          <label class="campo">Documento<input id="dtDocumento" maxlength="20"></label>
+          <label class="campo">Documento<input id="dtDocumento" maxlength="20" inputmode="numeric" aria-describedby="dtDocError"><small id="dtDocError" class="pista-campo mal" role="alert" hidden></small></label>
           <label class="campo">Nacionalidad<input id="dtNacionalidad" maxlength="30"></label>
         </div>
       </fieldset>
@@ -389,9 +398,10 @@
           <button type="button" id="jgFoto" class="foto-boton" aria-label="Foto tipo cédula del jugador"></button>
           <label class="campo">Dorsal<input id="jgDorsal" type="number" min="1" max="99"></label>
           <label class="campo">Nombre<input id="jgNombre" maxlength="60"></label>
-          <label class="campo">Documento<input id="jgDocumento" maxlength="20"></label>
+          <label class="campo">Documento<input id="jgDocumento" maxlength="20" inputmode="numeric" aria-describedby="jgError"></label>
           <label class="campo">Posición<select id="jgPosicion"></select></label>
           <button type="button" id="jgAgregar" class="btn">Agregar</button>
+          <button type="button" id="jgCancelarEdicion" class="btn fantasma" hidden>Cancelar</button>
         </div>
         <p id="jgError" class="error" role="alert" hidden></p>
         <div class="tabla-envoltura"><table class="tabla compacta">
@@ -548,6 +558,29 @@
     </form>
   </dialog>
 
+  <dialog id="dlgProgramar" class="dialogo" aria-labelledby="prTitulo">
+    <form id="formProgramar">
+      <h3 id="prTitulo">Programar fechas automáticamente</h3>
+      <p class="sutil">Diga desde cuándo, qué días y a qué horas se juega: el programa reparte los partidos pendientes, una jornada por día de juego y sin que un equipo juegue dos veces el mismo día. Después puede ajustar cualquiera en su «Previa».</p>
+      <div class="rejilla-2">
+        <label class="campo">Desde<input id="prInicio" type="date" required></label>
+        <label class="campo">Horas de juego<input id="prHoras" value="15:00, 17:00" placeholder="15:00, 17:00" aria-describedby="prAyudaHoras"><small id="prAyudaHoras" class="pista-campo">Separadas por comas.</small></label>
+      </div>
+      <fieldset class="grupo"><legend>Días de juego</legend>
+        <div id="prDias" class="dias-juego">
+          <label class="check"><input type="checkbox" value="1"> Lun</label><label class="check"><input type="checkbox" value="2"> Mar</label>
+          <label class="check"><input type="checkbox" value="3"> Mié</label><label class="check"><input type="checkbox" value="4"> Jue</label>
+          <label class="check"><input type="checkbox" value="5"> Vie</label><label class="check"><input type="checkbox" value="6" checked> Sáb</label>
+          <label class="check"><input type="checkbox" value="7" checked> Dom</label>
+        </div>
+      </fieldset>
+      <label class="campo">Canchas (opcional)<input id="prSedes" placeholder="Cancha 1, Cancha 2" aria-describedby="prAyudaSedes"><small id="prAyudaSedes" class="pista-campo">Vacío: cada partido va en el estadio del equipo local.</small></label>
+      <label class="check"><input type="checkbox" id="prTodos"> Reprogramar también los pendientes que ya tienen fecha</label>
+      <p id="prError" class="error" role="alert" hidden></p>
+      <div class="acciones"><button type="button" id="prCancelar" class="btn fantasma">Cancelar</button><button class="btn primario">Programar</button></div>
+    </form>
+  </dialog>
+
   <dialog id="dlgSemilla" class="dialogo pequeno-dlg" aria-labelledby="smTitulo">
     <form id="formSemilla">
       <h3 id="smTitulo">Datos de prueba</h3>
@@ -661,6 +694,8 @@
   <script src="js/service/calificaciones.js"></script>
   <script src="js/service/reglasVotacion.js"></script>
   <script src="js/service/cuentas.js"></script>
+  <script src="js/service/plantilla.js"></script>
+  <script src="js/service/cronograma.js"></script>
   <script src="js/service/servicioLocal.js"></script>
   <script src="js/service/servicioRemoto.js"></script>
   <script src="js/ui/cancha.js"></script>

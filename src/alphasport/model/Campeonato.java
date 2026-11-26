@@ -25,6 +25,7 @@ public class Campeonato implements Serializable {
     private String codigo;        // identifica el campeonato (en curso y en el historial)
     private int propietario;      // id del Organizador que lo creo (0 = sin dueno); un respaldo viejo no lo trae
     private String fechaArchivo;  // cuando se guardo en el historial
+    private String fechaCreacion; // AAAA-MM-DD en que se creo (null en archivos anteriores): ningun partido va antes
     // Ascensos y descensos con los que empezo esta temporada (null en archivos anteriores = ninguno)
     private ArrayList<MovimientoDivision> movimientos = new ArrayList<>();
 
@@ -305,6 +306,14 @@ public class Campeonato implements Serializable {
 
     public String getFechaArchivo() {
         return fechaArchivo;
+    }
+
+    public String getFechaCreacion() {
+        return fechaCreacion;
+    }
+
+    public void setFechaCreacion(String fechaCreacion) {
+        this.fechaCreacion = fechaCreacion;
     }
 
     public void setFechaArchivo(String fechaArchivo) {

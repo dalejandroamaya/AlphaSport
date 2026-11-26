@@ -305,7 +305,7 @@ public final class PruebaPostgres {
         List<Jugador> loc = c.buscarEquipo(p.getIdLocal()).getJugadores(), vis = c.buscarEquipo(p.getIdVisitante()).getJugadores();
         Partido d = copia(p);
         d.setEstado(EstadoPartido.JUGADO);
-        d.setFecha("2026-11-22");
+        d.setFecha(java.time.LocalDate.now().toString()); // ni antes de crear el campeonato ni en el futuro
         d.setHora("18:30");
         d.setSede("Estadio de prueba");
         d.setObservaciones("Con lluvia");
@@ -477,7 +477,7 @@ public final class PruebaPostgres {
         // Quien hizo el gol sale de la plantilla: su gol sigue y su id no se reutiliza.
         Jugador goleador = plantilla.remove(8);
         int antes = s.getCampeonato().getSiguienteIdJugador();
-        plantilla.add(new Jugador("Nuevo Refuerzo", "X1", 98, "Delantero centro"));
+        plantilla.add(new Jugador("Nuevo Refuerzo", "99001", 98, "Delantero centro"));
         s.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
         CampeonatoService otro = servicio(db);
         boolean gol = otro.buscarPartido(p.getId()).getGoles().get(0).getIdAutor() == goleador.getId()

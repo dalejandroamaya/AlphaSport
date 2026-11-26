@@ -58,6 +58,7 @@ public class SimulacionFormatos {
         probarEstadisticas();
         probarDivisiones();
         probarWalkoverYCampeones();
+        probarCronograma();
         probarNoticias();
         probarPreviaYResultado();
         probarReglasPartido();
@@ -175,9 +176,9 @@ public class SimulacionFormatos {
             ConfiguracionTorneo cfg = new ConfiguracionTorneo();
             cfg.setSorteoAleatorio(false);
             servicio.crear("Fotos", TipoFormato.LIGA, cfg, false);
-            java.util.Map<String, Object> j1 = new java.util.HashMap<>(java.util.Map.of("id", 0, "nombre", "Ana", "documento", "1",
+            java.util.Map<String, Object> j1 = new java.util.HashMap<>(java.util.Map.of("id", 0, "nombre", "Ana", "documento", "10001",
                     "dorsal", 1, "posicion", "Portero", "foto", alargada));
-            java.util.Map<String, Object> j2 = new java.util.HashMap<>(java.util.Map.of("id", 0, "nombre", "Beto", "documento", "2",
+            java.util.Map<String, Object> j2 = new java.util.HashMap<>(java.util.Map.of("id", 0, "nombre", "Beto", "documento", "10002",
                     "dorsal", 2, "posicion", "Defensa central", "foto", ""));
             java.util.Map<String, Object> cuerpo = new java.util.HashMap<>(java.util.Map.of("nombre", "Lobos", "estadio", "",
                     "jugadores", new ArrayList<Object>(List.of(j1, j2)), "escudo", dataUrl(transparente, "png")));
@@ -318,7 +319,7 @@ public class SimulacionFormatos {
             for (alphasport.model.Equipo e : new ArrayList<>(c.getEquipos())) {
                 List<alphasport.model.Jugador> plantilla = new ArrayList<>();
                 for (int dorsal = 1; dorsal <= 14; dorsal++) {
-                    plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, "C" + e.getId() + "-" + dorsal,
+                    plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, String.valueOf(100000 + e.getId() * 100 + dorsal),
                             dorsal, dorsal == 1 ? "Portero" : "Mediocampista central"));
                 }
                 servicio.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
@@ -1088,7 +1089,8 @@ public class SimulacionFormatos {
                     && "PERMISO".equals(codigoDe(() -> base.cliente(luis.getToken(), ligaAna).abrirRespaldo(respaldoAna)))
                     && respaldoAna.length > 0 && !textoRespaldo.contains("pbkdf2") && !textoRespaldo.contains("clave-ana1")
                     && !textoRespaldo.contains("@") && !textoRespaldo.contains("CuentaUsuario")
-                    && base.cliente(luis.getToken(), ligaAna).historialEnTexto().datos().length > 0; // el historial en texto sí se puede ver
+                    // el historial en texto sí lo puede pedir (sin partidos jugados responde que está vacío, no PERMISO)
+                    && !"PERMISO".equals(codigoDe(() -> base.cliente(luis.getToken(), ligaAna).historialEnTexto()));
             // Elegir: Luis elige la de Beto y la ve; Beto, con uno solo, lo tiene sin elegir; Maria, con tres, tiene que elegir.
             luis.ejecutar("campeonato/elegir", java.util.Map.of("codigo", ligaBeto));
             alphasport.ui.ApiControlador betoOtraVez = entrar.apply("beto", "clave-beto1"), maria = entrar.apply("maria", "clave-maria1");
@@ -1104,7 +1106,7 @@ public class SimulacionFormatos {
                 for (alphasport.model.Equipo e : s.getCampeonato().getEquipos()) {
                     List<alphasport.model.Jugador> plantilla = new ArrayList<>();
                     for (int dorsal = 1; dorsal <= 12; dorsal++) {
-                        plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, codigo + "-" + e.getId() + "-" + dorsal, dorsal,
+                        plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, String.valueOf(200000 + e.getId() * 100 + dorsal), dorsal,
                                 dorsal == 1 ? "Portero" : "Mediocampista central"));
                     }
                     s.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
@@ -1227,7 +1229,7 @@ public class SimulacionFormatos {
                 {"Cuatro", "4", "Defensa central"}, {"Doce", "12", "Portero"}, {"Dos", "2", "Lateral derecho"}, {"Once", "11", "Extremo izquierdo"}};
             List<alphasport.model.Jugador> plantilla = new ArrayList<>();
             for (String[] d : datos) {
-                plantilla.add(new alphasport.model.Jugador(d[0], "DOC-" + d[1], Integer.parseInt(d[1]), d[2]));
+                plantilla.add(new alphasport.model.Jugador(d[0], String.valueOf(50000 + Integer.parseInt(d[1])), Integer.parseInt(d[1]), d[2]));
             }
             servicio.equipos().guardarEquipo(e.getId(), "Orden FC", "", null, plantilla);
             alphasport.ui.ApiControlador api = new alphasport.ui.ApiControlador(servicio, new AutenticacionService());
@@ -1271,14 +1273,16 @@ public class SimulacionFormatos {
                 return l;
             };
             servicio.equipos().guardarEquipo(rojos, "Rojos", "", null, plantilla.apply(new String[][]{{"Ana", "  10 20  30 ", "1"}, {"Bea", "", "2"}, {"Cris", "", "3"}}));
-            boolean limpia = servicio.buscarEquipo(rojos).getJugadores().get(0).getDocumento().equals("10 20 30");
+            boolean limpia = servicio.buscarEquipo(rojos).getJugadores().get(0).getDocumento().equals("102030"); // se guardan solo los dígitos
             // Mismo documento en la misma plantilla, en otro equipo (con otros espacios y mayusculas) o en un equipo nuevo.
             String mensajeRepetido = mensaje(() -> servicio.equipos().guardarEquipo(rojos, "Rojos", "", null,
                     plantilla.apply(new String[][]{{"Ana", "102030", "1"}, {"Dani", "10 2030", "4"}})));
             String mensajeOtroEquipo = mensaje(() -> servicio.equipos().guardarEquipo(azules, "Azules", "", null,
                     plantilla.apply(new String[][]{{"Eva", "1020 30", "1"}})));
-            boolean letras = servicio.getCampeonato().getEquipos().size() == 2;
-            servicio.equipos().guardarEquipo(azules, "Azules", "", null, plantilla.apply(new String[][]{{"Eva", "ab-1", "1"}}));
+            // Documentos con letras o muy cortos: se rechazan (solo números, de 5 a 12 dígitos).
+            boolean letras = servicio.getCampeonato().getEquipos().size() == 2
+                    && rechaza(() -> servicio.equipos().guardarEquipo(azules, "Azules", "", null, plantilla.apply(new String[][]{{"Eva", "ab-1", "1"}})))
+                    && rechaza(() -> servicio.equipos().guardarEquipo(azules, "Azules", "", null, plantilla.apply(new String[][]{{"Eva", "123", "1"}})));
             letras &= rechaza(() -> servicio.equipos().guardarEquipo(null, "Verdes", "", null, plantilla.apply(new String[][]{{"Fer", "AB-1", "1"}})))
                     && servicio.getCampeonato().buscarEquipoPorNombre("Verdes") == null;
             // Sin documento se permite, y el mismo jugador puede volver a guardarse con su documento.
@@ -1355,7 +1359,7 @@ public class SimulacionFormatos {
             for (alphasport.model.Equipo e : new ArrayList<>(c.getEquipos())) {
                 List<alphasport.model.Jugador> plantilla = new ArrayList<>();
                 for (int d = 1; d <= 14; d++) {
-                    plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + d, "D" + e.getId() + "-" + d, d, "Mediocampista"));
+                    plantilla.add(new alphasport.model.Jugador(e.getNombreEquipo() + " J" + d, String.valueOf(300000 + e.getId() * 100 + d), d, "Mediocampista"));
                 }
                 servicio.equipos().guardarEquipo(e.getId(), e.getNombreEquipo(), "", null, plantilla);
             }
@@ -1370,7 +1374,7 @@ public class SimulacionFormatos {
             // 1) Previa: partido pendiente con XI, formación, fecha, hora y sede.
             java.util.Map<String, Object> previa = new java.util.HashMap<>(java.util.Map.of("estado", "PENDIENTE",
                     "titularesLocal", xiLocal, "titularesVisitante", xiVisitante, "formacionLocal", "4-4-2", "formacionVisitante", "4-3-3",
-                    "fecha", "2026-12-05", "hora", "18:00", "sede", "Estadio Norte", "obs", ""));
+                    "fecha", java.time.LocalDate.now().toString(), "hora", "18:00", "sede", "Estadio Norte", "obs", ""));
             previa.putAll(java.util.Map.of("gl", 0, "gv", 0, "pl", -1, "pv", -1, "tarjetas", List.of(), "cambios", List.of(), "goles", List.of()));
             api.ejecutar("partido", java.util.Map.of("id", p.getId(), "datos", previa, "accion", "guardar", "confirmado", false));
             boolean previaGuardada = !p.isJugado() && p.getTitularesLocal().equals(xiLocal) && p.getTitularesVisitante().equals(xiVisitante)
@@ -1628,7 +1632,7 @@ public class SimulacionFormatos {
         for (int i = 1; i <= 4; i++) {
             c.agregarEquipo("E" + i);
         }
-        alphasport.model.Jugador jugador = new alphasport.model.Jugador("Jugador expulsado", "1", 10, "Delantero");
+        alphasport.model.Jugador jugador = new alphasport.model.Jugador("Jugador expulsado", "10001", 10, "Delantero");
         jugador.setId(c.nuevoIdJugador());
         c.buscarEquipo(1).agregarJugador(jugador);
         MotorCampeonato motor = new MotorCampeonato(c);
@@ -1676,9 +1680,9 @@ public class SimulacionFormatos {
         for (int i = 1; i <= 4; i++) {
             c.agregarEquipo("E" + i);
         }
-        alphasport.model.Jugador nueve = new alphasport.model.Jugador("Nueve", "1", 9, "Delantero centro");
-        alphasport.model.Jugador diez = new alphasport.model.Jugador("Diez", "2", 10, "Mediapunta");
-        alphasport.model.Jugador central = new alphasport.model.Jugador("Central", "3", 4, "Defensa central");
+        alphasport.model.Jugador nueve = new alphasport.model.Jugador("Nueve", "10001", 9, "Delantero centro");
+        alphasport.model.Jugador diez = new alphasport.model.Jugador("Diez", "10002", 10, "Mediapunta");
+        alphasport.model.Jugador central = new alphasport.model.Jugador("Central", "10003", 4, "Defensa central");
         nueve.setId(c.nuevoIdJugador());
         diez.setId(c.nuevoIdJugador());
         central.setId(c.nuevoIdJugador());
@@ -1784,6 +1788,80 @@ public class SimulacionFormatos {
      * W.O. desde el editor (que trabaja sobre una copia sin ids): gana el local y gana el visitante,
      * cada uno con sus 3 goles y sus 3 puntos. Y en una liga con divisiones hay un campeon por division.
      */
+    /** Deja cada equipo con al menos el mínimo de jugadores para iniciar (ReglasPlantilla.MINIMO_JUGADORES). */
+    static void completarPlantillas(Campeonato c) {
+        for (alphasport.model.Equipo e : c.getEquipos()) {
+            for (int dorsal = e.getJugadores().size() + 1; e.getJugadores().size() < ReglasPlantilla.MINIMO_JUGADORES; dorsal++) {
+                alphasport.model.Jugador j = new alphasport.model.Jugador(e.getNombreEquipo() + " J" + dorsal, String.valueOf(700000 + e.getId() * 100 + dorsal),
+                        dorsal, dorsal == 1 ? "Portero" : "Mediocampista");
+                j.setId(c.nuevoIdJugador());
+                e.getJugadores().add(j);
+            }
+        }
+    }
+
+    /**
+     * Cronograma automático: reparte los partidos pendientes en los días y horas pedidos, sin que un equipo juegue
+     * dos veces el mismo día ni más partidos por día que horas por canchas; rechaza un inicio antes de hoy. Además,
+     * un partido no puede quedar antes de la creación del campeonato ni jugado en el futuro.
+     */
+    private static void probarCronograma() {
+        boolean correcto;
+        try {
+            java.nio.file.Path carpeta = java.nio.file.Files.createTempDirectory("alphasport-cronograma");
+            CampeonatoService servicio = new CampeonatoService(new alphasport.persistence.ArchivoRepositorioCampeonato(carpeta),
+                    new alphasport.persistence.ArchivoRepositorioHistorial(carpeta));
+            ConfiguracionTorneo cfg = new ConfiguracionTorneo();
+            cfg.setSorteoAleatorio(false);
+            servicio.crear("Cronograma", TipoFormato.LIGA, cfg, false);
+            for (int i = 1; i <= 6; i++) {
+                servicio.equipos().agregarEquipo("C" + i);
+            }
+            completarPlantillas(servicio.getCampeonato());
+            servicio.avanzar();
+            java.time.LocalDate hoy = java.time.LocalDate.now();
+            java.time.LocalDate inicio = hoy.plusDays(1);
+            java.util.Set<java.time.DayOfWeek> dias = java.util.EnumSet.of(java.time.DayOfWeek.SATURDAY, java.time.DayOfWeek.SUNDAY);
+            boolean rechazaPasado = rechaza(() -> servicio.partidos().programar(new Cronograma.Pedido(hoy.minusDays(1), dias, List.of("15:00"), List.of(), false)))
+                    && rechaza(() -> servicio.partidos().programar(new Cronograma.Pedido(inicio, java.util.Set.of(), List.of("15:00"), List.of(), false)))
+                    && rechaza(() -> servicio.partidos().programar(new Cronograma.Pedido(inicio, dias, List.of("25:00"), List.of(), false)));
+            String mensaje = servicio.partidos().programar(new Cronograma.Pedido(inicio, dias, List.of("17:00", "15:00"), List.of("Cancha 1"), false));
+            List<Partido> ps = servicio.getCampeonato().getPartidos();
+            java.util.Map<String, List<Partido>> porDia = new java.util.HashMap<>();
+            ps.forEach(x -> porDia.computeIfAbsent(x.getFecha(), k -> new ArrayList<>()).add(x));
+            boolean todos = ps.stream().allMatch(x -> x.getFecha().length() == 10 && java.time.LocalDate.parse(x.getFecha()) != null && "Cancha 1".equals(x.getSede()));
+            boolean diasBien = porDia.keySet().stream().map(java.time.LocalDate::parse)
+                    .allMatch(d -> !d.isBefore(inicio) && dias.contains(d.getDayOfWeek()));
+            boolean cupo = porDia.values().stream().allMatch(l -> l.size() <= 2
+                    && l.stream().map(Partido::getHora).distinct().count() == l.size());
+            boolean sinRepetir = porDia.values().stream().allMatch(l -> l.stream().flatMap(x -> java.util.stream.Stream.of(x.getIdLocal(), x.getIdVisitante()))
+                    .distinct().count() == l.size() * 2L);
+            // Fechas a mano: ni antes de la creación ni jugado en el futuro.
+            Partido p = ps.get(0);
+            Partido antes = new Partido();
+            antes.copiarDatosDe(p);
+            antes.setFecha(hoy.minusDays(3).toString());
+            Partido futuro = new Partido();
+            futuro.copiarDatosDe(p);
+            futuro.setEstado(alphasport.model.EstadoPartido.JUGADO);
+            futuro.setFecha(hoy.plusDays(3).toString());
+            boolean fechas = rechaza(() -> servicio.partidos().guardarPartido(p.getId(), antes, true))
+                    && rechaza(() -> servicio.partidos().guardarPartido(p.getId(), futuro, true));
+            correcto = rechazaPasado && todos && diasBien && cupo && sinRepetir && fechas && mensaje.startsWith("Se programaron " + ps.size());
+            if (!correcto) {
+                System.out.println("  rechazaPasado=" + rechazaPasado + " todos=" + todos + " dias=" + diasBien + " cupo=" + cupo
+                        + " sinRepetir=" + sinRepetir + " fechas=" + fechas + " " + mensaje);
+            }
+        } catch (Exception e) {
+            correcto = false;
+            System.out.println("  ERROR: " + e);
+        }
+        System.out.println("Cronograma automático y fechas válidas: " + (correcto ? "correcto" : "MAL"));
+        if (!correcto) {
+            fallos++;
+        }
+    }
+
     private static void probarWalkoverYCampeones() {
         boolean correcto;
         try {
@@ -1798,6 +1876,7 @@ public class SimulacionFormatos {
             for (int i = 1; i <= 9; i++) {
                 servicio.equipos().agregarEquipo("W" + i);
             }
+            completarPlantillas(servicio.getCampeonato()); // para iniciar, cada equipo necesita su XI
             servicio.avanzar();
             Campeonato c = servicio.getCampeonato();
             Partido p1 = c.getPartidos().get(0), p2 = c.getPartidos().get(1);

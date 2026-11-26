@@ -98,6 +98,8 @@ public class Aplicacion extends Application {
     /* Iconos de trazo (24x24) en lugar de emojis. */
     static final String ICONO_TROFEO = "M8 4h8v5a4 4 0 0 1-8 0V4ZM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 17h6v4H9z";
     static final String ICONO_LUNA = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z";
+    static final String ICONO_SOL = "M12 7.8a4.2 4.2 0 1 0 0 8.4a4.2 4.2 0 1 0 0-8.4ZM12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2"
+            + "M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6";
     static final String ICONO_MENU = "M4 7h16M4 12h16M4 17h16";
     static final String ICONO_PERSONA = "M12 4a4 4 0 1 1 0 8a4 4 0 1 1 0-8ZM4 21c0-4 4-6 8-6s8 2 8 6";
     static final String ICONO_SALE = "M17 4v14M13 14l4 4 4-4";
@@ -135,6 +137,10 @@ public class Aplicacion extends Application {
     private Region fotoFondo;
     private final Button btnAvanzar = new Button();
     private final MenuItem itemSiguiente = new MenuItem("Siguiente torneo corto (Clausura)…");
+    /** Opciones de Archivo que dependen del campeonato (ver actualizarMenuArchivo). */
+    private final MenuItem itemCambiar = new MenuItem("Cambiar formato del campeonato…"), itemTerminar = new MenuItem("Terminar campeonato…"),
+            itemEliminar = new MenuItem("Eliminar campeonato…"), itemRespaldo = new MenuItem("Guardar copia de seguridad"),
+            itemExportar = new MenuItem("Exportar historial (.txt)");
     private final Map<String, ToggleButton> navegacion = new LinkedHashMap<>();
     private final Label toast = new Label();
     private SequentialTransition animacionToast;
@@ -223,6 +229,27 @@ public class Aplicacion extends Application {
         }
     }
 
+    /**
+     * «ALPHASPORT SOFTWARE» del logo. En la entrada cambia con el modo (azul marino en claro, claro en oscuro);
+     * en el panel lateral siempre es azul marino (el panel es blanco en claro y gris en oscuro).
+     */
+    Node textoMarca(double ancho, boolean segunModo) {
+        ImageView marino = new ImageView(imagen("logo-texto.png"));
+        marino.setFitWidth(ancho);
+        marino.setPreserveRatio(true);
+        marino.setSmooth(true);
+        if (!segunModo) {
+            return marino;
+        }
+        marino.getStyleClass().add("texto-modo-claro");
+        ImageView claroTexto = new ImageView(imagen("logo-texto-claro.png"));
+        claroTexto.setFitWidth(ancho);
+        claroTexto.setPreserveRatio(true);
+        claroTexto.setSmooth(true);
+        claroTexto.getStyleClass().add("texto-modo-oscuro");
+        return new StackPane(marino, claroTexto);
+    }
+
     static SVGPath icono(String trazo, String... clases) {
         SVGPath s = new SVGPath();
         s.setContent(trazo);
@@ -301,6 +328,17 @@ public class Aplicacion extends Application {
             scene.getRoot().getStyleClass().remove("claro");
         }
         actualizarFoto();
+        botonesTema.forEach(this::rotularTema);
+    }
+
+    /** Botones de tema de la pantalla actual (uno en la entrada y uno en el panel). */
+    private final List<Button> botonesTema = new ArrayList<>();
+
+    /** Un solo botón de tema, solo con ícono: sol en modo oscuro (pasa a claro) y luna en modo claro (pasa a oscuro). */
+    private void rotularTema(Button b) {
+        b.setGraphic(icono(claro ? ICONO_LUNA : ICONO_SOL));
+        b.setTooltip(new Tooltip(claro ? "Cambiar a modo oscuro" : "Cambiar a modo claro"));
+        b.setAccessibleText(claro ? "Cambiar a modo oscuro" : "Cambiar a modo claro");
     }
 
     /** En la coronación, los focos del estadio se vuelven dorados. */
@@ -312,10 +350,12 @@ public class Aplicacion extends Application {
         }
     }
 
-    Button botonTema(String texto) {
-        Button b = boton(texto, "fantasma");
-        b.setGraphic(icono(ICONO_LUNA));
+    Button botonTema() {
+        Button b = boton("", "fantasma", "icono-solo");
+        rotularTema(b);
         b.setOnAction(e -> alternarTema());
+        botonesTema.removeIf(x -> x.getScene() == null); // los de pantallas anteriores
+        botonesTema.add(b);
         return b;
     }
 
@@ -399,7 +439,8 @@ public class Aplicacion extends Application {
         } catch (ReglaNegocioException e) {
             return mapa("ok", false, "codigo", e.getCodigo(), "error", e.getMessage());
         } catch (Exception e) {
-            return mapa("ok", false, "codigo", "ERROR", "error", e.getMessage() == null ? e.toString() : e.getMessage());
+            e.printStackTrace(); // el detalle técnico queda en la consola
+            return mapa("ok", false, "codigo", "ERROR", "error", alphasport.ui.MensajeUsuario.de(e));
         }
         E = m(r, "estado");
         render();
@@ -439,7 +480,7 @@ public class Aplicacion extends Application {
         boolean malCompilado = String.valueOf(ex.getMessage()).contains("Unresolved compilation");
         error.setText(malCompilado
                 ? "El programa quedó mal compilado. Ciérrelo, limpie la compilación en VS Code (Java: Clean Java Language Server Workspace) y ábralo de nuevo."
-                : ex.getMessage() == null ? "No se pudo entrar: " + ex : ex.getMessage());
+                : alphasport.ui.MensajeUsuario.de(ex));
         error.setWrapText(true);
         error.setVisible(true);
     }
@@ -447,11 +488,13 @@ public class Aplicacion extends Application {
     /** Pantalla de entrada: pestañas «Iniciar sesión» y «Registrarse» en la misma tarjeta. */
     void mostrarLogin() {
         detenerActualizacion(); // sin sesión no hay nada que revisar
-        ImageView logo = new ImageView(imagen("logo-texto.png"));
-        logo.setFitWidth(240);
-        logo.setPreserveRatio(true);
-        logo.setSmooth(true);
-        logo.getStyleClass().add("logo-login");
+        ImageView icono = new ImageView(imagen("logo.png"));
+        icono.setFitWidth(104);
+        icono.setPreserveRatio(true);
+        icono.setSmooth(true);
+        icono.getStyleClass().add("logo-login");
+        VBox logo = new VBox(12, icono, textoMarca(240, true));
+        logo.setAlignment(Pos.CENTER);
 
         // ---- Iniciar sesión
         TextField usuario = new TextField();
@@ -538,8 +581,7 @@ public class Aplicacion extends Application {
         desplazable.setFitToWidth(true);
         desplazable.setFitToHeight(true);
         desplazable.getStyleClass().add("desplazable");
-        Button tema = botonTema("");
-        tema.getStyleClass().add("icono-solo");
+        Button tema = botonTema();
         StackPane.setAlignment(tema, Pos.TOP_RIGHT);
         StackPane.setMargin(tema, new Insets(18));
         Label credito = etiqueta(claro ? "Foto: Miguel Ramírez · Unsplash" : "Foto: Josemar Duarte · Unsplash", "credito-foto");
@@ -669,8 +711,10 @@ public class Aplicacion extends Application {
         logo.setFitWidth(150);
         logo.setPreserveRatio(true);
         logo.getStyleClass().add("logo-lateral");
-        logo.setFitWidth(112);
-        VBox marca = new VBox(2, logo, etiqueta("AlphaSport", "marca-nombre"), etiqueta("Gestor de campeonatos", "marca-sub"));
+        logo.setFitWidth(92);
+        Node texto = textoMarca(168, false);
+        VBox.setMargin(texto, new Insets(8, 0, 2, 0));
+        VBox marca = new VBox(2, logo, texto, etiqueta("Gestor de campeonatos", "marca-sub"));
         marca.setAlignment(Pos.CENTER);
         marca.getStyleClass().add("marca-lateral");
 
@@ -711,13 +755,17 @@ public class Aplicacion extends Application {
         historial.setGraphic(icono(ICONO_TROFEO));
         historial.setMaxWidth(Double.MAX_VALUE);
         historial.setOnAction(e -> dialogos.historial());
-        Button tema = botonTema("Modo claro / oscuro");
-        tema.setMaxWidth(Double.MAX_VALUE);
+        Button tema = botonTema();
+        Button guia = boton("?", "fantasma", "icono-solo");
+        guia.setTooltip(new Tooltip("Cómo usar AlphaSport"));
+        guia.setOnAction(e -> dialogos.guia(puedeEditar()));
+        HBox pieLateral = new HBox(8, historial, guia, tema);
+        HBox.setHgrow(historial, Priority.ALWAYS);
         Usuario usuario = api.getUsuarioActual();
         Label chipRol = etiqueta(usuario.getRol().getNombre() + (usuario.puedeEditar() ? "" : " · solo lectura"), "chip");
         chipRol.setMaxWidth(Double.MAX_VALUE);
         chipRol.setAlignment(Pos.CENTER);
-        VBox lateral = new VBox(22, marca, nav, espacio(), new VBox(8, chipRol, historial, tema));
+        VBox lateral = new VBox(22, marca, nav, espacio(), new VBox(8, chipRol, pieLateral));
         lateral.getStyleClass().addAll("vidrio", "barra-lateral");
         lateral.setPrefWidth(248);
         lateral.setMinWidth(248);
@@ -787,6 +835,17 @@ public class Aplicacion extends Application {
         }
         render(); // sin campeonato elegido, render() muestra la lista de campeonatos
         iniciarActualizacion();
+        // La guía se muestra sola la primera vez que cada cuenta entra en este equipo.
+        String cuenta = api.getUsuarioActual().getNombre();
+        try {
+            java.util.prefs.Preferences p = java.util.prefs.Preferences.userNodeForPackage(Aplicacion.class);
+            if (p.get("guia." + cuenta, null) == null) {
+                p.put("guia." + cuenta, "vista");
+                javafx.application.Platform.runLater(() -> dialogos.guia(puedeEditar()));
+            }
+        } catch (RuntimeException e) {
+            // sin preferencias: no se muestra sola, sigue en el botón «?»
+        }
     }
 
     /**
@@ -924,7 +983,7 @@ public class Aplicacion extends Application {
         MenuItem nuevo = new MenuItem("Nuevo campeonato…");
         nuevo.setOnAction(e -> dialogos.nuevo(false, false)); // uno más: el actual sigue en curso, en «Mis campeonatos»
         itemSiguiente.setOnAction(e -> siguienteTorneo());
-        MenuItem cambiar = new MenuItem("Cambiar formato del campeonato…");
+        MenuItem cambiar = itemCambiar;
         cambiar.setOnAction(e -> {
             String texto = b(m(E, "campeonato"), "iniciado")
                     ? "Se conservarán los equipos con su DT y jugadores, pero se borrarán el fixture y todos los resultados del campeonato actual. ¿Continuar?"
@@ -933,14 +992,14 @@ public class Aplicacion extends Application {
                 dialogos.nuevo(false, true);
             }
         });
-        MenuItem terminar = new MenuItem("Terminar campeonato…");
+        MenuItem terminar = itemTerminar;
         terminar.setOnAction(e -> {
             Map<String, Object> c = m(E, "campeonato");
             if (c != null) {
                 terminarCampeonato(s(c, "codigo"), s(c, "nombre"), b(c, "terminado"));
             }
         });
-        MenuItem cancelar = new MenuItem("Eliminar campeonato…");
+        MenuItem cancelar = itemEliminar;
         cancelar.getStyleClass().add("opcion-peligro");
         cancelar.setOnAction(e -> {
             Map<String, Object> c = m(E, "campeonato");
@@ -948,11 +1007,11 @@ public class Aplicacion extends Application {
                 eliminarCampeonato(s(c, "codigo"), s(c, "nombre"));
             }
         });
-        MenuItem respaldo = new MenuItem("Descargar respaldo");
+        MenuItem respaldo = itemRespaldo;
         respaldo.setOnAction(e -> guardarRespaldo());
-        MenuItem abrir = new MenuItem("Abrir respaldo…");
+        MenuItem abrir = new MenuItem("Restaurar copia de seguridad…");
         abrir.setOnAction(e -> abrirRespaldo());
-        MenuItem exportar = new MenuItem("Exportar historial (.txt)");
+        MenuItem exportar = itemExportar;
         exportar.setOnAction(e -> exportarHistorial());
         MenuItem historial = new MenuItem("Historial de campeonatos");
         historial.setOnAction(e -> dialogos.historial());
@@ -973,6 +1032,24 @@ public class Aplicacion extends Application {
         menu.getItems().addAll(nuevo, itemSiguiente, cambiar, terminar, cancelar, new SeparatorMenuItem(), respaldo, abrir, exportar,
                 historial, new SeparatorMenuItem(), sesion, salir);
         return menu;
+    }
+
+    /**
+     * Opciones de Archivo según el campeonato (igual que en la web): sin campeonato no hay nada que terminar, cambiar
+     * ni guardar; sin equipos no hay copia de seguridad y sin partidos jugados no hay historial que exportar.
+     */
+    void actualizarMenuArchivo() {
+        Map<String, Object> c = b(E, "hay") ? m(E, "campeonato") : null;
+        int equipos = c == null ? 0 : l(E, "equipos").size();
+        long jugados = c == null ? 0 : l(E, "partidos").stream().filter(p -> b(p, "jugado")).count();
+        itemCambiar.setDisable(c == null);
+        itemEliminar.setDisable(c == null);
+        itemTerminar.setDisable(c == null || (!b(c, "terminado") && jugados == 0));
+        itemRespaldo.setDisable(c == null || equipos == 0);
+        itemExportar.setDisable(c == null || jugados == 0);
+        if (c == null) {
+            itemSiguiente.setDisable(true);
+        }
     }
 
     /** Clausura de un torneo corto o nueva temporada de una liga (con ascensos y descensos si hay divisiones). */
@@ -1009,7 +1086,7 @@ public class Aplicacion extends Application {
 
     private void guardarRespaldo() {
         FileChooser selector = new FileChooser();
-        selector.setTitle("Guardar respaldo");
+        selector.setTitle("Guardar copia de seguridad");
         selector.setInitialFileName(nombreArchivo(s(m(E, "campeonato"), "nombre")) + ".dat");
         selector.getExtensionFilters().add(new FileChooser.ExtensionFilter("Respaldo de AlphaSport", "*.dat"));
         File archivo = selector.showSaveDialog(stage);
@@ -1018,15 +1095,15 @@ public class Aplicacion extends Application {
         }
         try {
             Files.write(archivo.toPath(), api.respaldo().datos()); // por el controlador: permiso y datos al dia
-            aviso("Respaldo guardado en " + archivo.getName());
+            aviso("Copia de seguridad guardada en " + archivo.getName());
         } catch (Exception e) {
-            dialogos.mensaje("Error", e.getMessage());
+            dialogos.mensaje("No se pudo completar", alphasport.ui.MensajeUsuario.de(e));
         }
     }
 
     private void abrirRespaldo() {
         FileChooser selector = new FileChooser();
-        selector.setTitle("Abrir respaldo");
+        selector.setTitle("Restaurar copia de seguridad");
         selector.getExtensionFilters().add(new FileChooser.ExtensionFilter("Respaldo de AlphaSport", "*.dat"));
         File archivo = selector.showOpenDialog(stage);
         if (archivo == null) {
@@ -1037,7 +1114,7 @@ public class Aplicacion extends Application {
             render();
             aviso("Se abrió «" + s(m(E, "campeonato"), "nombre") + "».");
         } catch (Exception e) {
-            dialogos.mensaje("Error", e.getMessage());
+            dialogos.mensaje("No se pudo completar", alphasport.ui.MensajeUsuario.de(e));
         }
     }
 
@@ -1046,7 +1123,7 @@ public class Aplicacion extends Application {
         try {
             guardarTexto(s(m(E, "campeonato"), "nombre"), new String(api.historialEnTexto().datos(), StandardCharsets.UTF_8));
         } catch (ReglaNegocioException e) {
-            dialogos.mensaje("Error", e.getMessage());
+            dialogos.mensaje("No se pudo completar", alphasport.ui.MensajeUsuario.de(e));
         }
     }
 
@@ -1062,7 +1139,7 @@ public class Aplicacion extends Application {
             Files.writeString(archivo.toPath(), texto.replaceAll("\r?\n", "\r\n"), StandardCharsets.UTF_8);
             aviso("Archivo guardado: " + archivo.getName());
         } catch (Exception e) {
-            dialogos.mensaje("Error", e.getMessage());
+            dialogos.mensaje("No se pudo completar", alphasport.ui.MensajeUsuario.de(e));
         }
     }
 
@@ -1137,6 +1214,7 @@ public class Aplicacion extends Application {
         estado.getStyleClass().removeAll("en-juego", "terminado");
         estado.getStyleClass().add(terminado ? "terminado" : "en-juego");
         itemSiguiente.setDisable(!b(c, "puedeSiguiente"));
+        actualizarMenuArchivo();
         itemSiguiente.setText(s(c, "textoSiguiente").isEmpty() ? "Siguiente torneo corto (Clausura)…" : s(c, "textoSiguiente"));
         // Sin llaves (formato Liga) el botón «Llaves» desaparece del menú lateral.
         ToggleButton botonLlaves = navegacion.get("llaves");
@@ -1243,7 +1321,7 @@ public class Aplicacion extends Application {
         try {
             return api.consultar("campeonatos");
         } catch (ReglaNegocioException e) {
-            return mapa("ok", false, "error", e.getMessage(), "campeonatos", List.of(), "sinOrganizador", List.of());
+            return mapa("ok", false, "error", alphasport.ui.MensajeUsuario.de(e), "campeonatos", List.of(), "sinOrganizador", List.of());
         }
     }
 
@@ -1259,7 +1337,7 @@ public class Aplicacion extends Application {
         try {
             p = m(api.consultar("perfil"), "perfil");
         } catch (RuntimeException e) {
-            caja.getChildren().add(vacio(e.getMessage()));
+            caja.getChildren().add(vacio(alphasport.ui.MensajeUsuario.de(e)));
             return caja;
         }
         boolean verificado = b(p, "correoVerificado");
@@ -1352,7 +1430,7 @@ public class Aplicacion extends Application {
             aviso(s(r, "mensaje"));
             mostrarVista("perfil");
         } catch (Exception ex) {
-            error.setText(ex.getMessage());
+            error.setText(alphasport.ui.MensajeUsuario.de(ex));
             error.setWrapText(true);
             error.setVisible(true);
         }
@@ -1565,18 +1643,12 @@ public class Aplicacion extends Application {
         Button completo = boton("+ Con plantilla", "fantasma");
         completo.setDisable(iniciado);
         completo.setOnAction(e -> dialogos.equipo(null));
-        Button prueba = boton("Datos de prueba", "fantasma");
-        prueba.setGraphic(icono(ICONO_DADO, "icono-mini"));
-        prueba.setTooltip(new javafx.scene.control.Tooltip("Crear equipos inventados con plantilla completa a partir de una semilla"));
-        // Con el campeonato iniciado los datos de prueba solo completan plantillas vacías.
-        prueba.setDisable(iniciado && l(E, "equipos").stream().allMatch(e -> b(e, "retirado") || !l(e, "jugadores").isEmpty()));
-        prueba.setOnAction(e -> dialogos.datosPrueba());
-        soloAdmin(nombre, agregar, completo, prueba);
+        soloAdmin(nombre, agregar, completo); // sin «Datos de prueba»: equipos inventados confundían al usuario
         VBox caja = seccion("Equipos", !puedeEditar() ? "Equipos inscritos, con su director técnico y plantilla."
                 : iniciado
                 ? "El campeonato ya inició: puede editar nombre, DT y jugadores, pero no agregar equipos nuevos."
                 : "Registre los equipos (mínimo 2) y pulse «Iniciar campeonato» para generar el fixture automáticamente.",
-                nombre, agregar, completo, prueba);
+                nombre, agregar, completo);
         Map<String, Object> c = m(E, "campeonato");
         if (puedeEditar() && b(c, "esLiga")) {
             caja.getChildren().add(barraDivisiones(c));
@@ -1842,13 +1914,13 @@ public class Aplicacion extends Application {
                     || (filtroEstado.equals("aplazados") && (est.equals("APLAZADO") || est.equals("SUSPENDIDO")));
         };
         List<Map<String, Object>> todos = l(E, "partidos");
-        String sinFixture = "El fixture se genera automáticamente al pulsar «Iniciar campeonato».";
+        String sinFixture = "Todavía no hay partidos: registre los equipos en «Equipos» (mínimo 2, con 11 jugadores cada uno) y pulse «Iniciar campeonato». El programa arma el fixture solo.";
         boolean iniciado = b(m(E, "campeonato"), "iniciado");
         if (!puedeEditar()) {
             VBox caja = seccion("Partidos", "Calendario y resultados. Toque cualquier partido para ver la previa, el cara a cara, la racha y las alineaciones.",
                     cFase, cEstado, cEquipo);
             caja.getChildren().add(bloquesPartidos(todos.stream().filter(faseYEquipo.and(porEstado)).toList(), false,
-                    iniciado ? "No hay partidos con estos filtros." : "El calendario aparece cuando el organizador inicie el campeonato."));
+                    iniciado ? "No hay partidos con estos filtros." : "Todavía no hay partidos: el calendario aparece cuando el organizador inicie el campeonato."));
             return caja;
         }
         // Administrador: dos pasos separados, como en Noticias. Primero la previa (antes del pitazo), después el resultado.
@@ -1857,6 +1929,12 @@ public class Aplicacion extends Application {
         List<Map<String, Object>> porJugar = todos.stream().filter(p -> !b(p, "jugado")).filter(faseYEquipo).toList();
         List<Map<String, Object>> resultados = todos.stream().filter(faseYEquipo.and(porEstado)).toList();
         VBox panelPrevia = panelPestana("Partidos del fixture que todavía no se juegan. Defina fecha, hora, sede, formación y XI titular de cada equipo.");
+        if (iniciado && !b(m(E, "campeonato"), "terminado")) {
+            // Cronograma automático: fecha, hora y cancha para todos los pendientes de una vez (crítica 18).
+            Button programar = boton("Programar fechas", "primario", "mini");
+            programar.setOnAction(e -> dialogos.programarFechas());
+            panelPrevia.getChildren().add(programar);
+        }
         panelPrevia.getChildren().add(bloquesPartidos(porJugar, true, !iniciado ? sinFixture
                 : todos.stream().anyMatch(p -> !b(p, "jugado")) ? "No hay partidos por jugar con estos filtros." : "Todos los partidos ya se jugaron."));
         VBox panelResultados = panelPestana("Elija el partido que se jugó (o se está jugando) para cargar el marcador o el W.O., los goles, las tarjetas y los cambios.");
@@ -2201,9 +2279,9 @@ public class Aplicacion extends Application {
                 }
             }
         });
-        String leyenda = s(E, "leyenda") + (directos > 0 ? (b(t, "division") ? " Verde: asciende." : " Verde: clasifica.") : "")
+        String leyenda = s(E, "leyenda") + (directos > 0 ? (b(t, "division") ? " Azul: asciende." : " Azul: clasifica.") : "")
                 + (descenso > 0 ? " Rojo: desciende." : "") + (repechaje > 0 ? " Ámbar: repechaje." : "")
-                + (!l(t, "filas").isEmpty() && n(l(t, "filas").get(0), "pj") > 0 ? " Dorado: líder." : "");
+                + (!l(t, "filas").isEmpty() && n(l(t, "filas").get(0), "pj") > 0 ? " Ámbar: líder." : "");
         caja.getChildren().addAll(tabla, etiqueta(leyenda, "sutil", "pequeno"));
         return caja;
     }
@@ -2413,14 +2491,16 @@ public class Aplicacion extends Application {
         try {
             datos = m(api.consultar("noticias"), "noticias");
         } catch (RuntimeException e) {
-            return vacio("No se pudieron cargar las noticias: " + e.getMessage());
+            return vacio("No se pudieron cargar las noticias. " + alphasport.ui.MensajeUsuario.de(e));
         }
         boolean admin = puedeEditar();
         Button nueva = boton(admin ? "+ Nueva noticia" : "Proponer una noticia", "primario");
         nueva.setOnAction(e -> dialogos.noticia(null, !admin));
         VBox caja = seccion("Noticias", admin
-                ? "Publique noticias oficiales y apruebe o rechace las que envían los visitantes."
-                : "Comente o proponga una noticia: el organizador la revisa antes de publicarla.", nueva);
+                ? "Lo que publique aquí lo ven todas las personas que siguen «" + (b(E, "hay") ? s(m(E, "campeonato"), "nombre") : "este campeonato") + "»: cualquier aficionado que lo elija "
+                        + "en «Campeonatos activos». No hay que registrar a nadie. También aprueba o rechaza lo que proponen los aficionados."
+                : "Noticias de «" + (b(E, "hay") ? s(m(E, "campeonato"), "nombre") : "este campeonato") + "». Si propone una, el organizador la revisa antes de publicarla; después la ven "
+                        + "todos los que siguen este campeonato. Las de otro campeonato se ven al elegirlo en «Campeonatos activos».", nueva);
         List<Map<String, Object>> publicadas = l(datos, "publicadas");
         if (!admin) {
             // Visitante: solo el feed público (aprobado = true).

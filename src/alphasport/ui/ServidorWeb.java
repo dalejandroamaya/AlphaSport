@@ -162,7 +162,7 @@ public class ServidorWeb {
         } catch (Exception e) {
             e.printStackTrace();
             responder(intercambio, 500, Presentador.mapa("ok", false, "codigo", "ERROR",
-                    "error", "Error inesperado: " + e.getMessage()));
+                    "error", MensajeUsuario.INESPERADO)); // el detalle técnico queda en la consola
         }
     }
 

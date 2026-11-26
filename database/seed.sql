@@ -46,18 +46,18 @@ INSERT INTO directores_tecnicos (equipo_id, nombre, documento, nacionalidad)
 SELECT e.id, d.nombre, d.documento, 'Colombia'
   FROM equipos e
   JOIN torneos t ON t.id = e.torneo_id AND t.codigo = 'seed0001' AND t.situacion = 'ACTUAL'
-  JOIN (VALUES (1, 'Hernán Rojas', 'DT-001'), (2, 'Óscar Medina', 'DT-002'), (3, 'Julián Prada', 'DT-003'),
-               (4, 'Mauricio Cano', 'DT-004'), (5, 'Andrés Villa', 'DT-005'), (6, 'Fabio Suárez', 'DT-006'))
+  JOIN (VALUES (1, 'Hernán Rojas', '80000001'), (2, 'Óscar Medina', '80000002'), (3, 'Julián Prada', '80000003'),
+               (4, 'Mauricio Cano', '80000004'), (5, 'Andrés Villa', '80000005'), (6, 'Fabio Suárez', '80000006'))
        AS d (numero, nombre, documento) ON d.numero = e.numero;
 
 -- ---------------------------------------------------------------- jugadores
--- 16 por equipo: el dorsal 10 es el capitan. Cada uno es una persona nueva (el documento J0001... la identifica aqui).
+-- 16 por equipo: el dorsal 10 es el capitan. Cada uno es una persona nueva (el documento 1000001... la identifica aqui; solo numeros).
 CREATE TEMP TABLE semilla_jugadores ON COMMIT DROP AS
 SELECT e.torneo_id, e.id AS equipo_id, (e.numero - 1) * 16 + p.dorsal AS numero,
        (ARRAY['Mateo','Samuel','Nicolás','Tomás','Daniel','Felipe','Andrés','Santiago','Esteban','Camilo','Julián','Sergio','Iván','Óscar','Kevin','David'])[1 + (p.dorsal * 5 + e.numero * 3) % 16]
          || ' ' ||
        (ARRAY['Rojas','Gómez','Castro','Medina','Vargas','Ortiz','Salazar','Peña','Cardona','Ríos','Mejía','Torres','Parra','Lozano','Cruz','Molina','Arias'])[1 + (p.dorsal * 7 + e.numero * 4) % 17] AS nombre,
-       'J' || lpad(((e.numero - 1) * 16 + p.dorsal)::text, 4, '0') AS documento,
+       (1000000 + (e.numero - 1) * 16 + p.dorsal)::text AS documento,
        p.dorsal, p.posicion, p.dorsal = 10 AS es_capitan, p.dorsal - 1 AS orden
   FROM equipos e
   JOIN torneos t ON t.id = e.torneo_id AND t.codigo = 'seed0001' AND t.situacion = 'ACTUAL',

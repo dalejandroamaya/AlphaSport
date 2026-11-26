@@ -192,6 +192,7 @@ final class TorneoDAO {
             c.setPasoActual(rs.getInt("paso_actual"));
             c.setSemilla(rs.getLong("semilla"));
             c.setFechaArchivo(rs.getDate("fecha_archivo") == null ? null : rs.getDate("fecha_archivo").toLocalDate().toString());
+            c.setFechaCreacion(rs.getTimestamp("creado_en") == null ? null : rs.getTimestamp("creado_en").toLocalDateTime().toLocalDate().toString());
             c.restaurarContadores(rs.getInt("siguiente_equipo"), rs.getInt("siguiente_partido"), rs.getInt("siguiente_jugador"));
             return c;
         }, id);
